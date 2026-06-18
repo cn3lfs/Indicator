@@ -16,10 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-
 #include "CzscCore.h"
-
-#include "CCentroid.h"
 
 struct SegmentInterval
 {
@@ -561,6 +558,39 @@ static void WriteTrendDivergenceSignals(int nCount,
     else if (IsTrendDivergenceFirstSell(Points, Centers, i))
     {
       pOut[nIndex] = SIGNAL_FIRST_SELL;
+    }
+  }
+}
+
+static void WriteSecondBuySellSignals(int nCount,
+                                      float *pOut,
+                                      const std::vector<SegmentPoint> &Points,
+                                      const std::vector<Center> &Centers)
+{
+  for (std::size_t i = 0; i + 2 < Points.size(); i++)
+  {
+    const SegmentPoint &First = Points[i];
+    const SegmentPoint &Turn = Points[i + 1];
+    const SegmentPoint &Second = Points[i + 2];
+    int nIndex = Second.nIndex;
+    if ((nIndex < 0) || (nIndex >= nCount))
+    {
+      continue;
+    }
+
+    if (IsTrendDivergenceFirstBuy(Points, Centers, i) &&
+        (Turn.nType == CZSC_POINT_TOP) &&
+        (Second.nType == CZSC_POINT_BOTTOM) &&
+        (Second.fLow > First.fLow))
+    {
+      pOut[nIndex] = SIGNAL_SECOND_BUY;
+    }
+    else if (IsTrendDivergenceFirstSell(Points, Centers, i) &&
+             (Turn.nType == CZSC_POINT_BOTTOM) &&
+             (Second.nType == CZSC_POINT_TOP) &&
+             (Second.fHigh < First.fHigh))
+    {
+      pOut[nIndex] = SIGNAL_SECOND_SELL;
     }
   }
 }
@@ -1289,46 +1319,9 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
 
   ClearOutput(nCount, pOut);
 
-  CCentroid Centroid;
-
-  for (int i = 0; i < nCount; i++)
-  {
-    if (pIn[i] == 1)
-    {
-      if (Centroid.PushHigh(i, pHigh[i]))
-      {
-        pOut[i] = 0;
-      }
-      else if (Centroid.fTop1 < Centroid.fTop2)
-      {
-        // 第二类卖点信号
-        pOut[i] = SIGNAL_SECOND_SELL;
-      }
-      else
-      {
-        pOut[i] = 0;
-      }
-    }
-    else if (pIn[i] == -1)
-    {
-      if (Centroid.PushLow(i, pLow[i]))
-      {
-        pOut[i] = 0;
-      }
-      else if (Centroid.fBot1 > Centroid.fBot2)
-      {
-        // 第二类买点信号
-        pOut[i] = SIGNAL_SECOND_BUY;
-      }
-      else
-      {
-        pOut[i] = 0;
-      }
-    }
-  }
-
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
   std::vector<Center> Centers = BuildCenters(Points);
+  WriteSecondBuySellSignals(nCount, pOut, Points, Centers);
   WriteThirdBuySellSignals(nCount, pOut, Points, Centers);
   WriteTrendDivergenceSignals(nCount, pOut, Points, Centers);
 }

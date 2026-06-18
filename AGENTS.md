@@ -6,7 +6,7 @@ This repository builds a TongDaXin CZSC visualization plugin as `CZSC.dll`.
 Source files live at the repository root:
 
 - `Main.cpp` / `Main.h`: exported plugin entrypoints and indicator logic.
-- `CCentroid.cpp` / `CCentroid.h`: centroid state and calculations.
+- `CCentroid.cpp` / `CCentroid.h`: legacy centroid state retained for reference.
 - `FxIndicator.h` and `FxSelector.h`: indicator/selector support headers.
 - `CzscCore.cpp` / `CzscCore.h`: testable indicator and CZSC calculation core.
 - `Makefile`: GCC/MinGW-style build rules.
@@ -17,7 +17,7 @@ There is currently no asset pipeline.
 
 ## Build, Test, and Development Commands
 
-- `make`: builds `CZSC.dll` from `Main.o`, `CzscCore.o`, and `CCentroid.o`.
+- `make`: builds `CZSC.dll` from `Main.o` and `CzscCore.o`.
 - `make test`: builds and runs the lightweight core regression test executable.
 - `make clean`: removes generated `.dep` and `.o` files.
 - `make debug`: builds the DLL, then launches `gdb -w CZSC.dll`.

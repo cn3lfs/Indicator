@@ -573,6 +573,116 @@ static bool TestFunc5WritesCenterThirdSell()
   return NearlyEqual(pOut[20], 13.0f);
 }
 
+static bool TestFunc5WritesSecondBuyAfterFirstBuy()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = 7;
+  pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = 12;
+  pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = 8;
+  pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = 10;
+  pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = 3;
+  pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = 7;
+  pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = 4;
+  pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = 4.2f;
+  pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = 3.8f;
+  pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = 6;
+  pLow[36] = 6;
+  pIn[40] = -1;
+  pHigh[40] = 4.5f;
+  pLow[40] = 4.5f;
+
+  Func5(nCount, pOut, pIn, pHigh, pLow);
+
+  return NearlyEqual(pOut[32], 1.0f) && NearlyEqual(pOut[40], 2.0f);
+}
+
+static bool TestFunc5WritesSecondSellAfterFirstSell()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = 10;
+  pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = 5;
+  pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = 9;
+  pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = 7;
+  pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = 14;
+  pLow[16] = 14;
+  pIn[20] = -1;
+  pHigh[20] = 10;
+  pLow[20] = 10;
+  pIn[24] = 1;
+  pHigh[24] = 13;
+  pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = 12.8f;
+  pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = 13.2f;
+  pLow[32] = 13.2f;
+  pIn[36] = -1;
+  pHigh[36] = 11;
+  pLow[36] = 11;
+  pIn[40] = 1;
+  pHigh[40] = 12.5f;
+  pLow[40] = 12.5f;
+
+  Func5(nCount, pOut, pIn, pHigh, pLow);
+
+  return NearlyEqual(pOut[32], 11.0f) && NearlyEqual(pOut[40], 12.0f);
+}
+
 static bool TestFunc5WritesTrendDivergenceFirstSell()
 {
   const int nCount = 33;
@@ -781,21 +891,29 @@ int main()
   {
     return 15;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstSell())
+  if (!TestFunc5WritesSecondBuyAfterFirstBuy())
   {
     return 16;
   }
-  if (!TestFunc5SkipsStrongNewLow())
+  if (!TestFunc5WritesSecondSellAfterFirstSell())
   {
     return 17;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestFunc5WritesTrendDivergenceFirstSell())
   {
     return 18;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestFunc5SkipsStrongNewLow())
   {
     return 19;
+  }
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  {
+    return 20;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 21;
   }
 
   return 0;

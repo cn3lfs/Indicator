@@ -35,11 +35,13 @@ FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
 
 # Objectives
-OBJECT1=Main.o CzscCore.o CCentroid.o
+OBJECT1=Main.o CzscCore.o
 TARGET1=CZSC.dll
-TEST_OBJECTS=CzscCore.o CCentroid.o tests/CzscCoreTests.o
+TEST_OBJECTS=CzscCore.o tests/CzscCoreTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
 TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
+LEGACY_OBJECTS=CCentroid.o
+LEGACY_DEPENDS=CCentroid.dep
 OBJECTS=$(OBJECT1)
 TARGETS=$(TARGET1)
 DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep)
@@ -87,8 +89,8 @@ run: all
 	@$(TARGETS)
 
 clean:
-	@echo [RM] $(OBJECTS) $(TEST_OBJECTS)
-	@$(RM) $(DEPENDS) $(OBJECTS) $(TEST_OBJECTS) $(TEST_TARGETS)
+	@echo [RM] $(OBJECTS) $(TEST_OBJECTS) $(LEGACY_OBJECTS)
+	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(OBJECTS) $(TEST_OBJECTS) $(LEGACY_OBJECTS) $(TEST_TARGETS)
 
 # Standard Procedures
 %.dep : %.s
