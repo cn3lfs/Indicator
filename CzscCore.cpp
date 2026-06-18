@@ -798,7 +798,9 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
                                                          int nPriority,
                                                          int nPoint,
                                                          int nCenter,
-                                                         int nSource)
+                                                         int nBreakout,
+                                                         int nSource,
+                                                         bool bOverlapped)
 {
   TradingSignalCandidate C;
   C.nIndex = nIndex;
@@ -806,8 +808,27 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nPriority = nPriority;
   C.nPoint = nPoint;
   C.nCenter = nCenter;
+  C.nBreakout = nBreakout;
   C.nSource = nSource;
+  C.bOverlapped = bOverlapped;
   return C;
+}
+
+static int FindOverlappedBreakout(const std::vector<CenterBreakout> &Breakouts,
+                                  int nPoint,
+                                  int nDirection)
+{
+  for (std::size_t i = 0; i < Breakouts.size(); i++)
+  {
+    const CenterBreakout &B = Breakouts[i];
+    if (B.bFirstRetest && B.bThirdSignal &&
+        (B.nDirection == nDirection) &&
+        (B.nRetestPoint == nPoint))
+    {
+      return (int)i;
+    }
+  }
+  return -1;
 }
 
 static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCandidates,
@@ -829,7 +850,9 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                         SIGNAL_PRIORITY_FIRST,
                                                         (int)i,
                                                         FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
-                                                        SIGNAL_SOURCE_FIRST));
+                                                        -1,
+                                                        SIGNAL_SOURCE_FIRST,
+                                                        false));
     }
     else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i))
     {
@@ -838,7 +861,9 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                         SIGNAL_PRIORITY_FIRST,
                                                         (int)i,
                                                         FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
-                                                        SIGNAL_SOURCE_FIRST));
+                                                        -1,
+                                                        SIGNAL_SOURCE_FIRST,
+                                                        false));
     }
   }
 }
@@ -846,6 +871,7 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
 static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pCandidates,
                                          const std::vector<SegmentPoint> &Points,
                                          const std::vector<Center> &Centers,
+                                         const std::vector<CenterBreakout> &Breakouts,
                                          const std::vector<TradingSignalCandidate> &FirstCandidates)
 {
   if (pCandidates == 0)
@@ -870,24 +896,30 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
         (Second.nType == CZSC_POINT_BOTTOM) &&
         (Second.fLow > First.fLow))
     {
+      int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, 1);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
                                                         SIGNAL_SECOND_BUY,
                                                         SIGNAL_PRIORITY_SECOND,
                                                         (int)nPoint + 2,
                                                         FindLastCenterBeforeIndex(Centers, Second.nIndex),
-                                                        SIGNAL_SOURCE_SECOND));
+                                                        nBreakout,
+                                                        SIGNAL_SOURCE_SECOND,
+                                                        nBreakout >= 0));
     }
     else if ((FirstSignal.fSignal == SIGNAL_FIRST_SELL) &&
              (Turn.nType == CZSC_POINT_BOTTOM) &&
              (Second.nType == CZSC_POINT_TOP) &&
              (Second.fHigh < First.fHigh))
     {
+      int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, -1);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
                                                         SIGNAL_SECOND_SELL,
                                                         SIGNAL_PRIORITY_SECOND,
                                                         (int)nPoint + 2,
                                                         FindLastCenterBeforeIndex(Centers, Second.nIndex),
-                                                        SIGNAL_SOURCE_SECOND));
+                                                        nBreakout,
+                                                        SIGNAL_SOURCE_SECOND,
+                                                        nBreakout >= 0));
     }
   }
 }
@@ -916,7 +948,9 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                       SIGNAL_PRIORITY_THIRD,
                                                       B.nRetestPoint,
                                                       B.nCenter,
-                                                      SIGNAL_SOURCE_THIRD));
+                                                      (int)i,
+                                                      SIGNAL_SOURCE_THIRD,
+                                                      false));
   }
 }
 
@@ -929,7 +963,7 @@ std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vect
   std::vector<TradingSignalCandidate> FirstCandidates;
 
   AppendFirstSignalCandidates(&FirstCandidates, Points, Centers, Structures);
-  AppendSecondSignalCandidates(&Candidates, Points, Centers, FirstCandidates);
+  AppendSecondSignalCandidates(&Candidates, Points, Centers, Breakouts, FirstCandidates);
   AppendThirdSignalCandidates(&Candidates, Points, Breakouts);
   Candidates.insert(Candidates.end(), FirstCandidates.begin(), FirstCandidates.end());
 
