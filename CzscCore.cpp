@@ -37,6 +37,372 @@ static void ClearOutput(int nCount, float *pOut)
   }
 }
 
+static MergedBar MakeMergedBar(int nIndex, float fHigh, float fLow)
+{
+  MergedBar Bar;
+  Bar.nStart = nIndex;
+  Bar.nEnd = nIndex;
+  Bar.nHighIndex = nIndex;
+  Bar.nLowIndex = nIndex;
+  Bar.fHigh = fHigh;
+  Bar.fLow = fLow;
+  return Bar;
+}
+
+static bool IsIncluded(const MergedBar &Left, const MergedBar &Right)
+{
+  return ((Right.fHigh <= Left.fHigh) && (Right.fLow >= Left.fLow)) ||
+         ((Right.fHigh >= Left.fHigh) && (Right.fLow <= Left.fLow));
+}
+
+static int DetectDirection(const MergedBar &Left, const MergedBar &Right)
+{
+  if ((Right.fHigh > Left.fHigh) && (Right.fLow > Left.fLow))
+  {
+    return 1;
+  }
+  if ((Right.fHigh < Left.fHigh) && (Right.fLow < Left.fLow))
+  {
+    return -1;
+  }
+  return 0;
+}
+
+static int ChooseMergeDirection(const MergedBar &Last, const MergedBar &Bar, int nDirection)
+{
+  if (nDirection != 0)
+  {
+    return nDirection;
+  }
+
+  float fHighDiff = Bar.fHigh - Last.fHigh;
+  if (fHighDiff < 0)
+  {
+    fHighDiff = -fHighDiff;
+  }
+
+  float fLowDiff = Bar.fLow - Last.fLow;
+  if (fLowDiff < 0)
+  {
+    fLowDiff = -fLowDiff;
+  }
+
+  return (fHighDiff >= fLowDiff) ? 1 : -1;
+}
+
+static void AssignHigh(MergedBar *pTarget, const MergedBar &Source)
+{
+  pTarget->fHigh = Source.fHigh;
+  pTarget->nHighIndex = Source.nHighIndex;
+}
+
+static void AssignLow(MergedBar *pTarget, const MergedBar &Source)
+{
+  pTarget->fLow = Source.fLow;
+  pTarget->nLowIndex = Source.nLowIndex;
+}
+
+static void MergeIncludedBar(MergedBar *pLast, const MergedBar &Bar, int nDirection)
+{
+  if (nDirection >= 0)
+  {
+    if (Bar.fHigh >= pLast->fHigh)
+    {
+      AssignHigh(pLast, Bar);
+    }
+    if (Bar.fLow >= pLast->fLow)
+    {
+      AssignLow(pLast, Bar);
+    }
+  }
+  else
+  {
+    if (Bar.fHigh <= pLast->fHigh)
+    {
+      AssignHigh(pLast, Bar);
+    }
+    if (Bar.fLow <= pLast->fLow)
+    {
+      AssignLow(pLast, Bar);
+    }
+  }
+
+  pLast->nEnd = Bar.nEnd;
+}
+
+static bool IsMoreExtreme(const Fractal &Left, const Fractal &Right)
+{
+  if (Left.nType == CZSC_POINT_TOP)
+  {
+    return Right.fHigh >= Left.fHigh;
+  }
+  if (Left.nType == CZSC_POINT_BOTTOM)
+  {
+    return Right.fLow <= Left.fLow;
+  }
+  return false;
+}
+
+static Fractal MakeFractal(int nType, const MergedBar &Bar)
+{
+  Fractal F;
+  F.nType = nType;
+  F.nIndex = (nType == CZSC_POINT_TOP) ? Bar.nHighIndex : Bar.nLowIndex;
+  F.fHigh = Bar.fHigh;
+  F.fLow = Bar.fLow;
+  return F;
+}
+
+static SegmentPoint MakeSegmentPoint(const Fractal &F)
+{
+  SegmentPoint Point;
+  Point.nType = F.nType;
+  Point.nIndex = F.nIndex;
+  Point.fHigh = F.fHigh;
+  Point.fLow = F.fLow;
+  return Point;
+}
+
+static bool IsMoreExtremePoint(const SegmentPoint &Left, const SegmentPoint &Right)
+{
+  if (Left.nType == CZSC_POINT_TOP)
+  {
+    return Right.fHigh >= Left.fHigh;
+  }
+  if (Left.nType == CZSC_POINT_BOTTOM)
+  {
+    return Right.fLow <= Left.fLow;
+  }
+  return false;
+}
+
+static bool IsBrokenByPoint(const SegmentPoint &Start, int nDirection, const SegmentPoint &Point)
+{
+  if ((nDirection > 0) && (Point.nType == CZSC_POINT_BOTTOM))
+  {
+    return Point.fLow < Start.fLow;
+  }
+  if ((nDirection < 0) && (Point.nType == CZSC_POINT_TOP))
+  {
+    return Point.fHigh > Start.fHigh;
+  }
+  return false;
+}
+
+std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
+{
+  std::vector<MergedBar> Bars;
+  if ((nCount <= 0) || (pHigh == 0) || (pLow == 0))
+  {
+    return Bars;
+  }
+
+  int nDirection = 0;
+  Bars.push_back(MakeMergedBar(0, pHigh[0], pLow[0]));
+
+  for (int i = 1; i < nCount; i++)
+  {
+    MergedBar Bar = MakeMergedBar(i, pHigh[i], pLow[i]);
+    MergedBar &Last = Bars.back();
+
+    if (IsIncluded(Last, Bar))
+    {
+      int nMergeDirection = ChooseMergeDirection(Last, Bar, nDirection);
+      MergeIncludedBar(&Last, Bar, nMergeDirection);
+      if (nDirection == 0)
+      {
+        nDirection = nMergeDirection;
+      }
+      continue;
+    }
+
+    int nNewDirection = DetectDirection(Last, Bar);
+    if (nNewDirection != 0)
+    {
+      nDirection = nNewDirection;
+    }
+    Bars.push_back(Bar);
+  }
+
+  return Bars;
+}
+
+std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
+{
+  std::vector<Fractal> Fractals;
+  if (Bars.size() < 3)
+  {
+    return Fractals;
+  }
+
+  for (std::size_t i = 1; i + 1 < Bars.size(); i++)
+  {
+    const MergedBar &Left = Bars[i - 1];
+    const MergedBar &Middle = Bars[i];
+    const MergedBar &Right = Bars[i + 1];
+
+    int nType = CZSC_POINT_NONE;
+    if ((Middle.fHigh > Left.fHigh) && (Middle.fHigh > Right.fHigh) &&
+        (Middle.fLow > Left.fLow) && (Middle.fLow > Right.fLow))
+    {
+      nType = CZSC_POINT_TOP;
+    }
+    else if ((Middle.fLow < Left.fLow) && (Middle.fLow < Right.fLow) &&
+             (Middle.fHigh < Left.fHigh) && (Middle.fHigh < Right.fHigh))
+    {
+      nType = CZSC_POINT_BOTTOM;
+    }
+
+    if (nType == CZSC_POINT_NONE)
+    {
+      continue;
+    }
+
+    Fractal F = MakeFractal(nType, Middle);
+    if (!Fractals.empty() && (Fractals.back().nType == F.nType))
+    {
+      if (IsMoreExtreme(Fractals.back(), F))
+      {
+        Fractals.back() = F;
+      }
+      continue;
+    }
+
+    Fractals.push_back(F);
+  }
+
+  return Fractals;
+}
+
+std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals)
+{
+  std::vector<Stroke> Strokes;
+  if (Fractals.empty())
+  {
+    return Strokes;
+  }
+
+  Fractal Candidate = Fractals[0];
+  for (std::size_t i = 1; i < Fractals.size(); i++)
+  {
+    const Fractal &Current = Fractals[i];
+    if (Current.nType == Candidate.nType)
+    {
+      if (IsMoreExtreme(Candidate, Current))
+      {
+        Candidate = Current;
+      }
+      continue;
+    }
+
+    if (Current.nIndex - Candidate.nIndex < 4)
+    {
+      continue;
+    }
+
+    Stroke S;
+    S.Start = Candidate;
+    S.End = Current;
+    S.nDirection = (Candidate.nType == CZSC_POINT_BOTTOM) ? 1 : -1;
+    Strokes.push_back(S);
+    Candidate = Current;
+  }
+
+  return Strokes;
+}
+
+std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes)
+{
+  std::vector<SegmentPoint> Points;
+  if (Strokes.empty())
+  {
+    return Points;
+  }
+
+  Points.push_back(MakeSegmentPoint(Strokes[0].Start));
+
+  for (std::size_t i = 0; i < Strokes.size(); i++)
+  {
+    SegmentPoint Point = MakeSegmentPoint(Strokes[i].End);
+    if (Points.empty() || (Points.back().nIndex != Point.nIndex))
+    {
+      Points.push_back(Point);
+    }
+  }
+
+  return Points;
+}
+
+std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes)
+{
+  std::vector<SegmentPoint> Points;
+  if (Strokes.size() < 3)
+  {
+    return Points;
+  }
+
+  SegmentPoint Start = MakeSegmentPoint(Strokes[0].Start);
+  Points.push_back(Start);
+
+  int nDirection = Strokes[0].nDirection;
+  int nStartStroke = 0;
+  bool bHasCandidate = false;
+  SegmentPoint Candidate = Start;
+
+  for (std::size_t i = 0; i < Strokes.size(); i++)
+  {
+    SegmentPoint End = MakeSegmentPoint(Strokes[i].End);
+    int nStrokeSpan = (int)i - nStartStroke + 1;
+
+    if ((nStrokeSpan >= 3) && (End.nType != Start.nType))
+    {
+      if (!bHasCandidate || IsMoreExtremePoint(Candidate, End))
+      {
+        Candidate = End;
+        bHasCandidate = true;
+      }
+    }
+
+    if (bHasCandidate && IsBrokenByPoint(Start, nDirection, End))
+    {
+      if (Points.back().nIndex != Candidate.nIndex)
+      {
+        Points.push_back(Candidate);
+      }
+      Start = Candidate;
+      nDirection = -nDirection;
+      nStartStroke = ((int)i > 0) ? (int)i - 1 : (int)i;
+      bHasCandidate = false;
+      Candidate = Start;
+    }
+  }
+
+  if (bHasCandidate && (Points.back().nIndex != Candidate.nIndex))
+  {
+    Points.push_back(Candidate);
+  }
+
+  return Points;
+}
+
+void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    int nIndex = Points[i].nIndex;
+    if ((nIndex >= 0) && (nIndex < nCount))
+    {
+      pOut[nIndex] = (float)(Points[i].nType);
+    }
+  }
+}
+
 //=============================================================================
 // 数学函数部分
 //=============================================================================
@@ -264,15 +630,13 @@ void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     return;
   }
 
-  // 搜寻所有的高低点
-  Parse1(nCount, pOut, pHigh, pLow);
+  (void)pTime;
 
-  // 根据设置的遍数，进行化简（第归算法）
-  int nTimes = (pTime != 0) ? (int)(*pTime) : 0;
-  for (int i = 0; i < nTimes; i++)
-  {
-    Parse2(nCount, pOut, pHigh, pLow);
-  }
+  std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> Points = BuildSegmentPoints(Strokes);
+  WriteSegmentSignal(nCount, pOut, Points);
 }
 
 //=============================================================================
@@ -655,4 +1019,24 @@ void Func8(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
       pOut[i] = (pLow[i] - pHigh[nPrevTop]) / (i - nPrevTop);
     }
   }
+}
+
+//=============================================================================
+// 输出函数9号：线段高低点标记信号
+//=============================================================================
+
+void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow))
+  {
+    return;
+  }
+
+  (void)pTime;
+
+  std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> Points = BuildLineSegmentPoints(Strokes);
+  WriteSegmentSignal(nCount, pOut, Points);
 }

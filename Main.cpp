@@ -30,6 +30,7 @@ static PluginTCalcFuncInfo Info[] =
   {6, &Func6},
   {7, &Func7},
   {8, &Func8},
+  {9, &Func9},
   {0, NULL},
 };
 

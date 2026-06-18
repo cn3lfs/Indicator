@@ -19,7 +19,63 @@
 #ifndef __CZSC_CORE_H__
 #define __CZSC_CORE_H__
 
+#include <vector>
+
 #include "CCentroid.h"
+
+enum CzscPointType
+{
+  CZSC_POINT_BOTTOM = -1,
+  CZSC_POINT_NONE   = 0,
+  CZSC_POINT_TOP    = 1,
+};
+
+struct KBar
+{
+  int   nIndex;
+  float fHigh;
+  float fLow;
+};
+
+struct MergedBar
+{
+  int   nStart;
+  int   nEnd;
+  int   nHighIndex;
+  int   nLowIndex;
+  float fHigh;
+  float fLow;
+};
+
+struct Fractal
+{
+  int   nType;
+  int   nIndex;
+  float fHigh;
+  float fLow;
+};
+
+struct Stroke
+{
+  Fractal Start;
+  Fractal End;
+  int     nDirection;
+};
+
+struct SegmentPoint
+{
+  int   nType;
+  int   nIndex;
+  float fHigh;
+  float fLow;
+};
+
+std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
+std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
+std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals);
+std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes);
+std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes);
+void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
 void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
@@ -32,5 +88,6 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func6(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func7(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func8(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 
 #endif
