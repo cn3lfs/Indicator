@@ -554,6 +554,55 @@ static bool TestFunc5WritesTrendDivergenceFirstSell()
   return true;
 }
 
+static bool TestFunc5SkipsStrongNewLow()
+{
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = 7;
+  pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = 12;
+  pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = 8;
+  pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = 10;
+  pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = 3;
+  pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = 7;
+  pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = 4;
+  pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = 8;
+  pLow[28] = 8;
+  pIn[32] = -1;
+  pHigh[32] = 3.5f;
+  pLow[32] = 3.5f;
+
+  Func5(nCount, pOut, pIn, pHigh, pLow);
+
+  return !NearlyEqual(pOut[32], 1.0f);
+}
+
 static bool TestStrengthAndSlopeUsePreviousExtremes()
 {
   const int nCount = 5;
@@ -648,13 +697,17 @@ int main()
   {
     return 14;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestFunc5SkipsStrongNewLow())
   {
     return 15;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
   {
     return 16;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 17;
   }
 
   return 0;

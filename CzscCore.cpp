@@ -29,6 +29,12 @@ struct SegmentInterval
   float fLow;
 };
 
+struct MoveStrength
+{
+  float fSpace;
+  float fSpeed;
+};
+
 static const float SIGNAL_FIRST_BUY = 1.0f;
 static const float SIGNAL_SECOND_BUY = 2.0f;
 static const float SIGNAL_THIRD_BUY = 3.0f;
@@ -331,6 +337,38 @@ static float GetMovePower(const SegmentPoint &Start, const SegmentPoint &End)
   return fDiff / (float)nSpan;
 }
 
+static MoveStrength MeasureMoveStrength(const SegmentPoint &Start, const SegmentPoint &End)
+{
+  MoveStrength Strength;
+  Strength.fSpace = GetPointPrice(End) - GetPointPrice(Start);
+  if (Strength.fSpace < 0)
+  {
+    Strength.fSpace = -Strength.fSpace;
+  }
+  Strength.fSpeed = GetMovePower(Start, End);
+  return Strength;
+}
+
+static bool IsWeakerMove(const MoveStrength &Current, const MoveStrength &Previous)
+{
+  return (Current.fSpace < Previous.fSpace) || (Current.fSpeed < Previous.fSpeed);
+}
+
+static int GetMoveDirection(const SegmentPoint &Start, const SegmentPoint &End)
+{
+  float fStart = GetPointPrice(Start);
+  float fEnd = GetPointPrice(End);
+  if (fEnd > fStart)
+  {
+    return 1;
+  }
+  if (fEnd < fStart)
+  {
+    return -1;
+  }
+  return 0;
+}
+
 static bool IsCenterAbove(const Center &Left, const Center &Right)
 {
   return Right.fLow > Left.fHigh;
@@ -341,7 +379,11 @@ static bool IsCenterBelow(const Center &Left, const Center &Right)
   return Right.fHigh < Left.fLow;
 }
 
-static bool HasTwoTrendCenters(const std::vector<Center> &Centers, int nIndex, int nDirection)
+static bool FindLastTwoTrendCenters(const std::vector<Center> &Centers,
+                                    int nIndex,
+                                    int nDirection,
+                                    int *pPrev,
+                                    int *pLast)
 {
   int nPrev = -1;
   int nLast = -1;
@@ -361,11 +403,56 @@ static bool HasTwoTrendCenters(const std::vector<Center> &Centers, int nIndex, i
     return false;
   }
 
+  bool bTrend = false;
   if (nDirection > 0)
   {
-    return IsCenterAbove(Centers[nPrev], Centers[nLast]);
+    bTrend = IsCenterAbove(Centers[nPrev], Centers[nLast]);
   }
-  return IsCenterBelow(Centers[nPrev], Centers[nLast]);
+  else
+  {
+    bTrend = IsCenterBelow(Centers[nPrev], Centers[nLast]);
+  }
+
+  if (!bTrend)
+  {
+    return false;
+  }
+
+  if (pPrev != 0)
+  {
+    *pPrev = nPrev;
+  }
+  if (pLast != 0)
+  {
+    *pLast = nLast;
+  }
+  return true;
+}
+
+static bool FindPreviousSameDirectionMove(const std::vector<SegmentPoint> &Points,
+                                          std::size_t nPoint,
+                                          int nDirection,
+                                          std::size_t *pMove)
+{
+  if ((pMove == 0) || (nPoint < 2))
+  {
+    return false;
+  }
+
+  for (std::size_t i = nPoint - 2; ; i--)
+  {
+    if (GetMoveDirection(Points[i], Points[i + 1]) == nDirection)
+    {
+      *pMove = i;
+      return true;
+    }
+    if (i == 0)
+    {
+      break;
+    }
+  }
+
+  return false;
 }
 
 static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
@@ -376,23 +463,39 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
   {
     return false;
   }
-  if (!HasTwoTrendCenters(Centers, Points[nPoint].nIndex, -1))
+
+  int nPrevCenter = -1;
+  int nLastCenter = -1;
+  if (!FindLastTwoTrendCenters(Centers, Points[nPoint].nIndex, -1, &nPrevCenter, &nLastCenter))
   {
     return false;
   }
 
-  const SegmentPoint &PrevStart = Points[nPoint - 3];
-  const SegmentPoint &PrevEnd = Points[nPoint - 2];
   const SegmentPoint &CurrentStart = Points[nPoint - 1];
   const SegmentPoint &CurrentEnd = Points[nPoint];
-  if ((PrevStart.nType != CZSC_POINT_TOP) || (PrevEnd.nType != CZSC_POINT_BOTTOM) ||
-      (CurrentStart.nType != CZSC_POINT_TOP))
+  if ((CurrentStart.nType != CZSC_POINT_TOP) ||
+      (CurrentEnd.fLow >= Centers[nLastCenter].fLow))
   {
     return false;
   }
 
+  std::size_t nPrevMove = 0;
+  if (!FindPreviousSameDirectionMove(Points, nPoint, -1, &nPrevMove))
+  {
+    return false;
+  }
+
+  const SegmentPoint &PrevStart = Points[nPrevMove];
+  const SegmentPoint &PrevEnd = Points[nPrevMove + 1];
+  if ((PrevStart.nType != CZSC_POINT_TOP) || (PrevEnd.nType != CZSC_POINT_BOTTOM))
+  {
+    return false;
+  }
+
+  MoveStrength Previous = MeasureMoveStrength(PrevStart, PrevEnd);
+  MoveStrength Current = MeasureMoveStrength(CurrentStart, CurrentEnd);
   return (CurrentEnd.fLow < PrevEnd.fLow) &&
-         (GetMovePower(CurrentStart, CurrentEnd) < GetMovePower(PrevStart, PrevEnd));
+         IsWeakerMove(Current, Previous);
 }
 
 static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
@@ -403,23 +506,39 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
   {
     return false;
   }
-  if (!HasTwoTrendCenters(Centers, Points[nPoint].nIndex, 1))
+
+  int nPrevCenter = -1;
+  int nLastCenter = -1;
+  if (!FindLastTwoTrendCenters(Centers, Points[nPoint].nIndex, 1, &nPrevCenter, &nLastCenter))
   {
     return false;
   }
 
-  const SegmentPoint &PrevStart = Points[nPoint - 3];
-  const SegmentPoint &PrevEnd = Points[nPoint - 2];
   const SegmentPoint &CurrentStart = Points[nPoint - 1];
   const SegmentPoint &CurrentEnd = Points[nPoint];
-  if ((PrevStart.nType != CZSC_POINT_BOTTOM) || (PrevEnd.nType != CZSC_POINT_TOP) ||
-      (CurrentStart.nType != CZSC_POINT_BOTTOM))
+  if ((CurrentStart.nType != CZSC_POINT_BOTTOM) ||
+      (CurrentEnd.fHigh <= Centers[nLastCenter].fHigh))
   {
     return false;
   }
 
+  std::size_t nPrevMove = 0;
+  if (!FindPreviousSameDirectionMove(Points, nPoint, 1, &nPrevMove))
+  {
+    return false;
+  }
+
+  const SegmentPoint &PrevStart = Points[nPrevMove];
+  const SegmentPoint &PrevEnd = Points[nPrevMove + 1];
+  if ((PrevStart.nType != CZSC_POINT_BOTTOM) || (PrevEnd.nType != CZSC_POINT_TOP))
+  {
+    return false;
+  }
+
+  MoveStrength Previous = MeasureMoveStrength(PrevStart, PrevEnd);
+  MoveStrength Current = MeasureMoveStrength(CurrentStart, CurrentEnd);
   return (CurrentEnd.fHigh > PrevEnd.fHigh) &&
-         (GetMovePower(CurrentStart, CurrentEnd) < GetMovePower(PrevStart, PrevEnd));
+         IsWeakerMove(Current, Previous);
 }
 
 static void WriteTrendDivergenceSignals(int nCount,
