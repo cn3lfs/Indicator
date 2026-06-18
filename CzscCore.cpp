@@ -643,22 +643,101 @@ static void WriteSecondBuySellSignals(int nCount,
   }
 }
 
-static void WriteThirdBuySellSignals(int nCount,
-                                     float *pOut,
-                                     const std::vector<SegmentPoint> &Points,
-                                     const std::vector<Center> &Centers)
+static bool IsConsolidationDivergence(const std::vector<SegmentPoint> &Points,
+                                      std::size_t nLeavePoint,
+                                      int nDirection)
 {
+  if ((nLeavePoint == 0) || (nLeavePoint >= Points.size()))
+  {
+    return false;
+  }
+
+  std::size_t nPrevMove = 0;
+  if (!FindPreviousSameDirectionMove(Points, nLeavePoint, nDirection, &nPrevMove))
+  {
+    return false;
+  }
+
+  const SegmentPoint &PrevStart = Points[nPrevMove];
+  const SegmentPoint &PrevEnd = Points[nPrevMove + 1];
+  const SegmentPoint &CurrentStart = Points[nLeavePoint - 1];
+  const SegmentPoint &CurrentEnd = Points[nLeavePoint];
+
+  if (nDirection > 0)
+  {
+    if ((PrevStart.nType != CZSC_POINT_BOTTOM) || (PrevEnd.nType != CZSC_POINT_TOP) ||
+        (CurrentStart.nType != CZSC_POINT_BOTTOM) || (CurrentEnd.nType != CZSC_POINT_TOP) ||
+        (CurrentEnd.fHigh <= PrevEnd.fHigh))
+    {
+      return false;
+    }
+  }
+  else if (nDirection < 0)
+  {
+    if ((PrevStart.nType != CZSC_POINT_TOP) || (PrevEnd.nType != CZSC_POINT_BOTTOM) ||
+        (CurrentStart.nType != CZSC_POINT_TOP) || (CurrentEnd.nType != CZSC_POINT_BOTTOM) ||
+        (CurrentEnd.fLow >= PrevEnd.fLow))
+    {
+      return false;
+    }
+  }
+  else
+  {
+    return false;
+  }
+
+  StrengthMetrics Previous = MeasureStrength(PrevStart, PrevEnd);
+  StrengthMetrics Current = MeasureStrength(CurrentStart, CurrentEnd);
+  return IsWeakerStrength(Current, Previous);
+}
+
+static CenterBreakout MakeCenterBreakout(const std::vector<SegmentPoint> &Points,
+                                         const Center &C,
+                                         std::size_t nCenter,
+                                         std::size_t nLeavePoint,
+                                         std::size_t nRetestPoint,
+                                         int nDirection)
+{
+  CenterBreakout B;
+  B.nCenter = (int)nCenter;
+  B.nDirection = nDirection;
+  B.nLeavePoint = (int)nLeavePoint;
+  B.nRetestPoint = (int)nRetestPoint;
+  B.bFirstRetest = true;
+  B.bBackIntoCenter = false;
+  B.bThirdSignal = false;
+  B.bConsolidationDivergence = IsConsolidationDivergence(Points, nLeavePoint, nDirection);
+
+  const SegmentPoint &Retest = Points[nRetestPoint];
+  if (nDirection > 0)
+  {
+    B.bBackIntoCenter = Retest.fLow < C.fHigh;
+    B.bThirdSignal = !B.bBackIntoCenter;
+  }
+  else
+  {
+    B.bBackIntoCenter = Retest.fHigh > C.fLow;
+    B.bThirdSignal = !B.bBackIntoCenter;
+  }
+
+  return B;
+}
+
+std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint> &Points,
+                                                 const std::vector<Center> &Centers,
+                                                 const std::vector<TrendStructure> &Structures)
+{
+  (void)Structures;
+  std::vector<CenterBreakout> Breakouts;
+  if (Points.size() < 2)
+  {
+    return Breakouts;
+  }
+
   for (std::size_t i = 0; i < Centers.size(); i++)
   {
     const Center &C = Centers[i];
-    int nBoundary = nCount;
-    if (i + 1 < Centers.size())
-    {
-      nBoundary = Centers[i + 1].nStart;
-    }
-
-    bool bLeftUp = false;
-    bool bLeftDown = false;
+    int nBoundary = (i + 1 < Centers.size()) ? Centers[i + 1].nStart : 0x7fffffff;
     for (std::size_t j = 1; j < Points.size(); j++)
     {
       const SegmentPoint &Start = Points[j - 1];
@@ -673,36 +752,66 @@ static void WriteThirdBuySellSignals(int nCount,
       }
 
       int nDirection = GetMoveDirection(Start, End);
-      if (!bLeftUp && !bLeftDown)
+      bool bLeavesUp = (nDirection > 0) &&
+                       (End.nType == CZSC_POINT_TOP) &&
+                       (End.fHigh > C.fHigh);
+      bool bLeavesDown = (nDirection < 0) &&
+                         (End.nType == CZSC_POINT_BOTTOM) &&
+                         (End.fLow < C.fLow);
+      if (!bLeavesUp && !bLeavesDown)
       {
-        if ((nDirection > 0) && (End.nType == CZSC_POINT_TOP) && (End.fHigh > C.fHigh))
-        {
-          bLeftUp = true;
-        }
-        else if ((nDirection < 0) && (End.nType == CZSC_POINT_BOTTOM) && (End.fLow < C.fLow))
-        {
-          bLeftDown = true;
-        }
         continue;
       }
 
-      if (bLeftUp && (End.nType == CZSC_POINT_BOTTOM))
+      int nBreakDirection = bLeavesUp ? 1 : -1;
+      for (std::size_t k = j + 1; k < Points.size(); k++)
       {
-        if ((End.fLow >= C.fHigh) && (End.nIndex >= 0) && (End.nIndex < nCount))
+        const SegmentPoint &Retest = Points[k];
+        if (Retest.nIndex >= nBoundary)
         {
-          pOut[End.nIndex] = SIGNAL_THIRD_BUY;
+          break;
         }
-        break;
+        if (((nBreakDirection > 0) && (Retest.nType == CZSC_POINT_BOTTOM)) ||
+            ((nBreakDirection < 0) && (Retest.nType == CZSC_POINT_TOP)))
+        {
+          Breakouts.push_back(MakeCenterBreakout(Points, C, i, j, k, nBreakDirection));
+          break;
+        }
       }
+      break;
+    }
+  }
 
-      if (bLeftDown && (End.nType == CZSC_POINT_TOP))
-      {
-        if ((End.fHigh <= C.fLow) && (End.nIndex >= 0) && (End.nIndex < nCount))
-        {
-          pOut[End.nIndex] = SIGNAL_THIRD_SELL;
-        }
-        break;
-      }
+  return Breakouts;
+}
+
+static void WriteThirdBuySellSignals(int nCount,
+                                     float *pOut,
+                                     const std::vector<SegmentPoint> &Points,
+                                     const std::vector<CenterBreakout> &Breakouts)
+{
+  for (std::size_t i = 0; i < Breakouts.size(); i++)
+  {
+    const CenterBreakout &B = Breakouts[i];
+    if (!B.bFirstRetest || !B.bThirdSignal ||
+        (B.nRetestPoint < 0) || ((std::size_t)B.nRetestPoint >= Points.size()))
+    {
+      continue;
+    }
+
+    int nIndex = Points[B.nRetestPoint].nIndex;
+    if ((nIndex < 0) || (nIndex >= nCount))
+    {
+      continue;
+    }
+
+    if (B.nDirection > 0)
+    {
+      pOut[nIndex] = SIGNAL_THIRD_BUY;
+    }
+    else if (B.nDirection < 0)
+    {
+      pOut[nIndex] = SIGNAL_THIRD_SELL;
     }
   }
 }
@@ -1370,8 +1479,9 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
   std::vector<Center> Centers = BuildCenters(Points);
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
   WriteSecondBuySellSignals(nCount, pOut, Points, Centers, Structures);
-  WriteThirdBuySellSignals(nCount, pOut, Points, Centers);
+  WriteThirdBuySellSignals(nCount, pOut, Points, Breakouts);
   WriteTrendDivergenceSignals(nCount, pOut, Points, Centers, Structures);
 }
 

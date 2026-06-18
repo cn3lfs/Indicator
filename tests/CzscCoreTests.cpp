@@ -372,6 +372,187 @@ static bool TestTrendStructuresSkipOverlappingTrend()
          (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
 }
 
+static bool TestCenterBreakoutsDetectThirdBuy()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 9.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  if (Breakouts.size() != 1)
+  {
+    return false;
+  }
+  return (Breakouts[0].nDirection > 0) &&
+         (Breakouts[0].nLeavePoint == 5) &&
+         (Breakouts[0].nRetestPoint == 6) &&
+         Breakouts[0].bFirstRetest &&
+         !Breakouts[0].bBackIntoCenter &&
+         Breakouts[0].bThirdSignal;
+}
+
+static bool TestCenterBreakoutsDetectThirdSell()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 2));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 7));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 3.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  if (Breakouts.size() != 1)
+  {
+    return false;
+  }
+  return (Breakouts[0].nDirection < 0) &&
+         (Breakouts[0].nLeavePoint == 5) &&
+         (Breakouts[0].nRetestPoint == 6) &&
+         Breakouts[0].bFirstRetest &&
+         !Breakouts[0].bBackIntoCenter &&
+         Breakouts[0].bThirdSignal;
+}
+
+static bool TestCenterBreakoutsUseFirstRetestOnly()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 9.5f));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 13));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 10));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  if (Breakouts.size() != 1)
+  {
+    return false;
+  }
+  return Breakouts[0].bThirdSignal &&
+         (Breakouts[0].nRetestPoint == 6);
+}
+
+static bool TestCenterBreakoutsSkipBackIntoCenter()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 8.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  if (Breakouts.size() != 1)
+  {
+    return false;
+  }
+  return Breakouts[0].bBackIntoCenter && !Breakouts[0].bThirdSignal;
+}
+
+static bool TestCenterBreakoutsSkipWithoutLeave()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 8.5f));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 7));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  return Breakouts.empty();
+}
+
+static bool TestConsolidationDivergenceDetectsUpWeakening()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 2));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 9.5f));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 10.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  return (Breakouts.size() == 1) && Breakouts[0].bConsolidationDivergence;
+}
+
+static bool TestConsolidationDivergenceDetectsDownWeakening()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 2));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 4.5f));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 3));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 3.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  return (Breakouts.size() == 1) && Breakouts[0].bConsolidationDivergence;
+}
+
+static bool TestConsolidationDivergenceSkipsStrongBreakout()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 2));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 13));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 10.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  return (Breakouts.size() == 1) && !Breakouts[0].bConsolidationDivergence;
+}
+
 static bool TestFunc9WritesLineSegmentSignal()
 {
   const int nCount = 21;
@@ -1009,61 +1190,93 @@ int main()
   {
     return 13;
   }
-  if (!TestFunc9WritesLineSegmentSignal())
+  if (!TestCenterBreakoutsDetectThirdBuy())
   {
     return 14;
   }
-  if (!TestCentersUseThreeOverlappingSegments())
+  if (!TestCenterBreakoutsDetectThirdSell())
   {
     return 15;
   }
-  if (!TestCenterExtendsWithOverlappingSegment())
+  if (!TestCenterBreakoutsUseFirstRetestOnly())
   {
     return 16;
   }
-  if (!TestCentersSplitWhenOverlapBreaks())
+  if (!TestCenterBreakoutsSkipBackIntoCenter())
   {
     return 17;
   }
-  if (!TestCenterFunctionsWriteSignals())
+  if (!TestCenterBreakoutsSkipWithoutLeave())
   {
     return 18;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstBuy())
+  if (!TestConsolidationDivergenceDetectsUpWeakening())
   {
     return 19;
   }
-  if (!TestFunc5WritesCenterThirdBuy())
+  if (!TestConsolidationDivergenceDetectsDownWeakening())
   {
     return 20;
   }
-  if (!TestFunc5WritesCenterThirdSell())
+  if (!TestConsolidationDivergenceSkipsStrongBreakout())
   {
     return 21;
   }
-  if (!TestFunc5WritesSecondBuyAfterFirstBuy())
+  if (!TestFunc9WritesLineSegmentSignal())
   {
     return 22;
   }
-  if (!TestFunc5WritesSecondSellAfterFirstSell())
+  if (!TestCentersUseThreeOverlappingSegments())
   {
     return 23;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstSell())
+  if (!TestCenterExtendsWithOverlappingSegment())
   {
     return 24;
   }
-  if (!TestFunc5SkipsStrongNewLow())
+  if (!TestCentersSplitWhenOverlapBreaks())
   {
     return 25;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestCenterFunctionsWriteSignals())
   {
     return 26;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestFunc5WritesTrendDivergenceFirstBuy())
   {
     return 27;
+  }
+  if (!TestFunc5WritesCenterThirdBuy())
+  {
+    return 28;
+  }
+  if (!TestFunc5WritesCenterThirdSell())
+  {
+    return 29;
+  }
+  if (!TestFunc5WritesSecondBuyAfterFirstBuy())
+  {
+    return 30;
+  }
+  if (!TestFunc5WritesSecondSellAfterFirstSell())
+  {
+    return 31;
+  }
+  if (!TestFunc5WritesTrendDivergenceFirstSell())
+  {
+    return 32;
+  }
+  if (!TestFunc5SkipsStrongNewLow())
+  {
+    return 33;
+  }
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  {
+    return 34;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 35;
   }
 
   return 0;

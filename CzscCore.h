@@ -102,6 +102,18 @@ struct TrendStructure
   int nLastCenter;
 };
 
+struct CenterBreakout
+{
+  int  nCenter;
+  int  nDirection;
+  int  nLeavePoint;
+  int  nRetestPoint;
+  bool bFirstRetest;
+  bool bBackIntoCenter;
+  bool bThirdSignal;
+  bool bConsolidationDivergence;
+};
+
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals);
@@ -110,6 +122,9 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers);
+std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint> &Points,
+                                                 const std::vector<Center> &Centers,
+                                                 const std::vector<TrendStructure> &Structures);
 StrengthMetrics MeasureStrength(const SegmentPoint &Start, const SegmentPoint &End);
 bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Previous);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
