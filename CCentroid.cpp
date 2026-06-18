@@ -1,5 +1,5 @@
 /*****************************************************************************
- * ìøÂÛ¿ÉÊÓ»¯·ÖÎöÏµÍ³
+ * ç¦…è®ºå¯è§†åŒ–åˆ†æç³»ç»Ÿ
  * Copyright (C) 2016, Martin Tang
 
  * This program is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ CCentroid::~CCentroid()
 {
 }
 
-// ÍÆÈë¸ßµã²¢¼ÆËã×´Ì¬
+// æ¨å…¥é«˜ç‚¹å¹¶è®¡ç®—çŠ¶æ€
 bool CCentroid::PushHigh(int nIndex, float fValue)
 {
   if (bValid == true)
@@ -56,16 +56,16 @@ bool CCentroid::PushHigh(int nIndex, float fValue)
     nLines = 0;
   }
 
-  // ¸üĞÂ¸ßµÍµãÎ»ÖÃĞÅÏ¢
+  // æ›´æ–°é«˜ä½ç‚¹ä½ç½®ä¿¡æ¯
   nTop2 = nTop1;
   fTop2 = fTop1;
   nTop1 = nIndex;
   fTop1 = fValue;
 
-  // Èç¹û·ÇÖĞÊàÄ£Ê½ÏÂ
+  // å¦‚æœéä¸­æ¢æ¨¡å¼ä¸‹
   if (bValid == false)
   {
-    // ¸üĞÂÖĞÊà¸ß
+    // æ›´æ–°ä¸­æ¢é«˜
     if (fTop1 < fTop2)
     {
       fHigh  = fTop1;
@@ -75,7 +75,7 @@ bool CCentroid::PushHigh(int nIndex, float fValue)
       fHigh  = fTop2;
     }
 
-    // ÖĞÊàÊ¶±ğ
+    // ä¸­æ¢è¯†åˆ«
     if (fHigh > fLow)
     {
       if  (fBot1 < fBot2)
@@ -89,16 +89,16 @@ bool CCentroid::PushHigh(int nIndex, float fValue)
       bValid = true;
     }
   }
-  // Èç¹ûÔÚÖĞÊàÖĞ
+  // å¦‚æœåœ¨ä¸­æ¢ä¸­
   else
   {
-    // ¸üĞÂÖĞÊà¸ß
+    // æ›´æ–°ä¸­æ¢é«˜
     if (fHigh > fTop1)
     {
       fHigh  = fTop1;
     }
 
-    // ÖĞÊàÖÕ½á
+    // ä¸­æ¢ç»ˆç»“
     if (fHigh < fLow)
     {
       fHigh  = fTop1;
@@ -129,16 +129,16 @@ bool CCentroid::PushLow(int nIndex, float fValue)
     nLines = 0;
   }
 
-  // ¸üĞÂ¶¨Î»ĞÅÏ¢
+  // æ›´æ–°å®šä½ä¿¡æ¯
   nBot2 = nBot1;
   fBot2 = fBot1;
   nBot1 = nIndex;
   fBot1 = fValue;
 
-  // Èç¹û·ÇÖĞÊàÄ£Ê½ÏÂ
+  // å¦‚æœéä¸­æ¢æ¨¡å¼ä¸‹
   if (bValid == false)
   {
-    // ¸üĞÂÇø¼äµÍµã
+    // æ›´æ–°åŒºé—´ä½ç‚¹
     if (fBot1 > fBot2)
     {
       fLow = fBot1;
@@ -148,7 +148,7 @@ bool CCentroid::PushLow(int nIndex, float fValue)
       fLow = fBot2;
     }
 
-    // ÖĞÊà²¶×½
+    // ä¸­æ¢æ•æ‰
     if (fHigh > fLow)
     {
       if (fTop1 > fTop2)
@@ -162,16 +162,16 @@ bool CCentroid::PushLow(int nIndex, float fValue)
       bValid = true;
     }
   }
-  // Èç¹ûÔÚÖĞÊàÖĞ
+  // å¦‚æœåœ¨ä¸­æ¢ä¸­
   else 
   {
-    // ¸üĞÂÖĞÊàµÍ
+    // æ›´æ–°ä¸­æ¢ä½
     if (fLow < fBot1)
     {
       fLow = fBot1;
     }
 
-    // ÖĞÊàÖÕ½á
+    // ä¸­æ¢ç»ˆç»“
     if (fHigh < fLow)
     {
       fHigh  = fTop1;

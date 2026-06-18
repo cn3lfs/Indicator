@@ -18,9 +18,10 @@
 
 # Configurations
 INCLUDE=
+CHARSETFLAGS=-finput-charset=UTF-8
 ASFLAGS=$(INCLUDE) -O2
-CCFLAGS=$(INCLUDE) -O2
-CXFLAGS=$(INCLUDE) -O2
+CCFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
+CXFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
 FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
 
@@ -55,13 +56,13 @@ clean:
 	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
 
 %.dep : %.c 
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+	@gcc $(CCFLAGS) -MM -MT $(@:.dep=.o) -o $@ $<
 
 %.dep : %.m 
 	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
 
 %.dep : %.cpp 
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+	@gcc $(CXFLAGS) -MM -MT $(@:.dep=.o) -o $@ $<
 
 %.dep : %.f 
 	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * ìøÂÛ¿ÉÊÓ»¯·ÖÎöÏµÍ³
+ * ç¦…è®ºå¯è§†åŒ–åˆ†æç³»ç»Ÿ
  * Copyright (C) 2016, Martin Tang
 
  * This program is free software: you can redistribute it and/or modify
