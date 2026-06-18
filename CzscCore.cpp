@@ -557,8 +557,13 @@ static bool FindPreviousSameDirectionMove(const std::vector<SegmentPoint> &Point
 static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
                                       const std::vector<Center> &Centers,
                                       const std::vector<TrendStructure> &Structures,
-                                      std::size_t nPoint)
+                                      std::size_t nPoint,
+                                      DivergenceResult *pDivergence)
 {
+  if (pDivergence != 0)
+  {
+    *pDivergence = MakeEmptyDivergence(-1);
+  }
   if ((nPoint < 4) || (Points[nPoint].nType != CZSC_POINT_BOTTOM))
   {
     return false;
@@ -593,14 +598,23 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
   }
 
   DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, -1);
+  if (pDivergence != 0)
+  {
+    *pDivergence = Divergence;
+  }
   return Divergence.bDivergence;
 }
 
 static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
                                        const std::vector<Center> &Centers,
                                        const std::vector<TrendStructure> &Structures,
-                                       std::size_t nPoint)
+                                       std::size_t nPoint,
+                                       DivergenceResult *pDivergence)
 {
+  if (pDivergence != 0)
+  {
+    *pDivergence = MakeEmptyDivergence(1);
+  }
   if ((nPoint < 4) || (Points[nPoint].nType != CZSC_POINT_TOP))
   {
     return false;
@@ -635,6 +649,10 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
   }
 
   DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, 1);
+  if (pDivergence != 0)
+  {
+    *pDivergence = Divergence;
+  }
   return Divergence.bDivergence;
 }
 
@@ -800,7 +818,8 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
                                                          int nCenter,
                                                          int nBreakout,
                                                          int nSource,
-                                                         bool bOverlapped)
+                                                         bool bOverlapped,
+                                                         const DivergenceResult &Divergence)
 {
   TradingSignalCandidate C;
   C.nIndex = nIndex;
@@ -811,6 +830,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nBreakout = nBreakout;
   C.nSource = nSource;
   C.bOverlapped = bOverlapped;
+  C.Divergence = Divergence;
   return C;
 }
 
@@ -843,7 +863,8 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
 
   for (std::size_t i = 0; i < Points.size(); i++)
   {
-    if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i))
+    DivergenceResult Divergence = MakeEmptyDivergence(0);
+    if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i, &Divergence))
     {
       pCandidates->push_back(MakeTradingSignalCandidate(Points[i].nIndex,
                                                         SIGNAL_FIRST_BUY,
@@ -852,9 +873,10 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                         FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
                                                         -1,
                                                         SIGNAL_SOURCE_FIRST,
-                                                        false));
+                                                        false,
+                                                        Divergence));
     }
-    else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i))
+    else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i, &Divergence))
     {
       pCandidates->push_back(MakeTradingSignalCandidate(Points[i].nIndex,
                                                         SIGNAL_FIRST_SELL,
@@ -863,7 +885,8 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                         FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
                                                         -1,
                                                         SIGNAL_SOURCE_FIRST,
-                                                        false));
+                                                        false,
+                                                        Divergence));
     }
   }
 }
@@ -897,6 +920,9 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
         (Second.fLow > First.fLow))
     {
       int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, 1);
+      DivergenceResult Divergence = (nBreakout >= 0) ?
+                                    Breakouts[(std::size_t)nBreakout].Divergence :
+                                    MakeEmptyDivergence(1);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
                                                         SIGNAL_SECOND_BUY,
                                                         SIGNAL_PRIORITY_SECOND,
@@ -904,7 +930,8 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
                                                         FindLastCenterBeforeIndex(Centers, Second.nIndex),
                                                         nBreakout,
                                                         SIGNAL_SOURCE_SECOND,
-                                                        nBreakout >= 0));
+                                                        nBreakout >= 0,
+                                                        Divergence));
     }
     else if ((FirstSignal.fSignal == SIGNAL_FIRST_SELL) &&
              (Turn.nType == CZSC_POINT_BOTTOM) &&
@@ -912,6 +939,9 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
              (Second.fHigh < First.fHigh))
     {
       int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, -1);
+      DivergenceResult Divergence = (nBreakout >= 0) ?
+                                    Breakouts[(std::size_t)nBreakout].Divergence :
+                                    MakeEmptyDivergence(-1);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
                                                         SIGNAL_SECOND_SELL,
                                                         SIGNAL_PRIORITY_SECOND,
@@ -919,7 +949,8 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
                                                         FindLastCenterBeforeIndex(Centers, Second.nIndex),
                                                         nBreakout,
                                                         SIGNAL_SOURCE_SECOND,
-                                                        nBreakout >= 0));
+                                                        nBreakout >= 0,
+                                                        Divergence));
     }
   }
 }
@@ -950,7 +981,8 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                       B.nCenter,
                                                       (int)i,
                                                       SIGNAL_SOURCE_THIRD,
-                                                      false));
+                                                      false,
+                                                      B.Divergence));
   }
 }
 

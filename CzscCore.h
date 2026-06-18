@@ -136,6 +136,7 @@ struct TradingSignalCandidate
   int   nBreakout;
   int   nSource;
   bool  bOverlapped;
+  DivergenceResult Divergence;
 };
 
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);

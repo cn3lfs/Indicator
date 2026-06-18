@@ -189,6 +189,14 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nBreakout = -1;
   C.nSource = 0;
   C.bOverlapped = false;
+  C.Divergence.nDirection = 0;
+  C.Divergence.bNewExtreme = false;
+  C.Divergence.bWeakSpace = false;
+  C.Divergence.bWeakSpeed = false;
+  C.Divergence.bDivergence = false;
+  C.Divergence.Previous = MeasureStrength(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1),
+                                          MakeTestPoint(CZSC_POINT_TOP, 4, 2));
+  C.Divergence.Current = C.Divergence.Previous;
   return C;
 }
 
@@ -790,6 +798,89 @@ static bool TestApplyTradingCandidatesThirdOverridesSecond()
   return NearlyEqual(pOut[2], 3.0f);
 }
 
+static bool TestFirstCandidateKeepsTrendDivergence()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = 7;
+  pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = 12;
+  pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = 8;
+  pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = 10;
+  pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = 3;
+  pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = 7;
+  pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = 4;
+  pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = 4.2f;
+  pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = 3.8f;
+  pLow[32] = 3.8f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+
+  return (pFirst != 0) &&
+         (pFirst->Divergence.nDirection == -1) &&
+         pFirst->Divergence.bNewExtreme &&
+         pFirst->Divergence.bDivergence;
+}
+
+static bool TestThirdCandidateKeepsBreakoutDivergence()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 10.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 6));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 24, 3.0f);
+
+  return (pThird != 0) &&
+         (pThird->nBreakout == 0) &&
+         (pThird->Divergence.nDirection == 1) &&
+         pThird->Divergence.bNewExtreme &&
+         pThird->Divergence.bWeakSpace &&
+         pThird->Divergence.bDivergence;
+}
+
 static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
 {
   const int nCount = 41;
@@ -854,6 +945,7 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   return (pSecond != 0) &&
          pSecond->bOverlapped &&
          (pSecond->nBreakout == 0) &&
+         (pSecond->Divergence.nDirection == 1) &&
          NearlyEqual(pOut[40], 3.0f);
 }
 
@@ -921,6 +1013,7 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   return (pSecond != 0) &&
          pSecond->bOverlapped &&
          (pSecond->nBreakout == 0) &&
+         (pSecond->Divergence.nDirection == -1) &&
          NearlyEqual(pOut[40], 13.0f);
 }
 
@@ -1625,69 +1718,77 @@ int main()
   {
     return 29;
   }
-  if (!TestTradingCandidatesMarkSecondThirdBuyOverlap())
+  if (!TestFirstCandidateKeepsTrendDivergence())
   {
     return 30;
   }
-  if (!TestTradingCandidatesMarkSecondThirdSellOverlap())
+  if (!TestThirdCandidateKeepsBreakoutDivergence())
   {
     return 31;
   }
-  if (!TestFunc9WritesLineSegmentSignal())
+  if (!TestTradingCandidatesMarkSecondThirdBuyOverlap())
   {
     return 32;
   }
-  if (!TestCentersUseThreeOverlappingSegments())
+  if (!TestTradingCandidatesMarkSecondThirdSellOverlap())
   {
     return 33;
   }
-  if (!TestCenterExtendsWithOverlappingSegment())
+  if (!TestFunc9WritesLineSegmentSignal())
   {
     return 34;
   }
-  if (!TestCentersSplitWhenOverlapBreaks())
+  if (!TestCentersUseThreeOverlappingSegments())
   {
     return 35;
   }
-  if (!TestCenterFunctionsWriteSignals())
+  if (!TestCenterExtendsWithOverlappingSegment())
   {
     return 36;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstBuy())
+  if (!TestCentersSplitWhenOverlapBreaks())
   {
     return 37;
   }
-  if (!TestFunc5WritesCenterThirdBuy())
+  if (!TestCenterFunctionsWriteSignals())
   {
     return 38;
   }
-  if (!TestFunc5WritesCenterThirdSell())
+  if (!TestFunc5WritesTrendDivergenceFirstBuy())
   {
     return 39;
   }
-  if (!TestFunc5WritesSecondBuyAfterFirstBuy())
+  if (!TestFunc5WritesCenterThirdBuy())
   {
     return 40;
   }
-  if (!TestFunc5WritesSecondSellAfterFirstSell())
+  if (!TestFunc5WritesCenterThirdSell())
   {
     return 41;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstSell())
+  if (!TestFunc5WritesSecondBuyAfterFirstBuy())
   {
     return 42;
   }
-  if (!TestFunc5SkipsStrongNewLow())
+  if (!TestFunc5WritesSecondSellAfterFirstSell())
   {
     return 43;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestFunc5WritesTrendDivergenceFirstSell())
   {
     return 44;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestFunc5SkipsStrongNewLow())
   {
     return 45;
+  }
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  {
+    return 46;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 47;
   }
 
   return 0;
