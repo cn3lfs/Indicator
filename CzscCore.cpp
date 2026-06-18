@@ -811,6 +811,34 @@ static int FindLastCenterBeforeIndex(const std::vector<Center> &Centers, int nIn
   return nCenter;
 }
 
+static int ClassifyTradingSignalQuality(int nSource,
+                                        bool bOverlapped,
+                                        const DivergenceResult &Divergence)
+{
+  if (nSource == SIGNAL_SOURCE_FIRST)
+  {
+    return (Divergence.bDivergence && Divergence.bWeakSpace && Divergence.bWeakSpeed) ?
+           CZSC_SIGNAL_QUALITY_STRONG :
+           CZSC_SIGNAL_QUALITY_CONFIRMED;
+  }
+
+  if (nSource == SIGNAL_SOURCE_SECOND)
+  {
+    return (bOverlapped && Divergence.bDivergence) ?
+           CZSC_SIGNAL_QUALITY_STRONG :
+           CZSC_SIGNAL_QUALITY_CONFIRMED;
+  }
+
+  if (nSource == SIGNAL_SOURCE_THIRD)
+  {
+    return Divergence.bDivergence ?
+           CZSC_SIGNAL_QUALITY_STRONG :
+           CZSC_SIGNAL_QUALITY_CONFIRMED;
+  }
+
+  return CZSC_SIGNAL_QUALITY_WATCH;
+}
+
 static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
                                                          float fSignal,
                                                          int nPriority,
@@ -829,6 +857,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nCenter = nCenter;
   C.nBreakout = nBreakout;
   C.nSource = nSource;
+  C.nQuality = ClassifyTradingSignalQuality(nSource, bOverlapped, Divergence);
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
   return C;

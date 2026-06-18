@@ -188,6 +188,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nCenter = -1;
   C.nBreakout = -1;
   C.nSource = 0;
+  C.nQuality = CZSC_SIGNAL_QUALITY_WATCH;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
   C.Divergence.bNewExtreme = false;
@@ -851,7 +852,8 @@ static bool TestFirstCandidateKeepsTrendDivergence()
   return (pFirst != 0) &&
          (pFirst->Divergence.nDirection == -1) &&
          pFirst->Divergence.bNewExtreme &&
-         pFirst->Divergence.bDivergence;
+         pFirst->Divergence.bDivergence &&
+         (pFirst->nQuality == CZSC_SIGNAL_QUALITY_STRONG);
 }
 
 static bool TestThirdCandidateKeepsBreakoutDivergence()
@@ -878,7 +880,8 @@ static bool TestThirdCandidateKeepsBreakoutDivergence()
          (pThird->Divergence.nDirection == 1) &&
          pThird->Divergence.bNewExtreme &&
          pThird->Divergence.bWeakSpace &&
-         pThird->Divergence.bDivergence;
+         pThird->Divergence.bDivergence &&
+         (pThird->nQuality == CZSC_SIGNAL_QUALITY_STRONG);
 }
 
 static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
@@ -946,6 +949,7 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
          pSecond->bOverlapped &&
          (pSecond->nBreakout == 0) &&
          (pSecond->Divergence.nDirection == 1) &&
+         (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          NearlyEqual(pOut[40], 3.0f);
 }
 
@@ -1014,6 +1018,7 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
          pSecond->bOverlapped &&
          (pSecond->nBreakout == 0) &&
          (pSecond->Divergence.nDirection == -1) &&
+         (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          NearlyEqual(pOut[40], 13.0f);
 }
 
