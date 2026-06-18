@@ -158,6 +158,16 @@ static Fractal MakeTestFractal(int nType, int nIndex, float fHigh, float fLow)
   return F;
 }
 
+static SegmentPoint MakeTestPoint(int nType, int nIndex, float fPrice)
+{
+  SegmentPoint Point;
+  Point.nType = nType;
+  Point.nIndex = nIndex;
+  Point.fHigh = fPrice;
+  Point.fLow = fPrice;
+  return Point;
+}
+
 static bool TestLineSegmentsAreHigherLevelThanStrokes()
 {
   std::vector<Fractal> Fractals;
@@ -284,6 +294,144 @@ static bool TestFunc9WritesLineSegmentSignal()
   return true;
 }
 
+static bool TestCentersUseThreeOverlappingSegments()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() != 1)
+  {
+    return false;
+  }
+  if ((Centers[0].nStart != 0) || (Centers[0].nEnd != 12))
+  {
+    return false;
+  }
+  if (!NearlyEqual(Centers[0].fHigh, 9.0f) || !NearlyEqual(Centers[0].fLow, 4.0f))
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static bool TestCenterExtendsWithOverlappingSegment()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
+
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() != 1)
+  {
+    return false;
+  }
+  if (Centers[0].nEnd != 16)
+  {
+    return false;
+  }
+  if (!NearlyEqual(Centers[0].fHigh, 9.0f) || !NearlyEqual(Centers[0].fLow, 5.0f))
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static bool TestCentersSplitWhenOverlapBreaks()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 14));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 12));
+
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() != 2)
+  {
+    return false;
+  }
+  if ((Centers[0].nStart != 0) || (Centers[0].nEnd != 12))
+  {
+    return false;
+  }
+  if ((Centers[1].nStart != 12) || (Centers[1].nEnd != 24))
+  {
+    return false;
+  }
+  if (!NearlyEqual(Centers[0].fHigh, 10.0f) || !NearlyEqual(Centers[0].fLow, 4.0f))
+  {
+    return false;
+  }
+  if (!NearlyEqual(Centers[1].fHigh, 12.0f) || !NearlyEqual(Centers[1].fLow, 12.0f))
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static bool TestCenterFunctionsWriteSignals()
+{
+  const int nCount = 17;
+  float pIn[nCount] = {-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, -1};
+  float pHigh[nCount] = {1, 0, 0, 0, 10, 0, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0, 5};
+  float pLow[nCount] = {1, 0, 0, 0, 10, 0, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0, 5};
+  float pOut[nCount];
+
+  Func2(nCount, pOut, pIn, pHigh, pLow);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pOut[i], 9.0f))
+    {
+      return false;
+    }
+  }
+
+  Func3(nCount, pOut, pIn, pHigh, pLow);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pOut[i], 5.0f))
+    {
+      return false;
+    }
+  }
+
+  Func4(nCount, pOut, pIn, pHigh, pLow);
+  for (int i = 0; i < nCount; i++)
+  {
+    float fExpected = 0;
+    if (i == 0)
+    {
+      fExpected = 1;
+    }
+    else if (i == 16)
+    {
+      fExpected = 2;
+    }
+
+    if (!NearlyEqual(pOut[i], fExpected))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestStrengthAndSlopeUsePreviousExtremes()
 {
   const int nCount = 5;
@@ -354,13 +502,29 @@ int main()
   {
     return 8;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestCentersUseThreeOverlappingSegments())
   {
     return 9;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestCenterExtendsWithOverlappingSegment())
   {
     return 10;
+  }
+  if (!TestCentersSplitWhenOverlapBreaks())
+  {
+    return 11;
+  }
+  if (!TestCenterFunctionsWriteSignals())
+  {
+    return 12;
+  }
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  {
+    return 13;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 14;
   }
 
   return 0;

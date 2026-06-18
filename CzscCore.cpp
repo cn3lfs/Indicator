@@ -19,6 +19,16 @@
 
 #include "CzscCore.h"
 
+#include "CCentroid.h"
+
+struct SegmentInterval
+{
+  int   nStart;
+  int   nEnd;
+  float fHigh;
+  float fLow;
+};
+
 static bool HasOutput(int nCount, float *pOut)
 {
   return (nCount > 0) && (pOut != 0);
@@ -187,6 +197,111 @@ static bool IsBrokenByProtectPoint(int nDirection, const SegmentPoint &Protect, 
     return Point.fHigh > Protect.fHigh;
   }
   return false;
+}
+
+static float GetPointPrice(const SegmentPoint &Point)
+{
+  return (Point.nType == CZSC_POINT_TOP) ? Point.fHigh : Point.fLow;
+}
+
+static SegmentPoint MakeSignalPoint(int nIndex, int nType, float fHigh, float fLow)
+{
+  SegmentPoint Point;
+  Point.nType = nType;
+  Point.nIndex = nIndex;
+  Point.fHigh = fHigh;
+  Point.fLow = fLow;
+  return Point;
+}
+
+static SegmentInterval MakeSegmentInterval(const SegmentPoint &Start, const SegmentPoint &End)
+{
+  SegmentInterval Interval;
+  Interval.nStart = Start.nIndex;
+  Interval.nEnd = End.nIndex;
+
+  float fStart = GetPointPrice(Start);
+  float fEnd = GetPointPrice(End);
+  if (fStart > fEnd)
+  {
+    Interval.fHigh = fStart;
+    Interval.fLow = fEnd;
+  }
+  else
+  {
+    Interval.fHigh = fEnd;
+    Interval.fLow = fStart;
+  }
+
+  return Interval;
+}
+
+static bool IntervalsOverlap(float fLeftLow, float fLeftHigh, float fRightLow, float fRightHigh)
+{
+  return (fLeftLow <= fRightHigh) && (fRightLow <= fLeftHigh);
+}
+
+static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::size_t nStart, Center *pCenter)
+{
+  if ((pCenter == 0) || (nStart + 3 >= Points.size()))
+  {
+    return false;
+  }
+
+  SegmentInterval First = MakeSegmentInterval(Points[nStart], Points[nStart + 1]);
+  SegmentInterval Second = MakeSegmentInterval(Points[nStart + 1], Points[nStart + 2]);
+  SegmentInterval Third = MakeSegmentInterval(Points[nStart + 2], Points[nStart + 3]);
+
+  float fLow = First.fLow;
+  if (Second.fLow > fLow)
+  {
+    fLow = Second.fLow;
+  }
+  if (Third.fLow > fLow)
+  {
+    fLow = Third.fLow;
+  }
+
+  float fHigh = First.fHigh;
+  if (Second.fHigh < fHigh)
+  {
+    fHigh = Second.fHigh;
+  }
+  if (Third.fHigh < fHigh)
+  {
+    fHigh = Third.fHigh;
+  }
+
+  if (fLow > fHigh)
+  {
+    return false;
+  }
+
+  pCenter->nStart = Points[nStart].nIndex;
+  pCenter->nEnd = Points[nStart + 3].nIndex;
+  pCenter->fHigh = fHigh;
+  pCenter->fLow = fLow;
+  return true;
+}
+
+static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
+{
+  if ((pCenter == 0) ||
+      !IntervalsOverlap(pCenter->fLow, pCenter->fHigh, Interval.fLow, Interval.fHigh))
+  {
+    return false;
+  }
+
+  if (Interval.fLow > pCenter->fLow)
+  {
+    pCenter->fLow = Interval.fLow;
+  }
+  if (Interval.fHigh < pCenter->fHigh)
+  {
+    pCenter->fHigh = Interval.fHigh;
+  }
+  pCenter->nEnd = Interval.nEnd;
+  return true;
 }
 
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
@@ -420,6 +535,134 @@ void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint>
     if ((nIndex >= 0) && (nIndex < nCount))
     {
       pOut[nIndex] = (float)(Points[i].nType);
+    }
+  }
+}
+
+std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow)
+{
+  std::vector<SegmentPoint> Points;
+  if ((nCount <= 0) || (pIn == 0) || (pHigh == 0) || (pLow == 0))
+  {
+    return Points;
+  }
+
+  for (int i = 0; i < nCount; i++)
+  {
+    int nType = CZSC_POINT_NONE;
+    if (pIn[i] > 0)
+    {
+      nType = CZSC_POINT_TOP;
+    }
+    else if (pIn[i] < 0)
+    {
+      nType = CZSC_POINT_BOTTOM;
+    }
+
+    if (nType == CZSC_POINT_NONE)
+    {
+      continue;
+    }
+
+    SegmentPoint Point = MakeSignalPoint(i, nType, pHigh[i], pLow[i]);
+    if (!Points.empty() && (Points.back().nType == Point.nType))
+    {
+      if (IsMoreExtremePoint(Points.back(), Point))
+      {
+        Points.back() = Point;
+      }
+      continue;
+    }
+
+    Points.push_back(Point);
+  }
+
+  return Points;
+}
+
+std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
+{
+  std::vector<Center> Centers;
+  if (Points.size() < 4)
+  {
+    return Centers;
+  }
+
+  std::size_t i = 0;
+  while (i + 3 < Points.size())
+  {
+    Center C;
+    if (!TryBuildInitialCenter(Points, i, &C))
+    {
+      i++;
+      continue;
+    }
+
+    std::size_t nInterval = i + 3;
+    while (nInterval + 1 < Points.size())
+    {
+      SegmentInterval Interval = MakeSegmentInterval(Points[nInterval], Points[nInterval + 1]);
+      if (!ExtendCenter(&C, Interval))
+      {
+        break;
+      }
+      nInterval++;
+    }
+
+    Centers.push_back(C);
+    if (nInterval + 1 >= Points.size())
+    {
+      break;
+    }
+
+    i = (nInterval > i) ? nInterval : (i + 1);
+  }
+
+  return Centers;
+}
+
+static void WriteCenterHighSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
+{
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    int nStart = (Centers[i].nStart < 0) ? 0 : Centers[i].nStart;
+    int nEnd = (Centers[i].nEnd >= nCount) ? (nCount - 1) : Centers[i].nEnd;
+    for (int j = nStart; j <= nEnd; j++)
+    {
+      pOut[j] = Centers[i].fHigh;
+    }
+  }
+}
+
+static void WriteCenterLowSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
+{
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    int nStart = (Centers[i].nStart < 0) ? 0 : Centers[i].nStart;
+    int nEnd = (Centers[i].nEnd >= nCount) ? (nCount - 1) : Centers[i].nEnd;
+    for (int j = nStart; j <= nEnd; j++)
+    {
+      pOut[j] = Centers[i].fLow;
+    }
+  }
+}
+
+static void WriteCenterMarkSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
+{
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    int nStart = Centers[i].nStart;
+    int nEnd = Centers[i].nEnd;
+    if ((nStart >= 0) && (nStart < nCount))
+    {
+      pOut[nStart] = 1;
+    }
+    if ((nEnd >= 0) && (nEnd < nCount))
+    {
+      pOut[nEnd] = 2;
     }
   }
 }
@@ -671,46 +914,9 @@ void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  ClearOutput(nCount, pOut);
-
-  CCentroid Centroid;
-
-  for (int i = 0; i < nCount; i++)
-  {
-    if (pIn[i] == 1)
-    {
-      // 遇到线段高点，推入中枢算法
-      if (Centroid.PushHigh(i, pHigh[i]))
-      {
-        // 区段内更新算得的中枢高数据
-        for (int j = Centroid.nStart; j <= Centroid.nEnd; j++)
-        {
-          pOut[j] = Centroid.fPHigh;
-        }
-      }
-    }
-    else if (pIn[i] == -1)
-    {
-      // 遇到线段低点，推入中枢算法
-      if (Centroid.PushLow(i, pLow[i]))
-      {
-        // 区段内更新算得的中枢低数据
-        for (int j = Centroid.nStart; j <= Centroid.nEnd; j++)
-        {
-          pOut[j] = Centroid.fPHigh;
-        }
-      }
-    }
-
-    // 尾部未完成中枢处理
-    if (Centroid.bValid && (Centroid.nLines >= 2) && (i == nCount - 1))
-    {
-      for (int j = Centroid.nStart; j < nCount; j++)
-      {
-        pOut[j] = Centroid.fHigh;
-      }
-    }
-  }
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  WriteCenterHighSignal(nCount, pOut, Centers);
 }
 
 //=============================================================================
@@ -724,46 +930,9 @@ void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  ClearOutput(nCount, pOut);
-
-  CCentroid Centroid;
-
-  for (int i = 0; i < nCount; i++)
-  {
-    if (pIn[i] == 1)
-    {
-      // 遇到线段高点，推入中枢算法
-      if (Centroid.PushHigh(i, pHigh[i]))
-      {
-        // 区段内更新算得的中枢高数据
-        for (int j = Centroid.nStart; j <= Centroid.nEnd; j++)
-        {
-          pOut[j] = Centroid.fPLow;
-        }
-      }
-    }
-    else if (pIn[i] == -1)
-    {
-      // 遇到线段低点，推入中枢算法
-      if (Centroid.PushLow(i, pLow[i]))
-      {
-        // 区段内更新算得的中枢低数据
-        for (int j = Centroid.nStart; j <= Centroid.nEnd; j++)
-        {
-          pOut[j] = Centroid.fPLow;
-        }
-      }
-    }
-
-    // 尾部未完成中枢处理
-    if (Centroid.bValid && (Centroid.nLines >= 2) && (i == nCount - 1))
-    {
-      for (int j = Centroid.nStart; j < nCount; j++)
-      {
-        pOut[j] = Centroid.fLow;
-      }
-    }
-  }
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  WriteCenterLowSignal(nCount, pOut, Centers);
 }
 
 //=============================================================================
@@ -777,40 +946,9 @@ void Func4(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  ClearOutput(nCount, pOut);
-
-  CCentroid Centroid;
-
-  for (int i = 0; i < nCount; i++)
-  {
-    if (pIn[i] == 1)
-    {
-      // 遇到线段高点，推入中枢算法
-      if (Centroid.PushHigh(i, pHigh[i]))
-      {
-        // 进行标记
-        pOut[Centroid.nStart] = 1;
-        pOut[Centroid.nEnd]   = 2;
-      }
-    }
-    else if (pIn[i] == -1)
-    {
-      // 遇到线段低点，推入中枢算法
-      if (Centroid.PushLow(i, pLow[i]))
-      {
-        // 进行标记
-        pOut[Centroid.nStart] = 1;
-        pOut[Centroid.nEnd]   = 2;
-      }
-    }
-
-    // 尾部未完成中枢处理
-    if (Centroid.bValid && (Centroid.nLines >= 2) && (i == nCount - 1))
-    {
-      pOut[Centroid.nStart] = 1;
-      pOut[nCount-1]        = 2;
-    }
-  }
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  WriteCenterMarkSignal(nCount, pOut, Centers);
 }
 
 //=============================================================================

@@ -21,8 +21,6 @@
 
 #include <vector>
 
-#include "CCentroid.h"
-
 enum CzscPointType
 {
   CZSC_POINT_BOTTOM = -1,
@@ -70,11 +68,21 @@ struct SegmentPoint
   float fLow;
 };
 
+struct Center
+{
+  int   nStart;
+  int   nEnd;
+  float fHigh;
+  float fLow;
+};
+
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals);
 std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes);
+std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
+std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
