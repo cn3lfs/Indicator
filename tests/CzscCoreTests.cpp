@@ -493,6 +493,86 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
   return true;
 }
 
+static bool TestFunc5WritesCenterThirdBuy()
+{
+  const int nCount = 21;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = 10;
+  pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = 1;
+  pLow[4] = 1;
+  pIn[8] = 1;
+  pHigh[8] = 7;
+  pLow[8] = 7;
+  pIn[12] = -1;
+  pHigh[12] = 8;
+  pLow[12] = 8;
+  pIn[16] = 1;
+  pHigh[16] = 9;
+  pLow[16] = 9;
+  pIn[20] = -1;
+  pHigh[20] = 7.5f;
+  pLow[20] = 7.5f;
+
+  Func5(nCount, pOut, pIn, pHigh, pLow);
+
+  return NearlyEqual(pOut[20], 3.0f);
+}
+
+static bool TestFunc5WritesCenterThirdSell()
+{
+  const int nCount = 21;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = 1;
+  pLow[0] = 1;
+  pIn[4] = 1;
+  pHigh[4] = 10;
+  pLow[4] = 10;
+  pIn[8] = -1;
+  pHigh[8] = 4;
+  pLow[8] = 4;
+  pIn[12] = 1;
+  pHigh[12] = 3;
+  pLow[12] = 3;
+  pIn[16] = -1;
+  pHigh[16] = 2;
+  pLow[16] = 2;
+  pIn[20] = 1;
+  pHigh[20] = 3.5f;
+  pLow[20] = 3.5f;
+
+  Func5(nCount, pOut, pIn, pHigh, pLow);
+
+  return NearlyEqual(pOut[20], 13.0f);
+}
+
 static bool TestFunc5WritesTrendDivergenceFirstSell()
 {
   const int nCount = 33;
@@ -693,21 +773,29 @@ int main()
   {
     return 13;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstSell())
+  if (!TestFunc5WritesCenterThirdBuy())
   {
     return 14;
   }
-  if (!TestFunc5SkipsStrongNewLow())
+  if (!TestFunc5WritesCenterThirdSell())
   {
     return 15;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestFunc5WritesTrendDivergenceFirstSell())
   {
     return 16;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestFunc5SkipsStrongNewLow())
   {
     return 17;
+  }
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  {
+    return 18;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 19;
   }
 
   return 0;

@@ -565,6 +565,70 @@ static void WriteTrendDivergenceSignals(int nCount,
   }
 }
 
+static void WriteThirdBuySellSignals(int nCount,
+                                     float *pOut,
+                                     const std::vector<SegmentPoint> &Points,
+                                     const std::vector<Center> &Centers)
+{
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    const Center &C = Centers[i];
+    int nBoundary = nCount;
+    if (i + 1 < Centers.size())
+    {
+      nBoundary = Centers[i + 1].nStart;
+    }
+
+    bool bLeftUp = false;
+    bool bLeftDown = false;
+    for (std::size_t j = 1; j < Points.size(); j++)
+    {
+      const SegmentPoint &Start = Points[j - 1];
+      const SegmentPoint &End = Points[j];
+      if (End.nIndex <= C.nEnd)
+      {
+        continue;
+      }
+      if (End.nIndex >= nBoundary)
+      {
+        break;
+      }
+
+      int nDirection = GetMoveDirection(Start, End);
+      if (!bLeftUp && !bLeftDown)
+      {
+        if ((nDirection > 0) && (End.nType == CZSC_POINT_TOP) && (End.fHigh > C.fHigh))
+        {
+          bLeftUp = true;
+        }
+        else if ((nDirection < 0) && (End.nType == CZSC_POINT_BOTTOM) && (End.fLow < C.fLow))
+        {
+          bLeftDown = true;
+        }
+        continue;
+      }
+
+      if (bLeftUp && (End.nType == CZSC_POINT_BOTTOM))
+      {
+        if ((End.fLow >= C.fHigh) && (End.nIndex >= 0) && (End.nIndex < nCount))
+        {
+          pOut[End.nIndex] = SIGNAL_THIRD_BUY;
+        }
+        break;
+      }
+
+      if (bLeftDown && (End.nType == CZSC_POINT_TOP))
+      {
+        if ((End.fHigh <= C.fLow) && (End.nIndex >= 0) && (End.nIndex < nCount))
+        {
+          pOut[End.nIndex] = SIGNAL_THIRD_SELL;
+        }
+        break;
+      }
+    }
+  }
+}
+
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
 {
   std::vector<MergedBar> Bars;
@@ -1233,8 +1297,7 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     {
       if (Centroid.PushHigh(i, pHigh[i]))
       {
-        // 第三类卖点信号
-        pOut[i] = SIGNAL_THIRD_SELL;
+        pOut[i] = 0;
       }
       else if (Centroid.fTop1 < Centroid.fTop2)
       {
@@ -1250,8 +1313,7 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     {
       if (Centroid.PushLow(i, pLow[i]))
       {
-        // 第三类买点信号
-        pOut[i] = SIGNAL_THIRD_BUY;
+        pOut[i] = 0;
       }
       else if (Centroid.fBot1 > Centroid.fBot2)
       {
@@ -1267,6 +1329,7 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
   std::vector<Center> Centers = BuildCenters(Points);
+  WriteThirdBuySellSignals(nCount, pOut, Points, Centers);
   WriteTrendDivergenceSignals(nCount, pOut, Points, Centers);
 }
 
