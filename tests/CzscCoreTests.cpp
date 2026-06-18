@@ -196,6 +196,46 @@ static bool TestLineSegmentsAreHigherLevelThanStrokes()
   return true;
 }
 
+static bool TestLineSegmentBreakConfirmsTurn()
+{
+  std::vector<Fractal> Fractals;
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 7, 3));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 12, 8));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 9, 5));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 14, 10));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 8, 4));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 11, 7));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 6, 2));
+
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> LinePoints = BuildLineSegmentPoints(Strokes);
+
+  if (Strokes.size() != 8)
+  {
+    return false;
+  }
+  if (LinePoints.size() != 3)
+  {
+    return false;
+  }
+  if ((LinePoints[0].nType != CZSC_POINT_BOTTOM) || (LinePoints[0].nIndex != 0))
+  {
+    return false;
+  }
+  if ((LinePoints[1].nType != CZSC_POINT_TOP) || (LinePoints[1].nIndex != 20))
+  {
+    return false;
+  }
+  if ((LinePoints[2].nType != CZSC_POINT_BOTTOM) || (LinePoints[2].nIndex != 32))
+  {
+    return false;
+  }
+
+  return true;
+}
+
 static bool TestFunc9WritesLineSegmentSignal()
 {
   const int nCount = 21;
@@ -306,17 +346,21 @@ int main()
   {
     return 6;
   }
-  if (!TestFunc9WritesLineSegmentSignal())
+  if (!TestLineSegmentBreakConfirmsTurn())
   {
     return 7;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestFunc9WritesLineSegmentSignal())
   {
     return 8;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
   {
     return 9;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 10;
   }
 
   return 0;

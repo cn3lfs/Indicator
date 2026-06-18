@@ -176,15 +176,15 @@ static bool IsMoreExtremePoint(const SegmentPoint &Left, const SegmentPoint &Rig
   return false;
 }
 
-static bool IsBrokenByPoint(const SegmentPoint &Start, int nDirection, const SegmentPoint &Point)
+static bool IsBrokenByProtectPoint(int nDirection, const SegmentPoint &Protect, const SegmentPoint &Point)
 {
   if ((nDirection > 0) && (Point.nType == CZSC_POINT_BOTTOM))
   {
-    return Point.fLow < Start.fLow;
+    return Point.fLow < Protect.fLow;
   }
   if ((nDirection < 0) && (Point.nType == CZSC_POINT_TOP))
   {
-    return Point.fHigh > Start.fHigh;
+    return Point.fHigh > Protect.fHigh;
   }
   return false;
 }
@@ -341,45 +341,66 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
     return Points;
   }
 
-  SegmentPoint Start = MakeSegmentPoint(Strokes[0].Start);
-  Points.push_back(Start);
-
-  int nDirection = Strokes[0].nDirection;
-  int nStartStroke = 0;
-  bool bHasCandidate = false;
-  SegmentPoint Candidate = Start;
-
-  for (std::size_t i = 0; i < Strokes.size(); i++)
+  std::vector<SegmentPoint> StrokePoints = BuildSegmentPoints(Strokes);
+  if (StrokePoints.size() < 4)
   {
-    SegmentPoint End = MakeSegmentPoint(Strokes[i].End);
-    int nStrokeSpan = (int)i - nStartStroke + 1;
-
-    if ((nStrokeSpan >= 3) && (End.nType != Start.nType))
-    {
-      if (!bHasCandidate || IsMoreExtremePoint(Candidate, End))
-      {
-        Candidate = End;
-        bHasCandidate = true;
-      }
-    }
-
-    if (bHasCandidate && IsBrokenByPoint(Start, nDirection, End))
-    {
-      if (Points.back().nIndex != Candidate.nIndex)
-      {
-        Points.push_back(Candidate);
-      }
-      Start = Candidate;
-      nDirection = -nDirection;
-      nStartStroke = ((int)i > 0) ? (int)i - 1 : (int)i;
-      bHasCandidate = false;
-      Candidate = Start;
-    }
+    return Points;
   }
 
-  if (bHasCandidate && (Points.back().nIndex != Candidate.nIndex))
+  Points.push_back(StrokePoints[0]);
+
+  std::size_t nStart = 0;
+  std::size_t i = nStart + 1;
+  bool bHasCandidate = false;
+  std::size_t nCandidate = nStart;
+  std::size_t nProtect = nStart;
+
+  while (i < StrokePoints.size())
   {
-    Points.push_back(Candidate);
+    const SegmentPoint &Start = StrokePoints[nStart];
+    const SegmentPoint &Point = StrokePoints[i];
+    int nDirection = (Start.nType == CZSC_POINT_BOTTOM) ? 1 : -1;
+    int nStrokeSpan = (int)(i - nStart);
+
+    if (!bHasCandidate)
+    {
+      if ((nStrokeSpan >= 3) && (Point.nType != Start.nType))
+      {
+        nCandidate = i;
+        nProtect = i - 1;
+        bHasCandidate = true;
+      }
+      i++;
+      continue;
+    }
+
+    if ((Point.nType == StrokePoints[nCandidate].nType) &&
+        IsMoreExtremePoint(StrokePoints[nCandidate], Point))
+    {
+      nCandidate = i;
+      nProtect = i - 1;
+      i++;
+      continue;
+    }
+
+    if (IsBrokenByProtectPoint(nDirection, StrokePoints[nProtect], Point))
+    {
+      if (Points.back().nIndex != StrokePoints[nCandidate].nIndex)
+      {
+        Points.push_back(StrokePoints[nCandidate]);
+      }
+      nStart = nCandidate;
+      bHasCandidate = false;
+      i = nStart + 1;
+      continue;
+    }
+
+    i++;
+  }
+
+  if (bHasCandidate && (Points.back().nIndex != StrokePoints[nCandidate].nIndex))
+  {
+    Points.push_back(StrokePoints[nCandidate]);
   }
 
   return Points;
