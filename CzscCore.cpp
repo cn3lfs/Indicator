@@ -29,6 +29,13 @@ struct SegmentInterval
   float fLow;
 };
 
+static const float SIGNAL_FIRST_BUY = 1.0f;
+static const float SIGNAL_SECOND_BUY = 2.0f;
+static const float SIGNAL_THIRD_BUY = 3.0f;
+static const float SIGNAL_FIRST_SELL = 11.0f;
+static const float SIGNAL_SECOND_SELL = 12.0f;
+static const float SIGNAL_THIRD_SELL = 13.0f;
+
 static bool HasOutput(int nCount, float *pOut)
 {
   return (nCount > 0) && (pOut != 0);
@@ -302,6 +309,141 @@ static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
   }
   pCenter->nEnd = Interval.nEnd;
   return true;
+}
+
+static float GetMovePower(const SegmentPoint &Start, const SegmentPoint &End)
+{
+  int nSpan = End.nIndex - Start.nIndex;
+  if (nSpan < 0)
+  {
+    nSpan = -nSpan;
+  }
+  if (nSpan == 0)
+  {
+    nSpan = 1;
+  }
+
+  float fDiff = GetPointPrice(End) - GetPointPrice(Start);
+  if (fDiff < 0)
+  {
+    fDiff = -fDiff;
+  }
+  return fDiff / (float)nSpan;
+}
+
+static bool IsCenterAbove(const Center &Left, const Center &Right)
+{
+  return Right.fLow > Left.fHigh;
+}
+
+static bool IsCenterBelow(const Center &Left, const Center &Right)
+{
+  return Right.fHigh < Left.fLow;
+}
+
+static bool HasTwoTrendCenters(const std::vector<Center> &Centers, int nIndex, int nDirection)
+{
+  int nPrev = -1;
+  int nLast = -1;
+
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    if (Centers[i].nStart >= nIndex)
+    {
+      continue;
+    }
+    nPrev = nLast;
+    nLast = (int)i;
+  }
+
+  if ((nPrev < 0) || (nLast < 0))
+  {
+    return false;
+  }
+
+  if (nDirection > 0)
+  {
+    return IsCenterAbove(Centers[nPrev], Centers[nLast]);
+  }
+  return IsCenterBelow(Centers[nPrev], Centers[nLast]);
+}
+
+static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
+                                      const std::vector<Center> &Centers,
+                                      std::size_t nPoint)
+{
+  if ((nPoint < 4) || (Points[nPoint].nType != CZSC_POINT_BOTTOM))
+  {
+    return false;
+  }
+  if (!HasTwoTrendCenters(Centers, Points[nPoint].nIndex, -1))
+  {
+    return false;
+  }
+
+  const SegmentPoint &PrevStart = Points[nPoint - 3];
+  const SegmentPoint &PrevEnd = Points[nPoint - 2];
+  const SegmentPoint &CurrentStart = Points[nPoint - 1];
+  const SegmentPoint &CurrentEnd = Points[nPoint];
+  if ((PrevStart.nType != CZSC_POINT_TOP) || (PrevEnd.nType != CZSC_POINT_BOTTOM) ||
+      (CurrentStart.nType != CZSC_POINT_TOP))
+  {
+    return false;
+  }
+
+  return (CurrentEnd.fLow < PrevEnd.fLow) &&
+         (GetMovePower(CurrentStart, CurrentEnd) < GetMovePower(PrevStart, PrevEnd));
+}
+
+static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
+                                       const std::vector<Center> &Centers,
+                                       std::size_t nPoint)
+{
+  if ((nPoint < 4) || (Points[nPoint].nType != CZSC_POINT_TOP))
+  {
+    return false;
+  }
+  if (!HasTwoTrendCenters(Centers, Points[nPoint].nIndex, 1))
+  {
+    return false;
+  }
+
+  const SegmentPoint &PrevStart = Points[nPoint - 3];
+  const SegmentPoint &PrevEnd = Points[nPoint - 2];
+  const SegmentPoint &CurrentStart = Points[nPoint - 1];
+  const SegmentPoint &CurrentEnd = Points[nPoint];
+  if ((PrevStart.nType != CZSC_POINT_BOTTOM) || (PrevEnd.nType != CZSC_POINT_TOP) ||
+      (CurrentStart.nType != CZSC_POINT_BOTTOM))
+  {
+    return false;
+  }
+
+  return (CurrentEnd.fHigh > PrevEnd.fHigh) &&
+         (GetMovePower(CurrentStart, CurrentEnd) < GetMovePower(PrevStart, PrevEnd));
+}
+
+static void WriteTrendDivergenceSignals(int nCount,
+                                        float *pOut,
+                                        const std::vector<SegmentPoint> &Points,
+                                        const std::vector<Center> &Centers)
+{
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    int nIndex = Points[i].nIndex;
+    if ((nIndex < 0) || (nIndex >= nCount))
+    {
+      continue;
+    }
+
+    if (IsTrendDivergenceFirstBuy(Points, Centers, i))
+    {
+      pOut[nIndex] = SIGNAL_FIRST_BUY;
+    }
+    else if (IsTrendDivergenceFirstSell(Points, Centers, i))
+    {
+      pOut[nIndex] = SIGNAL_FIRST_SELL;
+    }
+  }
 }
 
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
@@ -973,12 +1115,12 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
       if (Centroid.PushHigh(i, pHigh[i]))
       {
         // 第三类卖点信号
-        pOut[i] = 13;
+        pOut[i] = SIGNAL_THIRD_SELL;
       }
       else if (Centroid.fTop1 < Centroid.fTop2)
       {
         // 第二类卖点信号
-        pOut[i] = 12;
+        pOut[i] = SIGNAL_SECOND_SELL;
       }
       else
       {
@@ -990,12 +1132,12 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
       if (Centroid.PushLow(i, pLow[i]))
       {
         // 第三类买点信号
-        pOut[i] = 3;
+        pOut[i] = SIGNAL_THIRD_BUY;
       }
       else if (Centroid.fBot1 > Centroid.fBot2)
       {
         // 第二类买点信号
-        pOut[i] = 2;
+        pOut[i] = SIGNAL_SECOND_BUY;
       }
       else
       {
@@ -1003,6 +1145,10 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
       }
     }
   }
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  WriteTrendDivergenceSignals(nCount, pOut, Points, Centers);
 }
 
 //=============================================================================
