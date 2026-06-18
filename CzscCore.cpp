@@ -839,6 +839,30 @@ static int ClassifyTradingSignalQuality(int nSource,
   return CZSC_SIGNAL_QUALITY_WATCH;
 }
 
+static int ClassifyCenterPosition(const std::vector<SegmentPoint> &Points,
+                                  const std::vector<Center> &Centers,
+                                  int nPoint,
+                                  int nCenter)
+{
+  if ((nPoint < 0) || ((std::size_t)nPoint >= Points.size()) ||
+      (nCenter < 0) || ((std::size_t)nCenter >= Centers.size()))
+  {
+    return CZSC_CENTER_POSITION_UNKNOWN;
+  }
+
+  float fPrice = GetPointPrice(Points[(std::size_t)nPoint]);
+  const Center &C = Centers[(std::size_t)nCenter];
+  if (fPrice < C.fLow)
+  {
+    return CZSC_CENTER_POSITION_BELOW;
+  }
+  if (fPrice > C.fHigh)
+  {
+    return CZSC_CENTER_POSITION_ABOVE;
+  }
+  return CZSC_CENTER_POSITION_INSIDE;
+}
+
 static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
                                                          float fSignal,
                                                          int nPriority,
@@ -846,6 +870,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
                                                          int nCenter,
                                                          int nBreakout,
                                                          int nSource,
+                                                         int nCenterPosition,
                                                          bool bOverlapped,
                                                          const DivergenceResult &Divergence)
 {
@@ -858,6 +883,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nBreakout = nBreakout;
   C.nSource = nSource;
   C.nQuality = ClassifyTradingSignalQuality(nSource, bOverlapped, Divergence);
+  C.nCenterPosition = nCenterPosition;
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
   return C;
@@ -895,25 +921,29 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
     DivergenceResult Divergence = MakeEmptyDivergence(0);
     if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i, &Divergence))
     {
+      int nCenter = FindLastCenterBeforeIndex(Centers, Points[i].nIndex);
       pCandidates->push_back(MakeTradingSignalCandidate(Points[i].nIndex,
                                                         SIGNAL_FIRST_BUY,
                                                         SIGNAL_PRIORITY_FIRST,
                                                         (int)i,
-                                                        FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
+                                                        nCenter,
                                                         -1,
                                                         SIGNAL_SOURCE_FIRST,
+                                                        ClassifyCenterPosition(Points, Centers, (int)i, nCenter),
                                                         false,
                                                         Divergence));
     }
     else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i, &Divergence))
     {
+      int nCenter = FindLastCenterBeforeIndex(Centers, Points[i].nIndex);
       pCandidates->push_back(MakeTradingSignalCandidate(Points[i].nIndex,
                                                         SIGNAL_FIRST_SELL,
                                                         SIGNAL_PRIORITY_FIRST,
                                                         (int)i,
-                                                        FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
+                                                        nCenter,
                                                         -1,
                                                         SIGNAL_SOURCE_FIRST,
+                                                        ClassifyCenterPosition(Points, Centers, (int)i, nCenter),
                                                         false,
                                                         Divergence));
     }
@@ -952,13 +982,16 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
       DivergenceResult Divergence = (nBreakout >= 0) ?
                                     Breakouts[(std::size_t)nBreakout].Divergence :
                                     MakeEmptyDivergence(1);
+      int nSecondPoint = (int)nPoint + 2;
+      int nCenter = FindLastCenterBeforeIndex(Centers, Second.nIndex);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
                                                         SIGNAL_SECOND_BUY,
                                                         SIGNAL_PRIORITY_SECOND,
-                                                        (int)nPoint + 2,
-                                                        FindLastCenterBeforeIndex(Centers, Second.nIndex),
+                                                        nSecondPoint,
+                                                        nCenter,
                                                         nBreakout,
                                                         SIGNAL_SOURCE_SECOND,
+                                                        ClassifyCenterPosition(Points, Centers, nSecondPoint, nCenter),
                                                         nBreakout >= 0,
                                                         Divergence));
     }
@@ -971,13 +1004,16 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
       DivergenceResult Divergence = (nBreakout >= 0) ?
                                     Breakouts[(std::size_t)nBreakout].Divergence :
                                     MakeEmptyDivergence(-1);
+      int nSecondPoint = (int)nPoint + 2;
+      int nCenter = FindLastCenterBeforeIndex(Centers, Second.nIndex);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
                                                         SIGNAL_SECOND_SELL,
                                                         SIGNAL_PRIORITY_SECOND,
-                                                        (int)nPoint + 2,
-                                                        FindLastCenterBeforeIndex(Centers, Second.nIndex),
+                                                        nSecondPoint,
+                                                        nCenter,
                                                         nBreakout,
                                                         SIGNAL_SOURCE_SECOND,
+                                                        ClassifyCenterPosition(Points, Centers, nSecondPoint, nCenter),
                                                         nBreakout >= 0,
                                                         Divergence));
     }
@@ -986,6 +1022,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
 
 static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCandidates,
                                         const std::vector<SegmentPoint> &Points,
+                                        const std::vector<Center> &Centers,
                                         const std::vector<CenterBreakout> &Breakouts)
 {
   if (pCandidates == 0)
@@ -1010,6 +1047,7 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                       B.nCenter,
                                                       (int)i,
                                                       SIGNAL_SOURCE_THIRD,
+                                                      ClassifyCenterPosition(Points, Centers, B.nRetestPoint, B.nCenter),
                                                       false,
                                                       B.Divergence));
   }
@@ -1025,7 +1063,7 @@ std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vect
 
   AppendFirstSignalCandidates(&FirstCandidates, Points, Centers, Structures);
   AppendSecondSignalCandidates(&Candidates, Points, Centers, Breakouts, FirstCandidates);
-  AppendThirdSignalCandidates(&Candidates, Points, Breakouts);
+  AppendThirdSignalCandidates(&Candidates, Points, Centers, Breakouts);
   Candidates.insert(Candidates.end(), FirstCandidates.begin(), FirstCandidates.end());
 
   return Candidates;

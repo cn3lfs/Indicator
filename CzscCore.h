@@ -42,6 +42,14 @@ enum CzscSignalQuality
   CZSC_SIGNAL_QUALITY_STRONG    = 2,
 };
 
+enum CzscCenterPosition
+{
+  CZSC_CENTER_POSITION_BELOW   = -1,
+  CZSC_CENTER_POSITION_INSIDE  = 0,
+  CZSC_CENTER_POSITION_ABOVE   = 1,
+  CZSC_CENTER_POSITION_UNKNOWN = 2,
+};
+
 struct KBar
 {
   int   nIndex;
@@ -143,6 +151,7 @@ struct TradingSignalCandidate
   int   nBreakout;
   int   nSource;
   int   nQuality;
+  int   nCenterPosition;
   bool  bOverlapped;
   DivergenceResult Divergence;
 };
