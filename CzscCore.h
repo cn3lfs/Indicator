@@ -93,6 +93,17 @@ struct StrengthMetrics
   bool  bRsiDivergence;
 };
 
+struct DivergenceResult
+{
+  int             nDirection;
+  bool            bNewExtreme;
+  bool            bWeakSpace;
+  bool            bWeakSpeed;
+  bool            bDivergence;
+  StrengthMetrics Previous;
+  StrengthMetrics Current;
+};
+
 struct TrendStructure
 {
   int nType;
@@ -112,6 +123,17 @@ struct CenterBreakout
   bool bBackIntoCenter;
   bool bThirdSignal;
   bool bConsolidationDivergence;
+  DivergenceResult Divergence;
+};
+
+struct TradingSignalCandidate
+{
+  int   nIndex;
+  float fSignal;
+  int   nPriority;
+  int   nPoint;
+  int   nCenter;
+  int   nSource;
 };
 
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
@@ -125,8 +147,20 @@ std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Cent
 std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint> &Points,
                                                  const std::vector<Center> &Centers,
                                                  const std::vector<TrendStructure> &Structures);
+std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vector<SegmentPoint> &Points,
+                                                                  const std::vector<Center> &Centers,
+                                                                  const std::vector<TrendStructure> &Structures,
+                                                                  const std::vector<CenterBreakout> &Breakouts);
 StrengthMetrics MeasureStrength(const SegmentPoint &Start, const SegmentPoint &End);
+DivergenceResult MeasureDivergence(const SegmentPoint &PrevStart,
+                                   const SegmentPoint &PrevEnd,
+                                   const SegmentPoint &CurrentStart,
+                                   const SegmentPoint &CurrentEnd,
+                                   int nDirection);
 bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Previous);
+void ApplyTradingSignalCandidates(int nCount,
+                                  float *pOut,
+                                  const std::vector<TradingSignalCandidate> &Candidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);

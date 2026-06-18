@@ -33,6 +33,14 @@ static const float SIGNAL_FIRST_SELL = 11.0f;
 static const float SIGNAL_SECOND_SELL = 12.0f;
 static const float SIGNAL_THIRD_SELL = 13.0f;
 
+static const int SIGNAL_PRIORITY_SECOND = 10;
+static const int SIGNAL_PRIORITY_THIRD = 20;
+static const int SIGNAL_PRIORITY_FIRST = 30;
+
+static const int SIGNAL_SOURCE_FIRST = 1;
+static const int SIGNAL_SOURCE_SECOND = 2;
+static const int SIGNAL_SOURCE_THIRD = 3;
+
 static bool HasOutput(int nCount, float *pOut)
 {
   return (nCount > 0) && (pOut != 0);
@@ -349,6 +357,56 @@ bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Pre
   return (Current.fSpace < Previous.fSpace) || (Current.fSpeed < Previous.fSpeed);
 }
 
+DivergenceResult MeasureDivergence(const SegmentPoint &PrevStart,
+                                   const SegmentPoint &PrevEnd,
+                                   const SegmentPoint &CurrentStart,
+                                   const SegmentPoint &CurrentEnd,
+                                   int nDirection)
+{
+  DivergenceResult Result;
+  Result.nDirection = nDirection;
+  Result.Previous = MeasureStrength(PrevStart, PrevEnd);
+  Result.Current = MeasureStrength(CurrentStart, CurrentEnd);
+  Result.bWeakSpace = Result.Current.fSpace < Result.Previous.fSpace;
+  Result.bWeakSpeed = Result.Current.fSpeed < Result.Previous.fSpeed;
+  Result.bNewExtreme = false;
+  if (nDirection > 0)
+  {
+    Result.bNewExtreme = CurrentEnd.fHigh > PrevEnd.fHigh;
+  }
+  else if (nDirection < 0)
+  {
+    Result.bNewExtreme = CurrentEnd.fLow < PrevEnd.fLow;
+  }
+  Result.bDivergence = Result.bNewExtreme && (Result.bWeakSpace || Result.bWeakSpeed);
+  return Result;
+}
+
+static StrengthMetrics MakeEmptyStrength()
+{
+  StrengthMetrics Strength;
+  Strength.fSpace = 0;
+  Strength.fSpeed = 0;
+  Strength.fDifHeight = 0;
+  Strength.fDeaHeight = 0;
+  Strength.fMacdArea = 0;
+  Strength.bRsiDivergence = false;
+  return Strength;
+}
+
+static DivergenceResult MakeEmptyDivergence(int nDirection)
+{
+  DivergenceResult Result;
+  Result.nDirection = nDirection;
+  Result.bNewExtreme = false;
+  Result.bWeakSpace = false;
+  Result.bWeakSpeed = false;
+  Result.bDivergence = false;
+  Result.Previous = MakeEmptyStrength();
+  Result.Current = MakeEmptyStrength();
+  return Result;
+}
+
 static int GetMoveDirection(const SegmentPoint &Start, const SegmentPoint &End)
 {
   float fStart = GetPointPrice(Start);
@@ -534,10 +592,8 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  StrengthMetrics Previous = MeasureStrength(PrevStart, PrevEnd);
-  StrengthMetrics Current = MeasureStrength(CurrentStart, CurrentEnd);
-  return (CurrentEnd.fLow < PrevEnd.fLow) &&
-         IsWeakerStrength(Current, Previous);
+  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, -1);
+  return Divergence.bDivergence;
 }
 
 static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
@@ -578,84 +634,24 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  StrengthMetrics Previous = MeasureStrength(PrevStart, PrevEnd);
-  StrengthMetrics Current = MeasureStrength(CurrentStart, CurrentEnd);
-  return (CurrentEnd.fHigh > PrevEnd.fHigh) &&
-         IsWeakerStrength(Current, Previous);
+  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, 1);
+  return Divergence.bDivergence;
 }
 
-static void WriteTrendDivergenceSignals(int nCount,
-                                        float *pOut,
-                                        const std::vector<SegmentPoint> &Points,
-                                        const std::vector<Center> &Centers,
-                                        const std::vector<TrendStructure> &Structures)
+static DivergenceResult MeasureConsolidationDivergence(const std::vector<SegmentPoint> &Points,
+                                                       std::size_t nLeavePoint,
+                                                       int nDirection)
 {
-  for (std::size_t i = 0; i < Points.size(); i++)
-  {
-    int nIndex = Points[i].nIndex;
-    if ((nIndex < 0) || (nIndex >= nCount))
-    {
-      continue;
-    }
-
-    if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i))
-    {
-      pOut[nIndex] = SIGNAL_FIRST_BUY;
-    }
-    else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i))
-    {
-      pOut[nIndex] = SIGNAL_FIRST_SELL;
-    }
-  }
-}
-
-static void WriteSecondBuySellSignals(int nCount,
-                                      float *pOut,
-                                      const std::vector<SegmentPoint> &Points,
-                                      const std::vector<Center> &Centers,
-                                      const std::vector<TrendStructure> &Structures)
-{
-  for (std::size_t i = 0; i + 2 < Points.size(); i++)
-  {
-    const SegmentPoint &First = Points[i];
-    const SegmentPoint &Turn = Points[i + 1];
-    const SegmentPoint &Second = Points[i + 2];
-    int nIndex = Second.nIndex;
-    if ((nIndex < 0) || (nIndex >= nCount))
-    {
-      continue;
-    }
-
-    if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i) &&
-        (Turn.nType == CZSC_POINT_TOP) &&
-        (Second.nType == CZSC_POINT_BOTTOM) &&
-        (Second.fLow > First.fLow))
-    {
-      pOut[nIndex] = SIGNAL_SECOND_BUY;
-    }
-    else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i) &&
-             (Turn.nType == CZSC_POINT_BOTTOM) &&
-             (Second.nType == CZSC_POINT_TOP) &&
-             (Second.fHigh < First.fHigh))
-    {
-      pOut[nIndex] = SIGNAL_SECOND_SELL;
-    }
-  }
-}
-
-static bool IsConsolidationDivergence(const std::vector<SegmentPoint> &Points,
-                                      std::size_t nLeavePoint,
-                                      int nDirection)
-{
+  DivergenceResult Empty = MakeEmptyDivergence(nDirection);
   if ((nLeavePoint == 0) || (nLeavePoint >= Points.size()))
   {
-    return false;
+    return Empty;
   }
 
   std::size_t nPrevMove = 0;
   if (!FindPreviousSameDirectionMove(Points, nLeavePoint, nDirection, &nPrevMove))
   {
-    return false;
+    return Empty;
   }
 
   const SegmentPoint &PrevStart = Points[nPrevMove];
@@ -669,7 +665,7 @@ static bool IsConsolidationDivergence(const std::vector<SegmentPoint> &Points,
         (CurrentStart.nType != CZSC_POINT_BOTTOM) || (CurrentEnd.nType != CZSC_POINT_TOP) ||
         (CurrentEnd.fHigh <= PrevEnd.fHigh))
     {
-      return false;
+      return Empty;
     }
   }
   else if (nDirection < 0)
@@ -678,17 +674,15 @@ static bool IsConsolidationDivergence(const std::vector<SegmentPoint> &Points,
         (CurrentStart.nType != CZSC_POINT_TOP) || (CurrentEnd.nType != CZSC_POINT_BOTTOM) ||
         (CurrentEnd.fLow >= PrevEnd.fLow))
     {
-      return false;
+      return Empty;
     }
   }
   else
   {
-    return false;
+    return Empty;
   }
 
-  StrengthMetrics Previous = MeasureStrength(PrevStart, PrevEnd);
-  StrengthMetrics Current = MeasureStrength(CurrentStart, CurrentEnd);
-  return IsWeakerStrength(Current, Previous);
+  return MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, nDirection);
 }
 
 static CenterBreakout MakeCenterBreakout(const std::vector<SegmentPoint> &Points,
@@ -706,7 +700,8 @@ static CenterBreakout MakeCenterBreakout(const std::vector<SegmentPoint> &Points
   B.bFirstRetest = true;
   B.bBackIntoCenter = false;
   B.bThirdSignal = false;
-  B.bConsolidationDivergence = IsConsolidationDivergence(Points, nLeavePoint, nDirection);
+  B.Divergence = MeasureConsolidationDivergence(Points, nLeavePoint, nDirection);
+  B.bConsolidationDivergence = B.Divergence.bDivergence;
 
   const SegmentPoint &Retest = Points[nRetestPoint];
   if (nDirection > 0)
@@ -785,11 +780,127 @@ std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint>
   return Breakouts;
 }
 
-static void WriteThirdBuySellSignals(int nCount,
-                                     float *pOut,
-                                     const std::vector<SegmentPoint> &Points,
-                                     const std::vector<CenterBreakout> &Breakouts)
+static int FindLastCenterBeforeIndex(const std::vector<Center> &Centers, int nIndex)
 {
+  int nCenter = -1;
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    if (Centers[i].nStart <= nIndex)
+    {
+      nCenter = (int)i;
+    }
+  }
+  return nCenter;
+}
+
+static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
+                                                         float fSignal,
+                                                         int nPriority,
+                                                         int nPoint,
+                                                         int nCenter,
+                                                         int nSource)
+{
+  TradingSignalCandidate C;
+  C.nIndex = nIndex;
+  C.fSignal = fSignal;
+  C.nPriority = nPriority;
+  C.nPoint = nPoint;
+  C.nCenter = nCenter;
+  C.nSource = nSource;
+  return C;
+}
+
+static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCandidates,
+                                        const std::vector<SegmentPoint> &Points,
+                                        const std::vector<Center> &Centers,
+                                        const std::vector<TrendStructure> &Structures)
+{
+  if (pCandidates == 0)
+  {
+    return;
+  }
+
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i))
+    {
+      pCandidates->push_back(MakeTradingSignalCandidate(Points[i].nIndex,
+                                                        SIGNAL_FIRST_BUY,
+                                                        SIGNAL_PRIORITY_FIRST,
+                                                        (int)i,
+                                                        FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
+                                                        SIGNAL_SOURCE_FIRST));
+    }
+    else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i))
+    {
+      pCandidates->push_back(MakeTradingSignalCandidate(Points[i].nIndex,
+                                                        SIGNAL_FIRST_SELL,
+                                                        SIGNAL_PRIORITY_FIRST,
+                                                        (int)i,
+                                                        FindLastCenterBeforeIndex(Centers, Points[i].nIndex),
+                                                        SIGNAL_SOURCE_FIRST));
+    }
+  }
+}
+
+static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pCandidates,
+                                         const std::vector<SegmentPoint> &Points,
+                                         const std::vector<Center> &Centers,
+                                         const std::vector<TradingSignalCandidate> &FirstCandidates)
+{
+  if (pCandidates == 0)
+  {
+    return;
+  }
+
+  for (std::size_t i = 0; i < FirstCandidates.size(); i++)
+  {
+    const TradingSignalCandidate &FirstSignal = FirstCandidates[i];
+    if ((FirstSignal.nPoint < 0) || ((std::size_t)FirstSignal.nPoint + 2 >= Points.size()))
+    {
+      continue;
+    }
+
+    std::size_t nPoint = (std::size_t)FirstSignal.nPoint;
+    const SegmentPoint &First = Points[nPoint];
+    const SegmentPoint &Turn = Points[nPoint + 1];
+    const SegmentPoint &Second = Points[nPoint + 2];
+    if ((FirstSignal.fSignal == SIGNAL_FIRST_BUY) &&
+        (Turn.nType == CZSC_POINT_TOP) &&
+        (Second.nType == CZSC_POINT_BOTTOM) &&
+        (Second.fLow > First.fLow))
+    {
+      pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
+                                                        SIGNAL_SECOND_BUY,
+                                                        SIGNAL_PRIORITY_SECOND,
+                                                        (int)nPoint + 2,
+                                                        FindLastCenterBeforeIndex(Centers, Second.nIndex),
+                                                        SIGNAL_SOURCE_SECOND));
+    }
+    else if ((FirstSignal.fSignal == SIGNAL_FIRST_SELL) &&
+             (Turn.nType == CZSC_POINT_BOTTOM) &&
+             (Second.nType == CZSC_POINT_TOP) &&
+             (Second.fHigh < First.fHigh))
+    {
+      pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
+                                                        SIGNAL_SECOND_SELL,
+                                                        SIGNAL_PRIORITY_SECOND,
+                                                        (int)nPoint + 2,
+                                                        FindLastCenterBeforeIndex(Centers, Second.nIndex),
+                                                        SIGNAL_SOURCE_SECOND));
+    }
+  }
+}
+
+static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCandidates,
+                                        const std::vector<SegmentPoint> &Points,
+                                        const std::vector<CenterBreakout> &Breakouts)
+{
+  if (pCandidates == 0)
+  {
+    return;
+  }
+
   for (std::size_t i = 0; i < Breakouts.size(); i++)
   {
     const CenterBreakout &B = Breakouts[i];
@@ -799,19 +910,60 @@ static void WriteThirdBuySellSignals(int nCount,
       continue;
     }
 
-    int nIndex = Points[B.nRetestPoint].nIndex;
-    if ((nIndex < 0) || (nIndex >= nCount))
+    float fSignal = (B.nDirection > 0) ? SIGNAL_THIRD_BUY : SIGNAL_THIRD_SELL;
+    pCandidates->push_back(MakeTradingSignalCandidate(Points[B.nRetestPoint].nIndex,
+                                                      fSignal,
+                                                      SIGNAL_PRIORITY_THIRD,
+                                                      B.nRetestPoint,
+                                                      B.nCenter,
+                                                      SIGNAL_SOURCE_THIRD));
+  }
+}
+
+std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vector<SegmentPoint> &Points,
+                                                                  const std::vector<Center> &Centers,
+                                                                  const std::vector<TrendStructure> &Structures,
+                                                                  const std::vector<CenterBreakout> &Breakouts)
+{
+  std::vector<TradingSignalCandidate> Candidates;
+  std::vector<TradingSignalCandidate> FirstCandidates;
+
+  AppendFirstSignalCandidates(&FirstCandidates, Points, Centers, Structures);
+  AppendSecondSignalCandidates(&Candidates, Points, Centers, FirstCandidates);
+  AppendThirdSignalCandidates(&Candidates, Points, Breakouts);
+  Candidates.insert(Candidates.end(), FirstCandidates.begin(), FirstCandidates.end());
+
+  return Candidates;
+}
+
+void ApplyTradingSignalCandidates(int nCount,
+                                  float *pOut,
+                                  const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
     {
       continue;
     }
-
-    if (B.nDirection > 0)
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
-      pOut[nIndex] = SIGNAL_THIRD_BUY;
-    }
-    else if (B.nDirection < 0)
-    {
-      pOut[nIndex] = SIGNAL_THIRD_SELL;
+      pOut[C.nIndex] = C.fSignal;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
 }
@@ -1474,15 +1626,15 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  ClearOutput(nCount, pOut);
-
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
   std::vector<Center> Centers = BuildCenters(Points);
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
-  WriteSecondBuySellSignals(nCount, pOut, Points, Centers, Structures);
-  WriteThirdBuySellSignals(nCount, pOut, Points, Breakouts);
-  WriteTrendDivergenceSignals(nCount, pOut, Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
+                                                                                Centers,
+                                                                                Structures,
+                                                                                Breakouts);
+  ApplyTradingSignalCandidates(nCount, pOut, Candidates);
 }
 
 //=============================================================================
