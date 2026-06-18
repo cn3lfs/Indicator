@@ -8,19 +8,22 @@ Source files live at the repository root:
 - `Main.cpp` / `Main.h`: exported plugin entrypoints and indicator logic.
 - `CCentroid.cpp` / `CCentroid.h`: centroid state and calculations.
 - `FxIndicator.h` and `FxSelector.h`: indicator/selector support headers.
+- `CzscCore.cpp` / `CzscCore.h`: testable indicator and CZSC calculation core.
 - `Makefile`: GCC/MinGW-style build rules.
 - `README.md`: user-facing install instructions and TongDaXin formula example.
+- `tests/`: lightweight C++ regression tests for the calculation core.
 
-There is currently no dedicated `tests/` directory or asset pipeline.
+There is currently no asset pipeline.
 
 ## Build, Test, and Development Commands
 
-- `make`: builds `CZSC.dll` from `Main.o` and `CCentroid.o`.
+- `make`: builds `CZSC.dll` from `Main.o`, `CzscCore.o`, and `CCentroid.o`.
+- `make test`: builds and runs the lightweight core regression test executable.
 - `make clean`: removes generated `.dep` and `.o` files.
 - `make debug`: builds the DLL, then launches `gdb -w CZSC.dll`.
 - `make run`: builds, then attempts to execute the target DLL; this is mainly a Makefile convenience and is not a realistic plugin validation.
 
-Use a Windows environment with compatible GNU tools (`make`, `gcc`, `c++`, `gdb`) available on `PATH`.
+Use a GNU/MinGW toolchain. For WSL2 cross-compilation to the 32-bit Windows DLL required by TongDaXin, install `make`, native `g++`, `mingw-w64`, `gcc-mingw-w64-i686`, and `g++-mingw-w64-i686` manually or with `sh scripts/bootstrap-wsl-mingw.sh`. Use native `make test` for runnable core tests, `make mingw32-test-build` for cross-compiled test binary checks, and `make mingw32` for the DLL. Use `sh scripts/build-mingw32.sh` to check the toolchain, run native tests, cross-compile test code, and build the DLL.
 
 ## Coding Style & Naming Conventions
 
@@ -28,7 +31,7 @@ Match the existing C++ style: two-space indentation, braces on their own lines f
 
 ## Testing Guidelines
 
-No automated test framework is present. For logic changes, add focused tests only if you introduce a test harness; otherwise validate by building with `make` and manually checking the DLL in TongDaXin using the formula shown in `README.md`. Treat compiler warnings, linker errors, and changed exported behavior as release blockers.
+Automated coverage is intentionally lightweight and uses plain C++ assertions-style return codes instead of a framework. For logic changes, add focused cases under `tests/` and run `make test`; also validate by building with `make` and manually checking the DLL in TongDaXin using the formula shown in `README.md` when exported behavior or chart rendering changes. Treat compiler warnings, linker errors, test failures, and changed exported behavior as release blockers.
 
 ## Commit & Pull Request Guidelines
 

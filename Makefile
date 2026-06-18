@@ -1,4 +1,4 @@
-############################################################################### 
+###############################################################################
 # Visual K-Line Analysing System For Zen Theory
 # Copyright (C) 2016, Martin Tang
 #
@@ -14,9 +14,18 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-############################################################################### 
+###############################################################################
 
 # Configurations
+CROSS_PREFIX=
+MINGW32_PREFIX=i686-w64-mingw32-
+EXEEXT=
+CC=$(CROSS_PREFIX)gcc
+CXX=$(CROSS_PREFIX)g++
+AS=$(CROSS_PREFIX)as
+FC=$(CROSS_PREFIX)g77
+WINDRES=$(CROSS_PREFIX)windres
+RM=rm -f
 INCLUDE=
 CHARSETFLAGS=-finput-charset=UTF-8
 ASFLAGS=$(INCLUDE) -O2
@@ -26,79 +35,109 @@ FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
 
 # Objectives
-OBJECT1=Main.o CCentroid.o
+OBJECT1=Main.o CzscCore.o CCentroid.o
 TARGET1=CZSC.dll
+TEST_OBJECTS=CzscCore.o CCentroid.o tests/CzscCoreTests.o
+TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
+TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
 OBJECTS=$(OBJECT1)
 TARGETS=$(TARGET1)
-DEPENDS=$(OBJECTS:.o=.dep) 
+DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep)
 
 # Build Commands
+.PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 test test-build run clean debug
+
 all : $(TARGETS)
 
-$(TARGET1) : $(OBJECTS) 
+mingw32: clean
+	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX)
+
+mingw32-test:
+	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) test
+
+check-mingw32:
+	@command -v make
+	@command -v $(MINGW32_PREFIX)gcc
+	@command -v $(MINGW32_PREFIX)g++
+	@command -v $(MINGW32_PREFIX)windres
+
+$(TARGET1) : $(OBJECTS)
 	@echo [LD] $@
-	@c++ -shared -o $@ $^ $(LDFLAGS)
+	@$(CXX) -shared -o $@ $^ $(LDFLAGS)
 
 debug: all
 	@echo [DB] $(TARGETS)
 	@gdb -w $(TARGETS)
 
-run: all 
+test: $(TEST_TARGET)
+	@echo [TE] $(TEST_TARGET)
+	@$(TEST_TARGET)
+
+test-build: $(TEST_TARGET)
+
+mingw32-test-build: clean
+	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build
+
+$(TEST_TARGET) : $(TEST_OBJECTS)
+	@echo [LD] $@
+	@$(CXX) -o $@ $^ $(LDFLAGS)
+
+run: all
 	@echo [EX] $(TARGETS)
 	@$(TARGETS)
 
-clean:  
-	@echo [RM] $(OBJECTS)
-	@rm $(DEPENDS) $(OBJECTS)
+clean:
+	@echo [RM] $(OBJECTS) $(TEST_OBJECTS)
+	@$(RM) $(DEPENDS) $(OBJECTS) $(TEST_OBJECTS) $(TEST_TARGETS)
 
 # Standard Procedures
-%.dep : %.s 
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+%.dep : %.s
+	@$(CC) $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $<
 
-%.dep : %.c 
-	@gcc $(CCFLAGS) -MM -MT $(@:.dep=.o) -o $@ $<
+%.dep : %.c
+	@$(CC) $(CCFLAGS) -MM -MT $(@:.dep=.o) -o $@ $<
 
-%.dep : %.m 
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+%.dep : %.m
+	@$(CC) $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $<
 
-%.dep : %.cpp 
-	@gcc $(CXFLAGS) -MM -MT $(@:.dep=.o) -o $@ $<
+%.dep : %.cpp
+	@$(CC) $(CXFLAGS) -MM -MT $(@:.dep=.o) -o $@ $<
 
-%.dep : %.f 
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+%.dep : %.f
+	@$(CC) $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $<
 
-%.dep : %.rc 
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+%.dep : %.rc
+	@$(CC) $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $<
 
 %.dep : %.l
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+	@$(CC) $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $<
 
 %.dep : %.y
-	@gcc $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $< 
+	@$(CC) $(INCLUDE) -MM -MT $(@:.dep=.o) -o $@ $<
 
-%.o : %.s 
+%.o : %.s
 	@echo [AS] $<
-	@as $(ASFLAGS) -o $@ $< 
+	@$(AS) $(ASFLAGS) -o $@ $<
 
-%.o : %.c 
+%.o : %.c
 	@echo [CC] $<
-	@gcc $(CCFLAGS) -c -o $@ $< 
+	@$(CC) $(CCFLAGS) -c -o $@ $<
 
-%.o : %.m 
+%.o : %.m
 	@echo [OC] $<
-	@gcc $(CCFLAGS) -c -o $@ $< 
+	@$(CC) $(CCFLAGS) -c -o $@ $<
 
-%.o : %.cpp 
+%.o : %.cpp
 	@echo [CX] $<
-	@c++ $(CXFLAGS) -c -o $@ $< 
+	@$(CXX) $(CXFLAGS) -c -o $@ $<
 
 %.o : %.f
 	@echo [CX] $<
-	@g77 $(FCFLAGS) -c -o $@ $< 
+	@$(FC) $(FCFLAGS) -c -o $@ $<
 
 %.o : %.rc
 	@echo [CX] $<
-	@windres $< $@ 
+	@$(WINDRES) $< $@
 
 %.c : %.l
 	@echo [FL] $<

@@ -16,32 +16,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#ifndef __CZSC_CORE_H__
+#define __CZSC_CORE_H__
 
-#include "Main.h"
-#include "CzscCore.h"
+#include "CCentroid.h"
 
-static PluginTCalcFuncInfo Info[] =
-{
-  {1, &Func1},
-  {2, &Func2},
-  {3, &Func3},
-  {4, &Func4},
-  {5, &Func5},
-  {6, &Func6},
-  {7, &Func7},
-  {8, &Func8},
-  {0, NULL},
-};
+void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
+void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 
-BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInfo)
-{
-  if (*pInfo == NULL)
-  {
-    *pInfo = Info;
+void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func4(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func6(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func7(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func8(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 
-    return TRUE;
-  }
-
-  return FALSE;
-}
-
+#endif

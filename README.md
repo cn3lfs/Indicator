@@ -12,6 +12,40 @@
 
 目前仅支持通达信软件使用。安装时，首先将CZSC.dll复制到通达信安装目录下的T0002\dlls目录之中，并在通达信公式管理器中将本dll加载到1号dll插件之中。
 
+# 编译方法
+
+通达信插件需要 32 位 Windows DLL。推荐在 WSL2 中使用 MinGW-w64 交叉编译：
+
+```bash
+sudo apt update
+sudo apt install make g++ mingw-w64 gcc-mingw-w64-i686 g++-mingw-w64-i686 binutils-mingw-w64-i686
+make mingw32
+```
+
+也可以直接运行仓库脚本安装工具链：
+
+```bash
+sh scripts/bootstrap-wsl-mingw.sh
+```
+
+运行核心回归测试：
+
+```bash
+make mingw32-test
+```
+
+在 WSL2 中，`make mingw32-test` 只适合有 Wine 或 Windows 执行环境时使用，因为它产出的是 Windows PE 可执行文件。常规回归测试使用 WSL 原生 `g++`：
+
+```bash
+make test
+```
+
+检查工具链、运行测试并构建 DLL：
+
+```bash
+sh scripts/build-mingw32.sh
+```
+
 # 通达信端代码
 
 ```text

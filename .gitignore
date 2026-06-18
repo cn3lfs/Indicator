@@ -1,0 +1,4 @@
+*.dep
+*.o
+tests/CzscCoreTests
+tests/*.exe

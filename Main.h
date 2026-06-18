@@ -20,7 +20,6 @@
 #define __MAIN_H__
 
 #include <float.h>
-#include "FXIndicator.h"
-#include "CCentroid.h"
+#include "FxIndicator.h"
 
 #endif

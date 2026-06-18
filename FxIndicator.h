@@ -22,6 +22,10 @@
 
 #include <windows.h>
 
+#ifndef DECLSPEC_EXPORT
+#define DECLSPEC_EXPORT __declspec(dllexport)
+#endif
+
 // 函数(数据个数,输出,输入a,输入b,输入c)
 typedef void(*pPluginFUNC)(int nCount, float *pOut, float *a, float *b, float *c);
 
@@ -34,7 +38,7 @@ typedef struct tagPluginTCalcFuncInfo
 #ifdef __cplusplus
 extern "C" {
 #endif
-DECLSPEC_EXPORT  BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInfo);  
+DECLSPEC_EXPORT  BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInfo);
 #ifdef __cplusplus
 };
 #endif
