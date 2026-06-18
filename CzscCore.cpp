@@ -26,12 +26,6 @@ struct SegmentInterval
   float fLow;
 };
 
-struct MoveStrength
-{
-  float fSpace;
-  float fSpeed;
-};
-
 static const float SIGNAL_FIRST_BUY = 1.0f;
 static const float SIGNAL_SECOND_BUY = 2.0f;
 static const float SIGNAL_THIRD_BUY = 3.0f;
@@ -334,19 +328,23 @@ static float GetMovePower(const SegmentPoint &Start, const SegmentPoint &End)
   return fDiff / (float)nSpan;
 }
 
-static MoveStrength MeasureMoveStrength(const SegmentPoint &Start, const SegmentPoint &End)
+StrengthMetrics MeasureStrength(const SegmentPoint &Start, const SegmentPoint &End)
 {
-  MoveStrength Strength;
+  StrengthMetrics Strength;
   Strength.fSpace = GetPointPrice(End) - GetPointPrice(Start);
   if (Strength.fSpace < 0)
   {
     Strength.fSpace = -Strength.fSpace;
   }
   Strength.fSpeed = GetMovePower(Start, End);
+  Strength.fDifHeight = 0;
+  Strength.fDeaHeight = 0;
+  Strength.fMacdArea = 0;
+  Strength.bRsiDivergence = false;
   return Strength;
 }
 
-static bool IsWeakerMove(const MoveStrength &Current, const MoveStrength &Previous)
+bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Previous)
 {
   return (Current.fSpace < Previous.fSpace) || (Current.fSpeed < Previous.fSpeed);
 }
@@ -376,52 +374,98 @@ static bool IsCenterBelow(const Center &Left, const Center &Right)
   return Right.fHigh < Left.fLow;
 }
 
-static bool FindLastTwoTrendCenters(const std::vector<Center> &Centers,
-                                    int nIndex,
-                                    int nDirection,
-                                    int *pPrev,
-                                    int *pLast)
+static TrendStructure MakeTrendStructure(const std::vector<Center> &Centers,
+                                         int nType,
+                                         std::size_t nFirst,
+                                         std::size_t nLast)
 {
-  int nPrev = -1;
-  int nLast = -1;
+  TrendStructure T;
+  T.nType = nType;
+  T.nStart = Centers[nFirst].nStart;
+  T.nEnd = Centers[nLast].nEnd;
+  T.nFirstCenter = (int)nFirst;
+  T.nLastCenter = (int)nLast;
+  return T;
+}
 
-  for (std::size_t i = 0; i < Centers.size(); i++)
+std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers)
+{
+  std::vector<TrendStructure> Structures;
+  std::size_t i = 0;
+  while (i < Centers.size())
   {
-    if (Centers[i].nStart >= nIndex)
+    if (i + 1 >= Centers.size())
+    {
+      Structures.push_back(MakeTrendStructure(Centers, CZSC_MOVEMENT_CONSOLIDATION, i, i));
+      break;
+    }
+
+    int nType = CZSC_MOVEMENT_CONSOLIDATION;
+    if (IsCenterAbove(Centers[i], Centers[i + 1]))
+    {
+      nType = CZSC_MOVEMENT_UP;
+    }
+    else if (IsCenterBelow(Centers[i], Centers[i + 1]))
+    {
+      nType = CZSC_MOVEMENT_DOWN;
+    }
+
+    if (nType == CZSC_MOVEMENT_CONSOLIDATION)
+    {
+      Structures.push_back(MakeTrendStructure(Centers, CZSC_MOVEMENT_CONSOLIDATION, i, i));
+      i++;
+      continue;
+    }
+
+    std::size_t nLast = i + 1;
+    while (nLast + 1 < Centers.size())
+    {
+      if ((nType == CZSC_MOVEMENT_UP) && IsCenterAbove(Centers[nLast], Centers[nLast + 1]))
+      {
+        nLast++;
+        continue;
+      }
+      if ((nType == CZSC_MOVEMENT_DOWN) && IsCenterBelow(Centers[nLast], Centers[nLast + 1]))
+      {
+        nLast++;
+        continue;
+      }
+      break;
+    }
+
+    Structures.push_back(MakeTrendStructure(Centers, nType, i, nLast));
+    i = nLast + 1;
+  }
+
+  return Structures;
+}
+
+static bool FindLastTrendStructure(const std::vector<TrendStructure> &Structures,
+                                   int nIndex,
+                                   int nDirection,
+                                   int *pTrend)
+{
+  int nType = (nDirection > 0) ? CZSC_MOVEMENT_UP : CZSC_MOVEMENT_DOWN;
+  int nTrend = -1;
+  for (std::size_t i = 0; i < Structures.size(); i++)
+  {
+    if (Structures[i].nStart >= nIndex)
     {
       continue;
     }
-    nPrev = nLast;
-    nLast = (int)i;
+    if (Structures[i].nType == nType)
+    {
+      nTrend = (int)i;
+    }
   }
 
-  if ((nPrev < 0) || (nLast < 0))
+  if (nTrend < 0)
   {
     return false;
   }
-
-  bool bTrend = false;
-  if (nDirection > 0)
+  if (pTrend != 0)
   {
-    bTrend = IsCenterAbove(Centers[nPrev], Centers[nLast]);
-  }
-  else
-  {
-    bTrend = IsCenterBelow(Centers[nPrev], Centers[nLast]);
-  }
-
-  if (!bTrend)
-  {
-    return false;
-  }
-
-  if (pPrev != 0)
-  {
-    *pPrev = nPrev;
-  }
-  if (pLast != 0)
-  {
-    *pLast = nLast;
+    *pTrend = nTrend;
   }
   return true;
 }
@@ -454,6 +498,7 @@ static bool FindPreviousSameDirectionMove(const std::vector<SegmentPoint> &Point
 
 static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
                                       const std::vector<Center> &Centers,
+                                      const std::vector<TrendStructure> &Structures,
                                       std::size_t nPoint)
 {
   if ((nPoint < 4) || (Points[nPoint].nType != CZSC_POINT_BOTTOM))
@@ -461,12 +506,12 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  int nPrevCenter = -1;
-  int nLastCenter = -1;
-  if (!FindLastTwoTrendCenters(Centers, Points[nPoint].nIndex, -1, &nPrevCenter, &nLastCenter))
+  int nTrend = -1;
+  if (!FindLastTrendStructure(Structures, Points[nPoint].nIndex, -1, &nTrend))
   {
     return false;
   }
+  int nLastCenter = Structures[nTrend].nLastCenter;
 
   const SegmentPoint &CurrentStart = Points[nPoint - 1];
   const SegmentPoint &CurrentEnd = Points[nPoint];
@@ -489,14 +534,15 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  MoveStrength Previous = MeasureMoveStrength(PrevStart, PrevEnd);
-  MoveStrength Current = MeasureMoveStrength(CurrentStart, CurrentEnd);
+  StrengthMetrics Previous = MeasureStrength(PrevStart, PrevEnd);
+  StrengthMetrics Current = MeasureStrength(CurrentStart, CurrentEnd);
   return (CurrentEnd.fLow < PrevEnd.fLow) &&
-         IsWeakerMove(Current, Previous);
+         IsWeakerStrength(Current, Previous);
 }
 
 static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
                                        const std::vector<Center> &Centers,
+                                       const std::vector<TrendStructure> &Structures,
                                        std::size_t nPoint)
 {
   if ((nPoint < 4) || (Points[nPoint].nType != CZSC_POINT_TOP))
@@ -504,12 +550,12 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  int nPrevCenter = -1;
-  int nLastCenter = -1;
-  if (!FindLastTwoTrendCenters(Centers, Points[nPoint].nIndex, 1, &nPrevCenter, &nLastCenter))
+  int nTrend = -1;
+  if (!FindLastTrendStructure(Structures, Points[nPoint].nIndex, 1, &nTrend))
   {
     return false;
   }
+  int nLastCenter = Structures[nTrend].nLastCenter;
 
   const SegmentPoint &CurrentStart = Points[nPoint - 1];
   const SegmentPoint &CurrentEnd = Points[nPoint];
@@ -532,16 +578,17 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  MoveStrength Previous = MeasureMoveStrength(PrevStart, PrevEnd);
-  MoveStrength Current = MeasureMoveStrength(CurrentStart, CurrentEnd);
+  StrengthMetrics Previous = MeasureStrength(PrevStart, PrevEnd);
+  StrengthMetrics Current = MeasureStrength(CurrentStart, CurrentEnd);
   return (CurrentEnd.fHigh > PrevEnd.fHigh) &&
-         IsWeakerMove(Current, Previous);
+         IsWeakerStrength(Current, Previous);
 }
 
 static void WriteTrendDivergenceSignals(int nCount,
                                         float *pOut,
                                         const std::vector<SegmentPoint> &Points,
-                                        const std::vector<Center> &Centers)
+                                        const std::vector<Center> &Centers,
+                                        const std::vector<TrendStructure> &Structures)
 {
   for (std::size_t i = 0; i < Points.size(); i++)
   {
@@ -551,11 +598,11 @@ static void WriteTrendDivergenceSignals(int nCount,
       continue;
     }
 
-    if (IsTrendDivergenceFirstBuy(Points, Centers, i))
+    if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i))
     {
       pOut[nIndex] = SIGNAL_FIRST_BUY;
     }
-    else if (IsTrendDivergenceFirstSell(Points, Centers, i))
+    else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i))
     {
       pOut[nIndex] = SIGNAL_FIRST_SELL;
     }
@@ -565,7 +612,8 @@ static void WriteTrendDivergenceSignals(int nCount,
 static void WriteSecondBuySellSignals(int nCount,
                                       float *pOut,
                                       const std::vector<SegmentPoint> &Points,
-                                      const std::vector<Center> &Centers)
+                                      const std::vector<Center> &Centers,
+                                      const std::vector<TrendStructure> &Structures)
 {
   for (std::size_t i = 0; i + 2 < Points.size(); i++)
   {
@@ -578,14 +626,14 @@ static void WriteSecondBuySellSignals(int nCount,
       continue;
     }
 
-    if (IsTrendDivergenceFirstBuy(Points, Centers, i) &&
+    if (IsTrendDivergenceFirstBuy(Points, Centers, Structures, i) &&
         (Turn.nType == CZSC_POINT_TOP) &&
         (Second.nType == CZSC_POINT_BOTTOM) &&
         (Second.fLow > First.fLow))
     {
       pOut[nIndex] = SIGNAL_SECOND_BUY;
     }
-    else if (IsTrendDivergenceFirstSell(Points, Centers, i) &&
+    else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i) &&
              (Turn.nType == CZSC_POINT_BOTTOM) &&
              (Second.nType == CZSC_POINT_TOP) &&
              (Second.fHigh < First.fHigh))
@@ -1321,9 +1369,10 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
   std::vector<Center> Centers = BuildCenters(Points);
-  WriteSecondBuySellSignals(nCount, pOut, Points, Centers);
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  WriteSecondBuySellSignals(nCount, pOut, Points, Centers, Structures);
   WriteThirdBuySellSignals(nCount, pOut, Points, Centers);
-  WriteTrendDivergenceSignals(nCount, pOut, Points, Centers);
+  WriteTrendDivergenceSignals(nCount, pOut, Points, Centers, Structures);
 }
 
 //=============================================================================

@@ -28,6 +28,13 @@ enum CzscPointType
   CZSC_POINT_TOP    = 1,
 };
 
+enum CzscMovementType
+{
+  CZSC_MOVEMENT_DOWN          = -1,
+  CZSC_MOVEMENT_CONSOLIDATION = 0,
+  CZSC_MOVEMENT_UP            = 1,
+};
+
 struct KBar
 {
   int   nIndex;
@@ -76,6 +83,25 @@ struct Center
   float fLow;
 };
 
+struct StrengthMetrics
+{
+  float fSpace;
+  float fSpeed;
+  float fDifHeight;
+  float fDeaHeight;
+  float fMacdArea;
+  bool  bRsiDivergence;
+};
+
+struct TrendStructure
+{
+  int nType;
+  int nStart;
+  int nEnd;
+  int nFirstCenter;
+  int nLastCenter;
+};
+
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals);
@@ -83,6 +109,9 @@ std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes)
 std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
+std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers);
+StrengthMetrics MeasureStrength(const SegmentPoint &Start, const SegmentPoint &End);
+bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Previous);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);

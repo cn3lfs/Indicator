@@ -168,6 +168,16 @@ static SegmentPoint MakeTestPoint(int nType, int nIndex, float fPrice)
   return Point;
 }
 
+static Center MakeTestCenter(int nStart, int nEnd, float fHigh, float fLow)
+{
+  Center C;
+  C.nStart = nStart;
+  C.nEnd = nEnd;
+  C.fHigh = fHigh;
+  C.fLow = fLow;
+  return C;
+}
+
 static bool TestLineSegmentsAreHigherLevelThanStrokes()
 {
   std::vector<Fractal> Fractals;
@@ -244,6 +254,122 @@ static bool TestLineSegmentBreakConfirmsTurn()
   }
 
   return true;
+}
+
+static bool TestStrengthMetricsMeasureSpaceAndSpeed()
+{
+  SegmentPoint Start = MakeTestPoint(CZSC_POINT_TOP, 2, 10);
+  SegmentPoint End = MakeTestPoint(CZSC_POINT_BOTTOM, 7, 4);
+
+  StrengthMetrics Strength = MeasureStrength(Start, End);
+
+  if (!NearlyEqual(Strength.fSpace, 6.0f) || !NearlyEqual(Strength.fSpeed, 1.2f))
+  {
+    return false;
+  }
+  if ((Strength.fDifHeight != 0) || (Strength.fDeaHeight != 0) ||
+      (Strength.fMacdArea != 0) || Strength.bRsiDivergence)
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static bool TestStrengthMetricsDetectWeakening()
+{
+  StrengthMetrics Previous;
+  Previous.fSpace = 6;
+  Previous.fSpeed = 2;
+  Previous.fDifHeight = 0;
+  Previous.fDeaHeight = 0;
+  Previous.fMacdArea = 0;
+  Previous.bRsiDivergence = false;
+
+  StrengthMetrics WeakSpace = Previous;
+  WeakSpace.fSpace = 5;
+  if (!IsWeakerStrength(WeakSpace, Previous))
+  {
+    return false;
+  }
+
+  StrengthMetrics WeakSpeed = Previous;
+  WeakSpeed.fSpeed = 1;
+  if (!IsWeakerStrength(WeakSpeed, Previous))
+  {
+    return false;
+  }
+
+  StrengthMetrics Stronger = Previous;
+  Stronger.fSpace = 7;
+  Stronger.fSpeed = 3;
+  return !IsWeakerStrength(Stronger, Previous);
+}
+
+static bool TestTrendStructuresDetectConsolidation()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 1)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (Structures[0].nFirstCenter == 0) &&
+         (Structures[0].nLastCenter == 0);
+}
+
+static bool TestTrendStructuresDetectUpTrend()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+  Centers.push_back(MakeTestCenter(16, 28, 15, 11));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 1)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_UP) &&
+         (Structures[0].nFirstCenter == 0) &&
+         (Structures[0].nLastCenter == 1);
+}
+
+static bool TestTrendStructuresDetectDownTrend()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 15, 11));
+  Centers.push_back(MakeTestCenter(16, 28, 10, 4));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 1)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_DOWN) &&
+         (Structures[0].nFirstCenter == 0) &&
+         (Structures[0].nLastCenter == 1);
+}
+
+static bool TestTrendStructuresSkipOverlappingTrend()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+  Centers.push_back(MakeTestCenter(16, 28, 12, 8));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 2)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
 }
 
 static bool TestFunc9WritesLineSegmentSignal()
@@ -859,61 +985,85 @@ int main()
   {
     return 7;
   }
-  if (!TestFunc9WritesLineSegmentSignal())
+  if (!TestStrengthMetricsMeasureSpaceAndSpeed())
   {
     return 8;
   }
-  if (!TestCentersUseThreeOverlappingSegments())
+  if (!TestStrengthMetricsDetectWeakening())
   {
     return 9;
   }
-  if (!TestCenterExtendsWithOverlappingSegment())
+  if (!TestTrendStructuresDetectConsolidation())
   {
     return 10;
   }
-  if (!TestCentersSplitWhenOverlapBreaks())
+  if (!TestTrendStructuresDetectUpTrend())
   {
     return 11;
   }
-  if (!TestCenterFunctionsWriteSignals())
+  if (!TestTrendStructuresDetectDownTrend())
   {
     return 12;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstBuy())
+  if (!TestTrendStructuresSkipOverlappingTrend())
   {
     return 13;
   }
-  if (!TestFunc5WritesCenterThirdBuy())
+  if (!TestFunc9WritesLineSegmentSignal())
   {
     return 14;
   }
-  if (!TestFunc5WritesCenterThirdSell())
+  if (!TestCentersUseThreeOverlappingSegments())
   {
     return 15;
   }
-  if (!TestFunc5WritesSecondBuyAfterFirstBuy())
+  if (!TestCenterExtendsWithOverlappingSegment())
   {
     return 16;
   }
-  if (!TestFunc5WritesSecondSellAfterFirstSell())
+  if (!TestCentersSplitWhenOverlapBreaks())
   {
     return 17;
   }
-  if (!TestFunc5WritesTrendDivergenceFirstSell())
+  if (!TestCenterFunctionsWriteSignals())
   {
     return 18;
   }
-  if (!TestFunc5SkipsStrongNewLow())
+  if (!TestFunc5WritesTrendDivergenceFirstBuy())
   {
     return 19;
   }
-  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  if (!TestFunc5WritesCenterThirdBuy())
   {
     return 20;
   }
-  if (!TestEmptyInputReturns())
+  if (!TestFunc5WritesCenterThirdSell())
   {
     return 21;
+  }
+  if (!TestFunc5WritesSecondBuyAfterFirstBuy())
+  {
+    return 22;
+  }
+  if (!TestFunc5WritesSecondSellAfterFirstSell())
+  {
+    return 23;
+  }
+  if (!TestFunc5WritesTrendDivergenceFirstSell())
+  {
+    return 24;
+  }
+  if (!TestFunc5SkipsStrongNewLow())
+  {
+    return 25;
+  }
+  if (!TestStrengthAndSlopeUsePreviousExtremes())
+  {
+    return 26;
+  }
+  if (!TestEmptyInputReturns())
+  {
+    return 27;
   }
 
   return 0;
