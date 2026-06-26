@@ -222,6 +222,7 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, bool bStrict = false);
 std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes);
+std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
 
 // 中枢与走势类型，以及中枢关系/三买后续/背驰-转折的分类
@@ -278,7 +279,8 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // 通达信导出函数（按编号在 Main.cpp 的 Info[] 注册，公式示例见 README）：
 //  1 线段点  2/3 中枢高/低  4 中枢起止  5 三类买卖点  6 形态买卖点  7 强度  8 斜率
 //  9 线段(笔)  10 信号质量  11 中枢关系  12 背驰-转折  13 三买后续  14 背驰段
-//  15 均线差(体位符号/力度幅度)  16 均线吻(飞吻1/唇吻2/湿吻3)  17 即时背驰预警  18 笔(新笔标准)
+//  15 均线差(体位符号/力度幅度)  16 均线吻(飞吻1/唇吻2/湿吻3)  17 即时背驰预警
+//  18 笔(新笔标准)  19 线段(特征序列法)
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
@@ -297,5 +299,6 @@ void Func15(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func16(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func17(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func18(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func19(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 
 #endif

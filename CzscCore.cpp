@@ -1826,6 +1826,127 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
   return Points;
 }
 
+//=============================================================================
+// 线段划分·特征序列法（第67课）：与上面的保护点启发式并存的可选实现
+//=============================================================================
+
+// 特征序列元素：把一条逆向笔看作一根 K 线，nPeak 是其作为线段终点候选的极值点下标
+struct FeatureElement
+{
+  float fHigh;
+  float fLow;
+  int   nPeak;
+};
+
+// 提取从 nStart 起、方向 nDir 的线段的标准特征序列：逆向笔为元素，并做非包含处理
+static std::vector<FeatureElement> BuildStandardFeatureSequence(const std::vector<SegmentPoint> &P,
+                                                                std::size_t nStart,
+                                                                int nDir)
+{
+  std::vector<FeatureElement> Seq;
+  // nStart->nStart+1 为顺向笔，第一条逆向笔从 nStart+1 开始，之后每隔一笔
+  for (std::size_t i = nStart + 1; i + 1 < P.size(); i += 2)
+  {
+    FeatureElement E;
+    if (nDir > 0)  // 上升线段：逆向笔 顶->底，候选终点取顶
+    {
+      E.fHigh = GetPointPrice(P[i]);
+      E.fLow = GetPointPrice(P[i + 1]);
+      E.nPeak = (int)i;
+    }
+    else           // 下降线段：逆向笔 底->顶，候选终点取底
+    {
+      E.fLow = GetPointPrice(P[i]);
+      E.fHigh = GetPointPrice(P[i + 1]);
+      E.nPeak = (int)i;
+    }
+
+    if (!Seq.empty())
+    {
+      FeatureElement &Prev = Seq.back();
+      bool bInclude = ((E.fHigh <= Prev.fHigh) && (E.fLow >= Prev.fLow)) ||
+                      ((E.fHigh >= Prev.fHigh) && (E.fLow <= Prev.fLow));
+      if (bInclude)
+      {
+        if (nDir > 0)  // 向上处理：高取高、低取高
+        {
+          if (E.fHigh > Prev.fHigh)
+          {
+            Prev.fHigh = E.fHigh;
+            Prev.nPeak = E.nPeak;
+          }
+          if (E.fLow > Prev.fLow)
+          {
+            Prev.fLow = E.fLow;
+          }
+        }
+        else           // 向下处理：低取低、高取低
+        {
+          if (E.fLow < Prev.fLow)
+          {
+            Prev.fLow = E.fLow;
+            Prev.nPeak = E.nPeak;
+          }
+          if (E.fHigh < Prev.fHigh)
+          {
+            Prev.fHigh = E.fHigh;
+          }
+        }
+        continue;
+      }
+    }
+    Seq.push_back(E);
+  }
+  return Seq;
+}
+
+// 在标准特征序列里找第一个分型（上升找顶分型/下降找底分型），返回线段终点的 StrokePoints 下标。
+// 注：第一种情况（无缺口）按原文在分型处结束；第二种情况（有缺口）此处作简化也在分型处确认。
+static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
+{
+  std::vector<FeatureElement> Seq = BuildStandardFeatureSequence(P, nStart, nDir);
+  for (std::size_t k = 1; k + 1 < Seq.size(); k++)
+  {
+    bool bFractal = (nDir > 0)
+                    ? ((Seq[k].fHigh > Seq[k - 1].fHigh) && (Seq[k].fHigh > Seq[k + 1].fHigh))
+                    : ((Seq[k].fLow < Seq[k - 1].fLow) && (Seq[k].fLow < Seq[k + 1].fLow));
+    if (bFractal)
+    {
+      return Seq[k].nPeak;
+    }
+  }
+  return -1;  // 未出现分型 → 线段尚未完成
+}
+
+// 特征序列法划分线段（第67课），与 BuildLineSegmentPoints 的启发式并存
+std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stroke> &Strokes)
+{
+  std::vector<SegmentPoint> Points;
+  std::vector<SegmentPoint> StrokePoints = BuildSegmentPoints(Strokes);
+  if (StrokePoints.size() < 4)
+  {
+    return Points;
+  }
+
+  Points.push_back(StrokePoints[0]);
+  std::size_t nStart = 0;
+  while (nStart + 3 < StrokePoints.size())
+  {
+    int nDir = (StrokePoints[nStart].nType == CZSC_POINT_BOTTOM) ? 1 : -1;
+    int nEnd = FindFeatureSegmentEnd(StrokePoints, nStart, nDir);
+    if ((nEnd < 0) || ((std::size_t)nEnd <= nStart))
+    {
+      break;
+    }
+    if (Points.back().nIndex != StrokePoints[(std::size_t)nEnd].nIndex)
+    {
+      Points.push_back(StrokePoints[(std::size_t)nEnd]);
+    }
+    nStart = (std::size_t)nEnd;
+  }
+  return Points;
+}
+
 // 在各线段点处写出其类型（±1），通达信据此画线段
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points)
 {
@@ -2808,5 +2929,24 @@ void Func18(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   std::vector<Fractal> Fractals = BuildFractals(Bars);
   std::vector<Stroke> Strokes = BuildStrokes(Fractals, true);
   std::vector<SegmentPoint> Points = BuildSegmentPoints(Strokes);
+  WriteSegmentSignal(nCount, pOut, Points);
+}
+
+//=============================================================================
+// 输出函数19号：线段（特征序列法，第67课；与9号的保护点启发式版并存）
+//=============================================================================
+
+void Func19(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow))
+  {
+    return;
+  }
+  (void)pTime;
+
+  std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> Points = BuildLineSegmentPointsByFeature(Strokes);
   WriteSegmentSignal(nCount, pOut, Points);
 }
