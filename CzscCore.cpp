@@ -1021,6 +1021,65 @@ static int ClassifyCenterPosition(const std::vector<SegmentPoint> &Points,
   return CZSC_CENTER_POSITION_INSIDE;
 }
 
+// 背驰-转折定理（第29课）：一买/一卖出现后，看其后第一段反弹相对最后中枢的高度，
+// 区分 中枢扩展(最弱) / 更大级别盘整 / 反趋势(最强)。需要存在反弹点，否则未知。
+int ClassifyReversalStrength(const std::vector<SegmentPoint> &Points,
+                             const std::vector<Center> &Centers,
+                             int nPoint,
+                             int nCenter,
+                             float fSignal)
+{
+  if ((nCenter < 0) || ((std::size_t)nCenter >= Centers.size()) || (nPoint < 0))
+  {
+    return CZSC_REVERSAL_UNKNOWN;
+  }
+
+  std::size_t nNext = (std::size_t)nPoint + 1;
+  if (nNext >= Points.size())
+  {
+    return CZSC_REVERSAL_UNKNOWN;
+  }
+
+  const Center &C = Centers[(std::size_t)nCenter];
+  const SegmentPoint &Rebound = Points[nNext];
+
+  if (fSignal == SIGNAL_FIRST_BUY)
+  {
+    if (Rebound.nType != CZSC_POINT_TOP)
+    {
+      return CZSC_REVERSAL_UNKNOWN;
+    }
+    if (Rebound.fHigh > C.fHigh)     // 突破中枢上沿 → 反趋势
+    {
+      return CZSC_REVERSAL_TREND;
+    }
+    if (Rebound.fHigh >= C.fLow)     // 回到中枢区间 → 更大级别盘整
+    {
+      return CZSC_REVERSAL_CONSOLIDATION;
+    }
+    return CZSC_REVERSAL_EXTENSION;  // 仅触及下沿/DD → 最弱 → 最后中枢扩展
+  }
+
+  if (fSignal == SIGNAL_FIRST_SELL)
+  {
+    if (Rebound.nType != CZSC_POINT_BOTTOM)
+    {
+      return CZSC_REVERSAL_UNKNOWN;
+    }
+    if (Rebound.fLow < C.fLow)       // 跌破中枢下沿 → 反趋势
+    {
+      return CZSC_REVERSAL_TREND;
+    }
+    if (Rebound.fLow <= C.fHigh)     // 回到中枢区间 → 更大级别盘整
+    {
+      return CZSC_REVERSAL_CONSOLIDATION;
+    }
+    return CZSC_REVERSAL_EXTENSION;  // 仅触及上沿/GG → 最弱 → 最后中枢扩展
+  }
+
+  return CZSC_REVERSAL_UNKNOWN;
+}
+
 static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
                                                          float fSignal,
                                                          int nPriority,
@@ -1042,6 +1101,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nSource = nSource;
   C.nQuality = ClassifyTradingSignalQuality(nSource, bOverlapped, Divergence);
   C.nCenterPosition = nCenterPosition;
+  C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
   return C;
@@ -1090,6 +1150,8 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                         ClassifyCenterPosition(Points, Centers, (int)i, nCenter),
                                                         false,
                                                         Divergence));
+      pCandidates->back().nReversal =
+        ClassifyReversalStrength(Points, Centers, (int)i, nCenter, SIGNAL_FIRST_BUY);
     }
     else if (IsTrendDivergenceFirstSell(Points, Centers, Structures, i, &Divergence))
     {
@@ -1104,6 +1166,8 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                         ClassifyCenterPosition(Points, Centers, (int)i, nCenter),
                                                         false,
                                                         Divergence));
+      pCandidates->back().nReversal =
+        ClassifyReversalStrength(Points, Centers, (int)i, nCenter, SIGNAL_FIRST_SELL);
     }
   }
 }
@@ -1288,6 +1352,53 @@ void ApplyTradingSignalQuality(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       pOut[C.nIndex] = (float)C.nQuality;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 与 ApplyTradingSignalCandidates 同样按优先级取胜，导出胜出信号的背驰-转折分类（第29课）。
+// 输出编码：1=最后中枢扩展、2=更大级别盘整、3=反趋势，0=非一类买卖点/无反弹（未知）。
+void ApplyTradingSignalReversal(int nCount,
+                                float *pOut,
+                                const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0;
+      if (C.nReversal == CZSC_REVERSAL_EXTENSION)
+      {
+        fCode = 1;
+      }
+      else if (C.nReversal == CZSC_REVERSAL_CONSOLIDATION)
+      {
+        fCode = 2;
+      }
+      else if (C.nReversal == CZSC_REVERSAL_TREND)
+      {
+        fCode = 3;
+      }
+      pOut[C.nIndex] = fCode;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -2224,4 +2335,27 @@ void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
   std::vector<Center> Centers = BuildCenters(Points);
   WriteCenterRelationSignal(nCount, pOut, Centers);
+}
+
+//=============================================================================
+// 输出函数12号：一类买卖点的背驰-转折分类（1=中枢扩展 2=更大盘整 3=反趋势，第29课）
+//=============================================================================
+
+void Func12(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow) || (pIn == 0))
+  {
+    return;
+  }
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
+                                                                                Centers,
+                                                                                Structures,
+                                                                                Breakouts);
+  ApplyTradingSignalReversal(nCount, pOut, Candidates);
 }

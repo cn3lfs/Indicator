@@ -57,6 +57,14 @@ enum CzscCenterRelation
   CZSC_CENTER_RELATION_UP        = 1,   // 后DD > 前GG：上涨及其延续
 };
 
+enum CzscReversalStrength
+{
+  CZSC_REVERSAL_EXTENSION     = -1,  // 情况一：最后中枢级别扩展（最弱反弹）
+  CZSC_REVERSAL_CONSOLIDATION = 0,   // 情况二：更大级别盘整
+  CZSC_REVERSAL_TREND         = 1,   // 情况三：反趋势（最强）
+  CZSC_REVERSAL_UNKNOWN       = 2,
+};
+
 struct KBar
 {
   int   nIndex;
@@ -163,6 +171,7 @@ struct TradingSignalCandidate
   int   nSource;
   int   nQuality;
   int   nCenterPosition;
+  int   nReversal;
   bool  bOverlapped;
   DivergenceResult Divergence;
 };
@@ -179,6 +188,11 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers);
 int ClassifyCenterRelation(const Center &Prev, const Center &Next);
+int ClassifyReversalStrength(const std::vector<SegmentPoint> &Points,
+                             const std::vector<Center> &Centers,
+                             int nPoint,
+                             int nCenter,
+                             float fSignal);
 std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint> &Points,
                                                  const std::vector<Center> &Centers,
                                                  const std::vector<TrendStructure> &Structures);
@@ -199,6 +213,9 @@ void ApplyTradingSignalCandidates(int nCount,
 void ApplyTradingSignalQuality(int nCount,
                                float *pOut,
                                const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalReversal(int nCount,
+                                float *pOut,
+                                const std::vector<TradingSignalCandidate> &Candidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
@@ -216,5 +233,6 @@ void Func8(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func12(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 
 #endif
