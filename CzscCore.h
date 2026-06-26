@@ -21,6 +21,7 @@
 
 #include <vector>
 
+// 分型 / 线段点的类型：顶、底或无
 enum CzscPointType
 {
   CZSC_POINT_BOTTOM = -1,
@@ -28,6 +29,7 @@ enum CzscPointType
   CZSC_POINT_TOP    = 1,
 };
 
+// 走势类型（由相邻中枢的上下关系判定）：下跌、盘整、上涨
 enum CzscMovementType
 {
   CZSC_MOVEMENT_DOWN          = -1,
@@ -35,6 +37,7 @@ enum CzscMovementType
   CZSC_MOVEMENT_UP            = 1,
 };
 
+// 买卖点信号质量（Func10 输出）：观察、确认、标准背驰（最强）
 enum CzscSignalQuality
 {
   CZSC_SIGNAL_QUALITY_WATCH     = 0,
@@ -42,6 +45,7 @@ enum CzscSignalQuality
   CZSC_SIGNAL_QUALITY_STRONG    = 2,
 };
 
+// 信号点相对所属中枢的位置：下方、内部、上方、未知
 enum CzscCenterPosition
 {
   CZSC_CENTER_POSITION_BELOW   = -1,
@@ -72,6 +76,7 @@ enum CzscCenterAftermath
   CZSC_CENTER_AFTERMATH_NEWBORN  = 2,  // 中枢新生：形成同向新中枢（趋势）
 };
 
+// 原始 K 线（下标 + 高低价）
 struct KBar
 {
   int   nIndex;
@@ -79,16 +84,18 @@ struct KBar
   float fLow;
 };
 
+// 包含处理后的合并 K 线，记录覆盖的原始下标区间与高低点出处
 struct MergedBar
 {
-  int   nStart;
+  int   nStart;       // 合并区间起止原始下标
   int   nEnd;
-  int   nHighIndex;
+  int   nHighIndex;   // 高/低点所在的原始下标
   int   nLowIndex;
   float fHigh;
   float fLow;
 };
 
+// 分型：顶分型或底分型（nType 见 CzscPointType），定位在合并 K 线上
 struct Fractal
 {
   int   nType;
@@ -97,6 +104,7 @@ struct Fractal
   float fLow;
 };
 
+// 笔：相邻一顶一底之间的一段（nDirection: +1 向上、-1 向下）
 struct Stroke
 {
   Fractal Start;
@@ -104,6 +112,7 @@ struct Stroke
   int     nDirection;
 };
 
+// 线段点 / 信号点：笔或线段的端点，fEnergy 为该点的累积 MACD 柱面积（动力学）
 struct SegmentPoint
 {
   int   nType;
@@ -123,76 +132,85 @@ struct Center
   float fBottom;  // DD = min(各段低点)，全幅下沿，恒 <= fLow
 };
 
+// 一段走势的力度度量：价差、平均速度、MACD 柱面积（fDif/fDea/bRsi 预留）
 struct StrengthMetrics
 {
-  float fSpace;
-  float fSpeed;
+  float fSpace;        // 价差（终点价-起点价的绝对值）
+  float fSpeed;        // 平均速度（价差/时间）
   float fDifHeight;
   float fDeaHeight;
-  float fMacdArea;
+  float fMacdArea;     // 区间累积 MACD 柱面积（第24课背驰判断）
   bool  bRsiDivergence;
 };
 
+// 背驰判断结果：方向、是否创新极值，以及价差/速度/MACD 三个维度是否走弱
 struct DivergenceResult
 {
   int             nDirection;
-  bool            bNewExtreme;
+  bool            bNewExtreme;   // 是否创新高/新低（趋势背驰必需，盘整背驰不需要）
   bool            bWeakSpace;
   bool            bWeakSpeed;
   bool            bWeakMacd;
-  bool            bDivergence;
-  StrengthMetrics Previous;
-  StrengthMetrics Current;
+  bool            bDivergence;    // 综合判定是否构成背驰
+  StrengthMetrics Previous;       // A 段（前一同向走势）
+  StrengthMetrics Current;        // C 段（当前走势）
 };
 
+// 走势类型结构：一段连续同向（或单个盘整）中枢构成的走势，记录起止与首末中枢下标
 struct TrendStructure
 {
-  int nType;
+  int nType;          // 见 CzscMovementType
   int nStart;
   int nEnd;
   int nFirstCenter;
   int nLastCenter;
 };
 
+// 中枢突破：离开中枢 + 首次回试的记录，用于判定第三类买卖点
 struct CenterBreakout
 {
   int  nCenter;
   int  nDirection;
-  int  nLeavePoint;
-  int  nRetestPoint;
-  bool bFirstRetest;
-  bool bBackIntoCenter;
-  bool bThirdSignal;
+  int  nLeavePoint;              // 离开中枢的线段点
+  int  nRetestPoint;            // 回试的线段点
+  bool bFirstRetest;            // 是否首次回试（第20课：必须第一次）
+  bool bBackIntoCenter;        // 回试是否回到中枢内
+  bool bThirdSignal;           // 是否构成第三类买卖点
   bool bConsolidationDivergence;
   DivergenceResult Divergence;
 };
 
+// 买卖点候选：携带全部上下文（来源/优先级/质量/中枢位置/背驰-转折/三买后续等）
 struct TradingSignalCandidate
 {
-  int   nIndex;
-  float fSignal;
-  int   nPriority;
-  int   nPoint;
-  int   nCenter;
-  int   nBreakout;
-  int   nSource;
-  int   nQuality;
-  int   nCenterPosition;
-  int   nReversal;
-  int   nAfterEffect;
-  bool  bOverlapped;
+  int   nIndex;             // 信号所在原始 K 线下标
+  float fSignal;            // 信号编码（1/2/3 买，11/12/13 卖）
+  int   nPriority;          // 同一根 K 线上的取胜优先级
+  int   nPoint;             // 对应线段点下标
+  int   nCenter;            // 所属中枢下标
+  int   nBreakout;          // 对应中枢突破下标（无则 -1）
+  int   nSource;            // 来源：第一/二/三类
+  int   nQuality;           // 见 CzscSignalQuality
+  int   nCenterPosition;    // 见 CzscCenterPosition
+  int   nReversal;          // 见 CzscReversalStrength（第29课，仅一类）
+  int   nAfterEffect;       // 见 CzscCenterAftermath（第21课，仅三类）
+  bool  bOverlapped;        // 二三类买卖点是否重合
   DivergenceResult Divergence;
 };
 
+// 动力学：MACD 柱面积及其在线段点上的累积能量
 std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice);
 void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const float *pHigh, const float *pLow);
 
+// 形态学流水线：合并K线 → 分型 → 笔 → 线段点 / 线段；以及由信号还原线段点
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals);
 std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
+
+// 中枢与走势类型，以及中枢关系/三买后续/背驰-转折的分类
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers);
 int ClassifyCenterRelation(const Center &Prev, const Center &Next);
@@ -202,6 +220,7 @@ int ClassifyReversalStrength(const std::vector<SegmentPoint> &Points,
                              int nPoint,
                              int nCenter,
                              float fSignal);
+// 买卖点：中枢突破 → 三类买卖点候选；力度/背驰度量
 std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint> &Points,
                                                  const std::vector<Center> &Centers,
                                                  const std::vector<TrendStructure> &Structures);
@@ -216,6 +235,8 @@ DivergenceResult MeasureDivergence(const SegmentPoint &PrevStart,
                                    const SegmentPoint &CurrentEnd,
                                    int nDirection);
 bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Previous);
+
+// 把候选/中枢结果按优先级写入通达信输出数组（信号、质量、背驰-转折、三买后续、中枢关系）
 void ApplyTradingSignalCandidates(int nCount,
                                   float *pOut,
                                   const std::vector<TradingSignalCandidate> &Candidates);
@@ -231,9 +252,13 @@ void ApplyTradingSignalAftermath(int nCount,
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
+// 顶底扫描与化简（早期版本的笔识别，保留供通达信公式使用）
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
 void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 
+// 通达信导出函数（按编号在 Main.cpp 的 Info[] 注册，公式示例见 README）：
+//  1 线段点  2/3 中枢高/低  4 中枢起止  5 三类买卖点  6 形态买卖点  7 强度  8 斜率
+//  9 线段(笔)  10 信号质量  11 中枢关系  12 背驰-转折  13 三买后续  14 背驰段
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

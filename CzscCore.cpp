@@ -41,6 +41,11 @@ static const int SIGNAL_SOURCE_FIRST = 1;
 static const int SIGNAL_SOURCE_SECOND = 2;
 static const int SIGNAL_SOURCE_THIRD = 3;
 
+//=============================================================================
+// 形态学辅助：输出校验、K线包含处理、分型/线段点构造
+//=============================================================================
+
+// 输出数组是否可用（个数为正且指针非空）
 static bool HasOutput(int nCount, float *pOut)
 {
   return (nCount > 0) && (pOut != 0);
@@ -71,12 +76,14 @@ static MergedBar MakeMergedBar(int nIndex, float fHigh, float fLow)
   return Bar;
 }
 
+// 两K线是否存在包含关系（一根的高低点全在另一根范围内，第62课）
 static bool IsIncluded(const MergedBar &Left, const MergedBar &Right)
 {
   return ((Right.fHigh <= Left.fHigh) && (Right.fLow >= Left.fLow)) ||
          ((Right.fHigh >= Left.fHigh) && (Right.fLow <= Left.fLow));
 }
 
+// 由非包含的相邻两K线判定向上(+1)/向下(-1)/不确定(0)
 static int DetectDirection(const MergedBar &Left, const MergedBar &Right)
 {
   if ((Right.fHigh > Left.fHigh) && (Right.fLow > Left.fLow))
@@ -90,6 +97,7 @@ static int DetectDirection(const MergedBar &Left, const MergedBar &Right)
   return 0;
 }
 
+// 选择包含合并的方向：已有趋势则沿用，否则按高/低点差值较大的一侧定向
 static int ChooseMergeDirection(const MergedBar &Last, const MergedBar &Bar, int nDirection)
 {
   if (nDirection != 0)
@@ -124,6 +132,7 @@ static void AssignLow(MergedBar *pTarget, const MergedBar &Source)
   pTarget->nLowIndex = Source.nLowIndex;
 }
 
+// 把被包含的K线合并进前一根：向上取高高/低取高，向下取低低/高取低（第62课）
 static void MergeIncludedBar(MergedBar *pLast, const MergedBar &Bar, int nDirection)
 {
   if (nDirection >= 0)
@@ -152,6 +161,7 @@ static void MergeIncludedBar(MergedBar *pLast, const MergedBar &Bar, int nDirect
   pLast->nEnd = Bar.nEnd;
 }
 
+// 同类型分型 Right 是否比 Left 更极端（顶更高 / 底更低），用于合并相邻同型分型
 static bool IsMoreExtreme(const Fractal &Left, const Fractal &Right)
 {
   if (Left.nType == CZSC_POINT_TOP)
@@ -165,6 +175,7 @@ static bool IsMoreExtreme(const Fractal &Left, const Fractal &Right)
   return false;
 }
 
+// 由合并K线生成分型（顶取高点下标、底取低点下标）
 static Fractal MakeFractal(int nType, const MergedBar &Bar)
 {
   Fractal F;
@@ -199,6 +210,7 @@ static bool IsMoreExtremePoint(const SegmentPoint &Left, const SegmentPoint &Rig
   return false;
 }
 
+// 线段是否被反向的保护点破坏（向上线段被新低破坏 / 向下线段被新高破坏）
 static bool IsBrokenByProtectPoint(int nDirection, const SegmentPoint &Protect, const SegmentPoint &Point)
 {
   if ((nDirection > 0) && (Point.nType == CZSC_POINT_BOTTOM))
@@ -212,6 +224,7 @@ static bool IsBrokenByProtectPoint(int nDirection, const SegmentPoint &Protect, 
   return false;
 }
 
+// 取线段点的代表价：顶取高、底取低
 static float GetPointPrice(const SegmentPoint &Point)
 {
   return (Point.nType == CZSC_POINT_TOP) ? Point.fHigh : Point.fLow;
@@ -228,6 +241,7 @@ static SegmentPoint MakeSignalPoint(int nIndex, int nType, float fHigh, float fL
   return Point;
 }
 
+// 相邻两点构成一段走势的价格区间 [低, 高]，用于中枢重叠计算
 static SegmentInterval MakeSegmentInterval(const SegmentPoint &Start, const SegmentPoint &End)
 {
   SegmentInterval Interval;
@@ -250,11 +264,13 @@ static SegmentInterval MakeSegmentInterval(const SegmentPoint &Start, const Segm
   return Interval;
 }
 
+// 两价格区间是否重叠
 static bool IntervalsOverlap(float fLeftLow, float fLeftHigh, float fRightLow, float fRightHigh)
 {
   return (fLeftLow <= fRightHigh) && (fRightLow <= fLeftHigh);
 }
 
+// 由连续三段走势的重叠区间构造初始中枢：ZG=min(三段高)、ZD=max(三段低)，GG/DD 取全幅极值
 static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::size_t nStart, Center *pCenter)
 {
   if ((pCenter == 0) || (nStart + 3 >= Points.size()))
@@ -321,6 +337,7 @@ static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::
   return true;
 }
 
+// 若新一段与中枢重叠则延伸：ZG/ZD 随重叠收缩、GG/DD 随全幅扩张、终点后移；否则中枢结束
 static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
 {
   if ((pCenter == 0) ||
@@ -548,6 +565,7 @@ static DivergenceResult MakeEmptyDivergence(int nDirection)
   return Result;
 }
 
+// 由两端点代表价判断一段走势的方向（+1 上、-1 下、0 平）
 static int GetMoveDirection(const SegmentPoint &Start, const SegmentPoint &End)
 {
   float fStart = GetPointPrice(Start);
@@ -563,6 +581,7 @@ static int GetMoveDirection(const SegmentPoint &Start, const SegmentPoint &End)
   return 0;
 }
 
+// 后中枢是否整体在前中枢之上 / 之下（ZG/ZD 不重叠），用于走势类型判定
 static bool IsCenterAbove(const Center &Left, const Center &Right)
 {
   return Right.fLow > Left.fHigh;
@@ -628,6 +647,8 @@ static TrendStructure MakeTrendStructure(const std::vector<Center> &Centers,
   return T;
 }
 
+// 把中枢序列归并为走势类型：连续同向（依次抬高/降低）的中枢合并为一段趋势，
+// 单个或不同向的归为盘整（第17/18课：趋势含两个以上依次同向中枢）
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers)
 {
   std::vector<TrendStructure> Structures;
@@ -980,6 +1001,7 @@ std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint>
   return Breakouts;
 }
 
+// 找到某下标处信号所属（最靠近的、起点不晚于它）的中枢，无则返回 -1
 static int FindLastCenterBeforeIndex(const std::vector<Center> &Centers, int nIndex)
 {
   int nCenter = -1;
@@ -993,6 +1015,7 @@ static int FindLastCenterBeforeIndex(const std::vector<Center> &Centers, int nIn
   return nCenter;
 }
 
+// 信号质量分级（第24/27/61课）：一类看价差+速度或 MACD 背驰，二类看盘整背驰/重合，三类看背驰
 static int ClassifyTradingSignalQuality(int nSource, const DivergenceResult &Divergence)
 {
   if (nSource == SIGNAL_SOURCE_FIRST)
@@ -1497,6 +1520,7 @@ void ApplyTradingSignalAftermath(int nCount,
   }
 }
 
+// 形态学第一步：对原始K线做包含处理，合并出无包含关系的合并K线序列（第62/65课）
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
 {
   std::vector<MergedBar> Bars;
@@ -1535,6 +1559,7 @@ std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
   return Bars;
 }
 
+// 从合并K线识别顶/底分型，并合并相邻同型分型（保留更极端者，第62课）
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
 {
   std::vector<Fractal> Fractals;
@@ -1582,6 +1607,7 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
   return Fractals;
 }
 
+// 由相邻顶底连成笔，要求顶底间隔至少 4 根（共 5 根成一笔，第62课的最基本要求）
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals)
 {
   std::vector<Stroke> Strokes;
@@ -1619,6 +1645,7 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals)
   return Strokes;
 }
 
+// 把笔的端点串成线段点序列（笔级别的转折点）
 std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes)
 {
   std::vector<SegmentPoint> Points;
@@ -1641,6 +1668,7 @@ std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes)
   return Points;
 }
 
+// 由笔进一步划分线段（更高级别）：至少三笔起步，用保护点是否被破坏确认线段转折
 std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes)
 {
   std::vector<SegmentPoint> Points;
@@ -1714,6 +1742,7 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
   return Points;
 }
 
+// 在各线段点处写出其类型（±1），通达信据此画线段
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points)
 {
   if (!HasOutput(nCount, pOut))
@@ -1732,6 +1761,7 @@ void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint>
   }
 }
 
+// 从通达信传入的线段点信号（±1）还原线段点序列，供中枢/买卖点计算复用
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow)
 {
   std::vector<SegmentPoint> Points;
@@ -1773,6 +1803,7 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
   return Points;
 }
 
+// 扫描线段点序列，构造中枢序列：先取三段重叠成枢，再向后延伸到重叠中断（第17/18课）
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
 {
   std::vector<Center> Centers;
@@ -1814,6 +1845,7 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
   return Centers;
 }
 
+// 在每个中枢的时间跨度内写出其上沿 ZG（fHigh），通达信据此画中枢上边
 static void WriteCenterHighSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
 {
   ClearOutput(nCount, pOut);
@@ -1828,6 +1860,7 @@ static void WriteCenterHighSignal(int nCount, float *pOut, const std::vector<Cen
   }
 }
 
+// 在每个中枢的时间跨度内写出其下沿 ZD（fLow），通达信据此画中枢下边
 static void WriteCenterLowSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
 {
   ClearOutput(nCount, pOut);
@@ -1842,6 +1875,7 @@ static void WriteCenterLowSignal(int nCount, float *pOut, const std::vector<Cent
   }
 }
 
+// 在每个中枢的起点标 1、终点标 2，通达信据此标注中枢起止
 static void WriteCenterMarkSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
 {
   ClearOutput(nCount, pOut);

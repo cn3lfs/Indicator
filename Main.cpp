@@ -20,6 +20,8 @@
 #include "Main.h"
 #include "CzscCore.h"
 
+// 通达信插件函数注册表：编号 → 函数指针，以 {0,NULL} 结尾。
+// 通达信公式用 TDXDLL1(编号,...) 调用，编号含义见 CzscCore.h 与 README。
 static PluginTCalcFuncInfo Info[] =
 {
   {1, &Func1},
@@ -39,6 +41,7 @@ static PluginTCalcFuncInfo Info[] =
   {0, NULL},
 };
 
+// 通达信加载插件时调用的导出入口：首次调用返回函数表，重复调用返回 FALSE
 BOOL RegisterTdxFunc(PluginTCalcFuncInfo **pInfo)
 {
   if (*pInfo == NULL)
