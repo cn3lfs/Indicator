@@ -65,6 +65,13 @@ enum CzscReversalStrength
   CZSC_REVERSAL_UNKNOWN       = 2,
 };
 
+enum CzscCenterAftermath
+{
+  CZSC_CENTER_AFTERMATH_UNKNOWN  = 0,  // 后续中枢尚未形成或反向异常
+  CZSC_CENTER_AFTERMATH_EXTENDED = 1,  // 中枢扩张：与后续中枢形成更大级别中枢
+  CZSC_CENTER_AFTERMATH_NEWBORN  = 2,  // 中枢新生：形成同向新中枢（趋势）
+};
+
 struct KBar
 {
   int   nIndex;
@@ -172,6 +179,7 @@ struct TradingSignalCandidate
   int   nQuality;
   int   nCenterPosition;
   int   nReversal;
+  int   nAfterEffect;
   bool  bOverlapped;
   DivergenceResult Divergence;
 };
@@ -188,6 +196,7 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers);
 int ClassifyCenterRelation(const Center &Prev, const Center &Next);
+int ClassifyCenterAftermath(const std::vector<Center> &Centers, int nCenter, float fSignal);
 int ClassifyReversalStrength(const std::vector<SegmentPoint> &Points,
                              const std::vector<Center> &Centers,
                              int nPoint,
@@ -216,6 +225,9 @@ void ApplyTradingSignalQuality(int nCount,
 void ApplyTradingSignalReversal(int nCount,
                                 float *pOut,
                                 const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalAftermath(int nCount,
+                                 float *pOut,
+                                 const std::vector<TradingSignalCandidate> &Candidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
@@ -234,5 +246,6 @@ void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func12(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func13(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 
 #endif

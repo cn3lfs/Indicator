@@ -588,6 +588,32 @@ int ClassifyCenterRelation(const Center &Prev, const Center &Next)
   return CZSC_CENTER_RELATION_EXTENSION;
 }
 
+// 三类买卖点后续（第21课/第53课）：离开中枢后若与后一个中枢形成高级别中枢则为「中枢扩张」，
+// 若形成同向新中枢则为「中枢新生（趋势）」。后续中枢尚未形成或方向相反则未知。
+int ClassifyCenterAftermath(const std::vector<Center> &Centers, int nCenter, float fSignal)
+{
+  if ((nCenter < 0) || ((std::size_t)nCenter + 1 >= Centers.size()))
+  {
+    return CZSC_CENTER_AFTERMATH_UNKNOWN;
+  }
+
+  int nRelation = ClassifyCenterRelation(Centers[(std::size_t)nCenter],
+                                         Centers[(std::size_t)nCenter + 1]);
+  if (nRelation == CZSC_CENTER_RELATION_EXTENSION)
+  {
+    return CZSC_CENTER_AFTERMATH_EXTENDED;
+  }
+  if ((fSignal == SIGNAL_THIRD_BUY) && (nRelation == CZSC_CENTER_RELATION_UP))
+  {
+    return CZSC_CENTER_AFTERMATH_NEWBORN;
+  }
+  if ((fSignal == SIGNAL_THIRD_SELL) && (nRelation == CZSC_CENTER_RELATION_DOWN))
+  {
+    return CZSC_CENTER_AFTERMATH_NEWBORN;
+  }
+  return CZSC_CENTER_AFTERMATH_UNKNOWN;
+}
+
 static TrendStructure MakeTrendStructure(const std::vector<Center> &Centers,
                                          int nType,
                                          std::size_t nFirst,
@@ -1102,6 +1128,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nQuality = ClassifyTradingSignalQuality(nSource, bOverlapped, Divergence);
   C.nCenterPosition = nCenterPosition;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
+  C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
   return C;
@@ -1272,6 +1299,7 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                       ClassifyCenterPosition(Points, Centers, B.nRetestPoint, B.nCenter),
                                                       false,
                                                       B.Divergence));
+    pCandidates->back().nAfterEffect = ClassifyCenterAftermath(Centers, B.nCenter, fSignal);
   }
 }
 
@@ -1397,6 +1425,48 @@ void ApplyTradingSignalReversal(int nCount,
       else if (C.nReversal == CZSC_REVERSAL_TREND)
       {
         fCode = 3;
+      }
+      pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 按优先级取胜，导出胜出信号的三类买卖点后续（第21课）：1=中枢扩张、2=中枢新生，0=其它。
+void ApplyTradingSignalAftermath(int nCount,
+                                 float *pOut,
+                                 const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0;
+      if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED)
+      {
+        fCode = 1;
+      }
+      else if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN)
+      {
+        fCode = 2;
       }
       pOut[C.nIndex] = fCode;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
@@ -2358,4 +2428,26 @@ void Func12(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
                                                                                 Structures,
                                                                                 Breakouts);
   ApplyTradingSignalReversal(nCount, pOut, Candidates);
+}
+
+//=============================================================================
+// 输出函数13号：三类买卖点后续（1=中枢扩张 2=中枢新生，第21课）
+//=============================================================================
+
+void Func13(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow) || (pIn == 0))
+  {
+    return;
+  }
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
+                                                                                Centers,
+                                                                                Structures,
+                                                                                Breakouts);
+  ApplyTradingSignalAftermath(nCount, pOut, Candidates);
 }
