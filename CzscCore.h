@@ -76,6 +76,15 @@ enum CzscCenterAftermath
   CZSC_CENTER_AFTERMATH_NEWBORN  = 2,  // 中枢新生：形成同向新中枢（趋势）
 };
 
+// 均线吻分类（第11课）：短长均线靠近/相交处的反抗强度，递增
+enum CzscKissType
+{
+  CZSC_KISS_NONE = 0,
+  CZSC_KISS_FLY  = 1,  // 飞吻：短均线略走平即继续原趋势（反抗最弱）
+  CZSC_KISS_LIP  = 2,  // 唇吻：短均线贴近长均线但不破
+  CZSC_KISS_WET  = 3,  // 湿吻：短均线升破/跌破长均线（反抗最强，转折多由此始）
+};
+
 // 原始 K 线（下标 + 高低价）
 struct KBar
 {
@@ -202,6 +211,10 @@ struct TradingSignalCandidate
 std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice);
 void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const float *pHigh, const float *pLow);
 
+// 均线系统（第11-15课）：简单移动平均；短长均线的吻分类（飞吻/唇吻/湿吻）
+std::vector<float> ComputeMovingAverage(int nCount, const float *pPrice, int nPeriod);
+std::vector<int> ClassifyMaKisses(const std::vector<float> &Short, const std::vector<float> &Long);
+
 // 形态学流水线：合并K线 → 分型 → 笔 → 线段点 / 线段；以及由信号还原线段点
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
@@ -259,6 +272,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // 通达信导出函数（按编号在 Main.cpp 的 Info[] 注册，公式示例见 README）：
 //  1 线段点  2/3 中枢高/低  4 中枢起止  5 三类买卖点  6 形态买卖点  7 强度  8 斜率
 //  9 线段(笔)  10 信号质量  11 中枢关系  12 背驰-转折  13 三买后续  14 背驰段
+//  15 均线差(体位符号/力度幅度)  16 均线吻(飞吻1/唇吻2/湿吻3)
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
@@ -273,5 +287,7 @@ void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func12(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func13(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func14(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func15(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func16(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 
 #endif

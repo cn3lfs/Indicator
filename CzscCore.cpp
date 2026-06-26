@@ -64,6 +64,11 @@ static void ClearOutput(int nCount, float *pOut)
   }
 }
 
+static float AbsF(float fValue)
+{
+  return (fValue < 0) ? -fValue : fValue;
+}
+
 static MergedBar MakeMergedBar(int nIndex, float fHigh, float fLow)
 {
   MergedBar Bar;
@@ -460,6 +465,81 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
       Points[i].fEnergy = Cumulative[(std::size_t)nIndex];
     }
   }
+}
+
+//=============================================================================
+// 均线系统（第11-15课）：简单移动平均 + 吻分类（飞吻/唇吻/湿吻）
+//=============================================================================
+
+static const int   MA_SHORT_PERIOD  = 5;
+static const int   MA_LONG_PERIOD   = 20;
+static const float MA_LIP_THRESHOLD = 0.01f;  // 唇吻：短长均线相对间距 < 1% 视为贴近
+
+// 简单移动平均；序列开头不足一个周期时用已有数据的部分窗口平均
+std::vector<float> ComputeMovingAverage(int nCount, const float *pPrice, int nPeriod)
+{
+  std::vector<float> Ma;
+  if ((nCount <= 0) || (pPrice == 0) || (nPeriod <= 0))
+  {
+    return Ma;
+  }
+
+  Ma.resize((std::size_t)nCount);
+  float fSum = 0;
+  for (int i = 0; i < nCount; i++)
+  {
+    fSum += pPrice[i];
+    if (i >= nPeriod)
+    {
+      fSum -= pPrice[i - nPeriod];
+    }
+    int nWindow = (i + 1 < nPeriod) ? (i + 1) : nPeriod;
+    Ma[(std::size_t)i] = fSum / (float)nWindow;
+  }
+  return Ma;
+}
+
+// 在短长均线间距的每个局部极小处判一次「吻」：升破/跌破=湿吻，贴近不破=唇吻，略走平=飞吻
+std::vector<int> ClassifyMaKisses(const std::vector<float> &Short, const std::vector<float> &Long)
+{
+  std::size_t n = Short.size();
+  std::vector<int> Kiss;
+  Kiss.assign(n, CZSC_KISS_NONE);
+  if ((n < 3) || (Long.size() != n))
+  {
+    return Kiss;
+  }
+
+  for (std::size_t i = 1; i + 1 < n; i++)
+  {
+    float fPrev = Short[i - 1] - Long[i - 1];
+    float fCurr = Short[i] - Long[i];
+    float fNext = Short[i + 1] - Long[i + 1];
+    float fAbsPrev = AbsF(fPrev);
+    float fAbsCurr = AbsF(fCurr);
+    float fAbsNext = AbsF(fNext);
+
+    // 间距先收窄后放大 → 这一根是一次吻
+    if ((fAbsCurr < fAbsPrev) && (fAbsCurr <= fAbsNext))
+    {
+      bool bCross = ((fPrev > 0) != (fCurr > 0)) || ((fCurr > 0) != (fNext > 0));
+      float fBase = AbsF(Long[i]);
+      float fRel = (fBase > 0) ? (fAbsCurr / fBase) : fAbsCurr;
+      if (bCross)
+      {
+        Kiss[i] = CZSC_KISS_WET;
+      }
+      else if (fRel < MA_LIP_THRESHOLD)
+      {
+        Kiss[i] = CZSC_KISS_LIP;
+      }
+      else
+      {
+        Kiss[i] = CZSC_KISS_FLY;
+      }
+    }
+  }
+  return Kiss;
 }
 
 static float GetMovePower(const SegmentPoint &Start, const SegmentPoint &End)
@@ -2561,4 +2641,63 @@ void Func14(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
                                                                                 Structures,
                                                                                 Breakouts);
   WriteDivergenceSegmentSignal(nCount, pOut, Points, Candidates);
+}
+
+// 由 H/L 算出短长均线（收盘价用 (H+L)/2 代理），写出 Price 缓冲供 Func15/16 复用
+static void ComputeShortLongMa(int nCount, float *pHigh, float *pLow,
+                               std::vector<float> *pShort, std::vector<float> *pLong)
+{
+  std::vector<float> Price;
+  Price.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Price[(std::size_t)i] = (pHigh[i] + pLow[i]) * 0.5f;
+  }
+  *pShort = ComputeMovingAverage(nCount, &Price[0], MA_SHORT_PERIOD);
+  *pLong = ComputeMovingAverage(nCount, &Price[0], MA_LONG_PERIOD);
+}
+
+//=============================================================================
+// 输出函数15号：短长均线差 = 短均线 - 长均线（符号=体位，幅度=趋势力度，第11/15课）
+//=============================================================================
+
+void Func15(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow))
+  {
+    return;
+  }
+  (void)pTime;
+
+  ClearOutput(nCount, pOut);
+  std::vector<float> Short;
+  std::vector<float> Long;
+  ComputeShortLongMa(nCount, pHigh, pLow, &Short, &Long);
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = Short[(std::size_t)i] - Long[(std::size_t)i];
+  }
+}
+
+//=============================================================================
+// 输出函数16号：均线吻类型（飞吻1 / 唇吻2 / 湿吻3，第11课），非吻处为 0
+//=============================================================================
+
+void Func16(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow))
+  {
+    return;
+  }
+  (void)pTime;
+
+  ClearOutput(nCount, pOut);
+  std::vector<float> Short;
+  std::vector<float> Long;
+  ComputeShortLongMa(nCount, pHigh, pLow, &Short, &Long);
+  std::vector<int> Kiss = ClassifyMaKisses(Short, Long);
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = (float)Kiss[(std::size_t)i];
+  }
 }
