@@ -208,6 +208,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nSource = 0;
   C.nQuality = CZSC_SIGNAL_QUALITY_WATCH;
   C.nCenterPosition = CZSC_CENTER_POSITION_UNKNOWN;
+  C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
   C.Divergence.bNewExtreme = false;
@@ -2223,6 +2224,115 @@ static bool TestFunc11HandlesEmptyInput()
   return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
+static bool TestReversalStrengthExtension()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 8));     // 一买点
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 8.5f));     // 反弹仅到 8.5
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 12, 9));             // 中枢 [9,12]
+
+  // 反弹高 8.5 < ZD 9 → 最弱 → 最后中枢扩展
+  return ClassifyReversalStrength(Points, Centers, 0, 0, 1.0f) == CZSC_REVERSAL_EXTENSION;
+}
+
+static bool TestReversalStrengthConsolidation()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10.5f));    // 反弹回到中枢内
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 12, 9));
+
+  return ClassifyReversalStrength(Points, Centers, 0, 0, 1.0f) == CZSC_REVERSAL_CONSOLIDATION;
+}
+
+static bool TestReversalStrengthTrend()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 13));       // 反弹突破中枢上沿
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 12, 9));
+
+  return ClassifyReversalStrength(Points, Centers, 0, 0, 1.0f) == CZSC_REVERSAL_TREND;
+}
+
+static bool TestReversalStrengthSell()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 12, 9));
+
+  std::vector<SegmentPoint> Cons;
+  Cons.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 15));         // 一卖点
+  Cons.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 11));      // 回抽进中枢 → 盘整
+  if (ClassifyReversalStrength(Cons, Centers, 0, 0, 11.0f) != CZSC_REVERSAL_CONSOLIDATION)
+  {
+    return false;
+  }
+
+  std::vector<SegmentPoint> Trend;
+  Trend.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 15));
+  Trend.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 8));      // 跌破中枢下沿 → 反趋势
+  return ClassifyReversalStrength(Trend, Centers, 0, 0, 11.0f) == CZSC_REVERSAL_TREND;
+}
+
+static bool TestReversalStrengthUnknownNoRebound()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 8));     // 一买点，其后尚无反弹
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 12, 9));
+
+  return ClassifyReversalStrength(Points, Centers, 0, 0, 1.0f) == CZSC_REVERSAL_UNKNOWN;
+}
+
+static bool TestFunc12WritesReversalCode()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = pLow[36] = 6;
+  pIn[40] = -1;
+  pHigh[40] = pLow[40] = 4.5f;
+
+  Func12(nCount, pOut, pIn, pHigh, pLow);
+
+  // 一买(index32)带 1/2/3 的背驰-转折编码；二买(index40)与无信号处为 0
+  bool bFirstCoded = (pOut[32] >= 0.9f) && (pOut[32] <= 3.1f);
+  return bFirstCoded && NearlyEqual(pOut[40], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -2500,6 +2610,30 @@ int main()
   if (!TestFunc11HandlesEmptyInput())
   {
     return 69;
+  }
+  if (!TestReversalStrengthExtension())
+  {
+    return 70;
+  }
+  if (!TestReversalStrengthConsolidation())
+  {
+    return 71;
+  }
+  if (!TestReversalStrengthTrend())
+  {
+    return 72;
+  }
+  if (!TestReversalStrengthSell())
+  {
+    return 73;
+  }
+  if (!TestReversalStrengthUnknownNoRebound())
+  {
+    return 74;
+  }
+  if (!TestFunc12WritesReversalCode())
+  {
+    return 75;
   }
 
   return 0;
