@@ -180,12 +180,13 @@ static bool IsMoreExtreme(const Fractal &Left, const Fractal &Right)
   return false;
 }
 
-// 由合并K线生成分型（顶取高点下标、底取低点下标）
-static Fractal MakeFractal(int nType, const MergedBar &Bar)
+// 由合并K线生成分型（顶取高点下标、底取低点下标；nMergedIndex 为分型中点的合并K线下标）
+static Fractal MakeFractal(int nType, const MergedBar &Bar, int nMergedIndex)
 {
   Fractal F;
   F.nType = nType;
   F.nIndex = (nType == CZSC_POINT_TOP) ? Bar.nHighIndex : Bar.nLowIndex;
+  F.nMergedIndex = nMergedIndex;
   F.fHigh = Bar.fHigh;
   F.fLow = Bar.fLow;
   return F;
@@ -1671,7 +1672,7 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
       continue;
     }
 
-    Fractal F = MakeFractal(nType, Middle);
+    Fractal F = MakeFractal(nType, Middle, (int)i);
     if (!Fractals.empty() && (Fractals.back().nType == F.nType))
     {
       if (IsMoreExtreme(Fractals.back(), F))
@@ -1687,8 +1688,9 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
   return Fractals;
 }
 
-// 由相邻顶底连成笔，要求顶底间隔至少 4 根（共 5 根成一笔，第62课的最基本要求）
-std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals)
+// 由相邻顶底连成笔。bStrict=false（默认）：按原始K线间隔≥4（共5根成一笔，现状）；
+// bStrict=true：新笔标准，按合并K线间隔≥4（两分型间至少1根独立合并K线，第62/65课）
+std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, bool bStrict)
 {
   std::vector<Stroke> Strokes;
   if (Fractals.empty())
@@ -1709,7 +1711,9 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals)
       continue;
     }
 
-    if (Current.nIndex - Candidate.nIndex < 4)
+    int nGap = bStrict ? (Current.nMergedIndex - Candidate.nMergedIndex)
+                       : (Current.nIndex - Candidate.nIndex);
+    if (nGap < 4)
     {
       continue;
     }
@@ -2786,4 +2790,23 @@ void Func17(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
   {
     pOut[nCount - 1] = (float)nWarn;  // 在当下（最右一根）给出预警
   }
+}
+
+//=============================================================================
+// 输出函数18号：笔（新笔标准，按合并K线间隔；与1号的原始K线间隔版并存，第62/65课）
+//=============================================================================
+
+void Func18(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow))
+  {
+    return;
+  }
+  (void)pTime;
+
+  std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals, true);
+  std::vector<SegmentPoint> Points = BuildSegmentPoints(Strokes);
+  WriteSegmentSignal(nCount, pOut, Points);
 }
