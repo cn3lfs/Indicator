@@ -88,6 +88,7 @@ struct SegmentPoint
   int   nIndex;
   float fHigh;
   float fLow;
+  float fEnergy;
 };
 
 struct Center
@@ -114,6 +115,7 @@ struct DivergenceResult
   bool            bNewExtreme;
   bool            bWeakSpace;
   bool            bWeakSpeed;
+  bool            bWeakMacd;
   bool            bDivergence;
   StrengthMetrics Previous;
   StrengthMetrics Current;
@@ -156,6 +158,9 @@ struct TradingSignalCandidate
   DivergenceResult Divergence;
 };
 
+std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice);
+void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const float *pHigh, const float *pLow);
+
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals);
@@ -181,6 +186,9 @@ bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Pre
 void ApplyTradingSignalCandidates(int nCount,
                                   float *pOut,
                                   const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalQuality(int nCount,
+                               float *pOut,
+                               const std::vector<TradingSignalCandidate> &Candidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
@@ -195,5 +203,6 @@ void Func6(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func7(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func8(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 
 #endif

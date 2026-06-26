@@ -165,6 +165,14 @@ static SegmentPoint MakeTestPoint(int nType, int nIndex, float fPrice)
   Point.nIndex = nIndex;
   Point.fHigh = fPrice;
   Point.fLow = fPrice;
+  Point.fEnergy = 0;
+  return Point;
+}
+
+static SegmentPoint MakeTestEnergyPoint(int nType, int nIndex, float fPrice, float fEnergy)
+{
+  SegmentPoint Point = MakeTestPoint(nType, nIndex, fPrice);
+  Point.fEnergy = fEnergy;
   return Point;
 }
 
@@ -195,6 +203,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.Divergence.bNewExtreme = false;
   C.Divergence.bWeakSpace = false;
   C.Divergence.bWeakSpeed = false;
+  C.Divergence.bWeakMacd = false;
   C.Divergence.bDivergence = false;
   C.Divergence.Previous = MeasureStrength(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1),
                                           MakeTestPoint(CZSC_POINT_TOP, 4, 2));
@@ -217,6 +226,7 @@ static CenterBreakout MakeTestBreakout(int nDirection, int nRetestPoint)
   B.Divergence.bNewExtreme = false;
   B.Divergence.bWeakSpace = false;
   B.Divergence.bWeakSpeed = false;
+  B.Divergence.bWeakMacd = false;
   B.Divergence.bDivergence = false;
   B.Divergence.Previous = MeasureStrength(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1),
                                           MakeTestPoint(CZSC_POINT_TOP, 4, 2));
@@ -1674,6 +1684,221 @@ static bool TestEmptyInputReturns()
   return true;
 }
 
+static bool TestMacdHistogramFlatSeriesIsZero()
+{
+  const int nCount = 40;
+  float pPrice[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pPrice[i] = 10;
+  }
+
+  std::vector<float> Histogram = ComputeMacdHistogram(nCount, pPrice);
+  if ((int)Histogram.size() != nCount)
+  {
+    return false;
+  }
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(Histogram[(std::size_t)i], 0.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestMacdHistogramRisingSeriesIsPositive()
+{
+  const int nCount = 60;
+  float pPrice[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pPrice[i] = 10.0f + (float)i;
+  }
+
+  std::vector<float> Histogram = ComputeMacdHistogram(nCount, pPrice);
+  if ((int)Histogram.size() != nCount)
+  {
+    return false;
+  }
+
+  // 单调上升序列：快线 EMA 始终高于慢线，DIF 单增、DEA 滞后，柱子非负。
+  float fSum = 0;
+  for (int i = 0; i < nCount; i++)
+  {
+    if (Histogram[(std::size_t)i] < -0.0001f)
+    {
+      return false;
+    }
+    fSum += Histogram[(std::size_t)i];
+  }
+
+  return fSum > 0;
+}
+
+static bool TestAssignSegmentEnergySetsCumulativeArea()
+{
+  const int nCount = 60;
+  float pHigh[nCount];
+  float pLow[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pHigh[i] = 10.5f + (float)i;
+    pLow[i] = 9.5f + (float)i;
+  }
+
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 30, 40));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 59, 69));
+
+  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
+
+  // 上升序列柱子非负，累积能量随序号单调不减且终点为正。
+  return (Points[0].fEnergy <= Points[1].fEnergy + 0.0001f) &&
+         (Points[1].fEnergy <= Points[2].fEnergy + 0.0001f) &&
+         (Points[2].fEnergy > 0);
+}
+
+static bool TestStrengthMetricsUseMacdEnergy()
+{
+  SegmentPoint Start = MakeTestEnergyPoint(CZSC_POINT_TOP, 2, 10, 100);
+  SegmentPoint End = MakeTestEnergyPoint(CZSC_POINT_BOTTOM, 7, 4, 70);
+
+  StrengthMetrics Strength = MeasureStrength(Start, End);
+
+  return NearlyEqual(Strength.fMacdArea, 30.0f) &&
+         NearlyEqual(Strength.fSpace, 6.0f) &&
+         NearlyEqual(Strength.fSpeed, 1.2f);
+}
+
+static bool TestDivergenceDetectsMacdWeakening()
+{
+  SegmentPoint PrevStart = MakeTestEnergyPoint(CZSC_POINT_TOP, 0, 12, 100);
+  SegmentPoint PrevEnd = MakeTestEnergyPoint(CZSC_POINT_BOTTOM, 4, 2, 60);
+  SegmentPoint CurrentStart = MakeTestEnergyPoint(CZSC_POINT_TOP, 8, 4.5f, 55);
+  SegmentPoint CurrentEnd = MakeTestEnergyPoint(CZSC_POINT_BOTTOM, 12, 1, 40);
+
+  DivergenceResult Weak = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, -1);
+  if (!Weak.bWeakMacd || !Weak.bDivergence)
+  {
+    return false;
+  }
+
+  // 末段 MACD 面积不缩小时不应判定 MACD 背驰。
+  SegmentPoint StrongEnd = MakeTestEnergyPoint(CZSC_POINT_BOTTOM, 12, 1, -10);
+  DivergenceResult Strong = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, StrongEnd, -1);
+
+  return !Strong.bWeakMacd;
+}
+
+static bool TestFunc10WritesSignalQuality()
+{
+  // 复用一类买点背驰场景：index 32 出现一类买点，价差与速度同时走弱 → 标准强信号。
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = 7;
+  pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = 12;
+  pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = 8;
+  pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = 10;
+  pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = 3;
+  pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = 7;
+  pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = 4;
+  pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = 4.2f;
+  pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = 3.8f;
+  pLow[32] = 3.8f;
+
+  Func10(nCount, pOut, pIn, pHigh, pLow);
+
+  for (int i = 0; i < nCount; i++)
+  {
+    float fExpected = (i == 32) ? (float)CZSC_SIGNAL_QUALITY_STRONG : 0.0f;
+    if (!NearlyEqual(pOut[i], fExpected))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFirstCandidateMacdUpgradesQuality()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 14));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 15));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 30, 8));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 18, 13));
+  Centers.push_back(MakeTestCenter(16, 24, 12, 9));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+
+  // 末段（点4→点5）价差更大但速度更慢：几何上仅速度走弱，质量只能到 CONFIRMED。
+  std::vector<TradingSignalCandidate> Plain =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pPlain = FindSignalCandidate(Plain, 30, 1.0f);
+  if ((pPlain == 0) ||
+      pPlain->Divergence.bWeakSpace ||
+      !pPlain->Divergence.bWeakSpeed ||
+      pPlain->Divergence.bWeakMacd ||
+      (pPlain->nQuality != CZSC_SIGNAL_QUALITY_CONFIRMED))
+  {
+    return false;
+  }
+
+  // 注入末段 MACD 面积小于前段：第24课标准背驰，质量升级为 STRONG。
+  Points[2].fEnergy = 100;
+  Points[3].fEnergy = 70;
+  Points[4].fEnergy = 50;
+  Points[5].fEnergy = 40;
+
+  std::vector<TradingSignalCandidate> Energized =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pEnergized = FindSignalCandidate(Energized, 30, 1.0f);
+
+  return (pEnergized != 0) &&
+         pEnergized->Divergence.bWeakMacd &&
+         !pEnergized->Divergence.bWeakSpace &&
+         pEnergized->Divergence.bWeakSpeed &&
+         (pEnergized->nQuality == CZSC_SIGNAL_QUALITY_STRONG);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -1867,6 +2092,34 @@ int main()
   if (!TestEmptyInputReturns())
   {
     return 48;
+  }
+  if (!TestMacdHistogramFlatSeriesIsZero())
+  {
+    return 49;
+  }
+  if (!TestMacdHistogramRisingSeriesIsPositive())
+  {
+    return 50;
+  }
+  if (!TestAssignSegmentEnergySetsCumulativeArea())
+  {
+    return 51;
+  }
+  if (!TestStrengthMetricsUseMacdEnergy())
+  {
+    return 52;
+  }
+  if (!TestDivergenceDetectsMacdWeakening())
+  {
+    return 53;
+  }
+  if (!TestFirstCandidateMacdUpgradesQuality())
+  {
+    return 54;
+  }
+  if (!TestFunc10WritesSignalQuality())
+  {
+    return 55;
   }
 
   return 0;

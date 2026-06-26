@@ -182,6 +182,7 @@ static SegmentPoint MakeSegmentPoint(const Fractal &F)
   Point.nIndex = F.nIndex;
   Point.fHigh = F.fHigh;
   Point.fLow = F.fLow;
+  Point.fEnergy = 0;
   return Point;
 }
 
@@ -223,6 +224,7 @@ static SegmentPoint MakeSignalPoint(int nIndex, int nType, float fHigh, float fL
   Point.nIndex = nIndex;
   Point.fHigh = fHigh;
   Point.fLow = fLow;
+  Point.fEnergy = 0;
   return Point;
 }
 
@@ -316,6 +318,99 @@ static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
   return true;
 }
 
+//=============================================================================
+// 动力学：MACD 柱子面积（第24课「C段面积小于A段即背驰」的能量基础）
+//=============================================================================
+
+// 标准 TDX EMA：EMA(i) = price(i) * k + EMA(i-1) * (1-k)，k = 2/(period+1)
+static std::vector<float> ComputeEma(int nCount, const float *pPrice, int nPeriod)
+{
+  std::vector<float> Ema;
+  if ((nCount <= 0) || (pPrice == 0) || (nPeriod <= 0))
+  {
+    return Ema;
+  }
+
+  Ema.resize((std::size_t)nCount);
+  float fK = 2.0f / (float)(nPeriod + 1);
+  Ema[0] = pPrice[0];
+  for (int i = 1; i < nCount; i++)
+  {
+    Ema[(std::size_t)i] = pPrice[i] * fK + Ema[(std::size_t)(i - 1)] * (1.0f - fK);
+  }
+  return Ema;
+}
+
+// 标准 MACD 柱：DIF = EMA12 - EMA26，DEA = EMA(DIF,9)，柱 = (DIF - DEA) * 2
+std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice)
+{
+  std::vector<float> Histogram;
+  if ((nCount <= 0) || (pPrice == 0))
+  {
+    return Histogram;
+  }
+
+  std::vector<float> Fast = ComputeEma(nCount, pPrice, 12);
+  std::vector<float> Slow = ComputeEma(nCount, pPrice, 26);
+
+  std::vector<float> Dif;
+  Dif.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Dif[(std::size_t)i] = Fast[(std::size_t)i] - Slow[(std::size_t)i];
+  }
+
+  std::vector<float> Dea = ComputeEma(nCount, &Dif[0], 9);
+
+  Histogram.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Histogram[(std::size_t)i] = (Dif[(std::size_t)i] - Dea[(std::size_t)i]) * 2.0f;
+  }
+  return Histogram;
+}
+
+// 给每个线段点赋累积 MACD 柱面积，使任一走势段的能量 = 终点能量 - 起点能量。
+// TDX 的 Func5 只传入 H/L（无收盘价），故以 (H+L)/2 作为收盘价代理计算 MACD。
+void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const float *pHigh, const float *pLow)
+{
+  if ((nCount <= 0) || (pHigh == 0) || (pLow == 0))
+  {
+    return;
+  }
+
+  std::vector<float> Price;
+  Price.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Price[(std::size_t)i] = (pHigh[i] + pLow[i]) * 0.5f;
+  }
+
+  std::vector<float> Histogram = ComputeMacdHistogram(nCount, &Price[0]);
+  if (Histogram.empty())
+  {
+    return;
+  }
+
+  std::vector<float> Cumulative;
+  Cumulative.resize((std::size_t)nCount);
+  float fAccumulator = 0;
+  for (int i = 0; i < nCount; i++)
+  {
+    fAccumulator += Histogram[(std::size_t)i];
+    Cumulative[(std::size_t)i] = fAccumulator;
+  }
+
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    int nIndex = Points[i].nIndex;
+    if ((nIndex >= 0) && (nIndex < nCount))
+    {
+      Points[i].fEnergy = Cumulative[(std::size_t)nIndex];
+    }
+  }
+}
+
 static float GetMovePower(const SegmentPoint &Start, const SegmentPoint &End)
 {
   int nSpan = End.nIndex - Start.nIndex;
@@ -347,7 +442,14 @@ StrengthMetrics MeasureStrength(const SegmentPoint &Start, const SegmentPoint &E
   Strength.fSpeed = GetMovePower(Start, End);
   Strength.fDifHeight = 0;
   Strength.fDeaHeight = 0;
-  Strength.fMacdArea = 0;
+
+  // 走势段的 MACD 能量 = 区间累积柱面积之差的绝对值（上涨看红柱、下跌看绿柱）。
+  Strength.fMacdArea = End.fEnergy - Start.fEnergy;
+  if (Strength.fMacdArea < 0)
+  {
+    Strength.fMacdArea = -Strength.fMacdArea;
+  }
+
   Strength.bRsiDivergence = false;
   return Strength;
 }
@@ -369,6 +471,10 @@ DivergenceResult MeasureDivergence(const SegmentPoint &PrevStart,
   Result.Current = MeasureStrength(CurrentStart, CurrentEnd);
   Result.bWeakSpace = Result.Current.fSpace < Result.Previous.fSpace;
   Result.bWeakSpeed = Result.Current.fSpeed < Result.Previous.fSpeed;
+  // 第24课标准背驰：C段 MACD 柱面积小于 A段。仅在两段都有能量数据时成立。
+  Result.bWeakMacd = (Result.Current.fMacdArea > 0) &&
+                     (Result.Previous.fMacdArea > 0) &&
+                     (Result.Current.fMacdArea < Result.Previous.fMacdArea);
   Result.bNewExtreme = false;
   if (nDirection > 0)
   {
@@ -401,6 +507,7 @@ static DivergenceResult MakeEmptyDivergence(int nDirection)
   Result.bNewExtreme = false;
   Result.bWeakSpace = false;
   Result.bWeakSpeed = false;
+  Result.bWeakMacd = false;
   Result.bDivergence = false;
   Result.Previous = MakeEmptyStrength();
   Result.Current = MakeEmptyStrength();
@@ -817,16 +924,17 @@ static int ClassifyTradingSignalQuality(int nSource,
 {
   if (nSource == SIGNAL_SOURCE_FIRST)
   {
-    return (Divergence.bDivergence && Divergence.bWeakSpace && Divergence.bWeakSpeed) ?
-           CZSC_SIGNAL_QUALITY_STRONG :
-           CZSC_SIGNAL_QUALITY_CONFIRMED;
+    // 一类买卖点：价差与速度同时走弱，或 MACD 柱面积走弱（第24课标准背驰），即为强信号。
+    bool bStrong = Divergence.bDivergence &&
+                   ((Divergence.bWeakSpace && Divergence.bWeakSpeed) || Divergence.bWeakMacd);
+    return bStrong ? CZSC_SIGNAL_QUALITY_STRONG : CZSC_SIGNAL_QUALITY_CONFIRMED;
   }
 
   if (nSource == SIGNAL_SOURCE_SECOND)
   {
-    return (bOverlapped && Divergence.bDivergence) ?
-           CZSC_SIGNAL_QUALITY_STRONG :
-           CZSC_SIGNAL_QUALITY_CONFIRMED;
+    // 二类买卖点：与三类重合，或离开段 MACD 背驰确认，即为强信号。
+    bool bStrong = Divergence.bDivergence && (bOverlapped || Divergence.bWeakMacd);
+    return bStrong ? CZSC_SIGNAL_QUALITY_STRONG : CZSC_SIGNAL_QUALITY_CONFIRMED;
   }
 
   if (nSource == SIGNAL_SOURCE_THIRD)
@@ -1096,6 +1204,40 @@ void ApplyTradingSignalCandidates(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       pOut[C.nIndex] = C.fSignal;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 与 ApplyTradingSignalCandidates 同样按优先级取胜，但导出胜出信号的质量等级
+// （0=观察，1=确认，2=标准背驰）。两者并用即可在图上区分 MACD 背驰确认的强信号。
+void ApplyTradingSignalQuality(int nCount,
+                               float *pOut,
+                               const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)C.nQuality;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -1760,6 +1902,7 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
   }
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
   std::vector<Center> Centers = BuildCenters(Points);
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
@@ -1963,4 +2106,27 @@ void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   std::vector<Stroke> Strokes = BuildStrokes(Fractals);
   std::vector<SegmentPoint> Points = BuildLineSegmentPoints(Strokes);
   WriteSegmentSignal(nCount, pOut, Points);
+}
+
+//=============================================================================
+// 输出函数10号：三类买卖点信号质量（0=观察，1=确认，2=标准背驰）
+//=============================================================================
+
+void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow) || (pIn == 0))
+  {
+    return;
+  }
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
+                                                                                Centers,
+                                                                                Structures,
+                                                                                Breakouts);
+  ApplyTradingSignalQuality(nCount, pOut, Candidates);
 }
