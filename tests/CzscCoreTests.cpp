@@ -2539,6 +2539,104 @@ static bool TestFunc14HandlesEmptyInput()
   return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
+static bool TestMovingAverageComputesSma()
+{
+  const int nCount = 5;
+  float pPrice[nCount] = {2, 4, 6, 8, 10};
+  std::vector<float> Ma = ComputeMovingAverage(nCount, pPrice, 3);
+
+  if ((int)Ma.size() != nCount)
+  {
+    return false;
+  }
+  // 起始用部分窗口：2、(2+4)/2、(2+4+6)/3、(4+6+8)/3、(6+8+10)/3
+  return NearlyEqual(Ma[0], 2.0f) && NearlyEqual(Ma[1], 3.0f) &&
+         NearlyEqual(Ma[2], 4.0f) && NearlyEqual(Ma[3], 6.0f) &&
+         NearlyEqual(Ma[4], 8.0f);
+}
+
+static bool TestMaKissClassifiesThreeTypes()
+{
+  // 湿吻：短均线由上穿下（间距变号）
+  std::vector<float> WetShort;
+  std::vector<float> WetLong;
+  WetShort.push_back(12);  WetLong.push_back(10.0f);    // +2
+  WetShort.push_back(11);  WetLong.push_back(10.5f);    // +0.5
+  WetShort.push_back(10);  WetLong.push_back(10.2f);    // -0.2 (变号，局部极小)
+  WetShort.push_back(9);   WetLong.push_back(10.5f);    // -1.5
+  WetShort.push_back(8);   WetLong.push_back(10.0f);    // -2
+  std::vector<int> WetKiss = ClassifyMaKisses(WetShort, WetLong);
+  if (WetKiss[2] != CZSC_KISS_WET)
+  {
+    return false;
+  }
+
+  // 唇吻：不变号，贴近（相对间距 < 1%）
+  std::vector<float> LipShort;
+  std::vector<float> LipLong;
+  LipShort.push_back(12);    LipLong.push_back(11);   // +1
+  LipShort.push_back(11.1f); LipLong.push_back(11);   // +0.1
+  LipShort.push_back(11.05f);LipLong.push_back(11);   // +0.05 (≈0.45%)
+  LipShort.push_back(11.1f); LipLong.push_back(11);   // +0.1
+  LipShort.push_back(12);    LipLong.push_back(11);   // +1
+  std::vector<int> LipKiss = ClassifyMaKisses(LipShort, LipLong);
+  if (LipKiss[2] != CZSC_KISS_LIP)
+  {
+    return false;
+  }
+
+  // 飞吻：不变号，仅略走平（相对间距较大）
+  std::vector<float> FlyShort;
+  std::vector<float> FlyLong;
+  FlyShort.push_back(13);   FlyLong.push_back(11);   // +2
+  FlyShort.push_back(12);   FlyLong.push_back(11);   // +1
+  FlyShort.push_back(11.8f);FlyLong.push_back(11);   // +0.8 (≈7%)
+  FlyShort.push_back(12);   FlyLong.push_back(11);   // +1
+  FlyShort.push_back(13);   FlyLong.push_back(11);   // +2
+  std::vector<int> FlyKiss = ClassifyMaKisses(FlyShort, FlyLong);
+  return FlyKiss[2] == CZSC_KISS_FLY;
+}
+
+static bool TestFunc15WritesMaDiff()
+{
+  const int nCount = 30;
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+  float fTime = 5;
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pHigh[i] = 10.5f + (float)i;   // 单调上升
+    pLow[i] = 9.5f + (float)i;
+    pOut[i] = -99;
+  }
+
+  Func15(nCount, pOut, pHigh, pLow, &fTime);
+
+  // 上升趋势：短均线高于长均线（女上位）→ 末端差值为正；起点两均线相等 → 0
+  return (pOut[nCount - 1] > 0) && NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestFunc15Func16HandleEmptyInput()
+{
+  float pHigh[3] = {1, 2, 3};
+  float pLow[3] = {1, 2, 3};
+  float pOut[3] = {9, 9, 9};
+  float fTime = 5;
+
+  Func15(0, pOut, pHigh, pLow, &fTime);     // 个数为 0 → 不改写
+  Func16(0, pOut, pHigh, pLow, &fTime);
+  if ((pOut[0] != 9) || (pOut[1] != 9) || (pOut[2] != 9))
+  {
+    return false;
+  }
+
+  Func15(3, pOut, 0, pLow, &fTime);          // 缺最高价 → 不改写
+  Func16(3, pOut, 0, pLow, &fTime);
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -2880,6 +2978,22 @@ int main()
   if (!TestFunc14HandlesEmptyInput())
   {
     return 85;
+  }
+  if (!TestMovingAverageComputesSma())
+  {
+    return 86;
+  }
+  if (!TestMaKissClassifiesThreeTypes())
+  {
+    return 87;
+  }
+  if (!TestFunc15WritesMaDiff())
+  {
+    return 88;
+  }
+  if (!TestFunc15Func16HandleEmptyInput())
+  {
+    return 89;
   }
 
   return 0;
