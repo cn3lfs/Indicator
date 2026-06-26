@@ -1794,6 +1794,152 @@ static bool TestDivergenceDetectsMacdWeakening()
   return !Strong.bWeakMacd;
 }
 
+static bool TestMacdHistogramHandlesTinyInput()
+{
+  std::vector<float> Empty = ComputeMacdHistogram(0, 0);
+  if (!Empty.empty())
+  {
+    return false;
+  }
+
+  float pOne[1] = {42.0f};
+  std::vector<float> One = ComputeMacdHistogram(1, pOne);
+  return (One.size() == 1) && NearlyEqual(One[0], 0.0f);
+}
+
+static bool TestAssignSegmentEnergyIgnoresDegenerateInput()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 5));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 1, 9));
+
+  float pHigh[2] = {9, 10};
+  float pLow[2] = {5, 6};
+
+  AssignSegmentEnergy(Points, 0, 0, 0);     // 无数据
+  AssignSegmentEnergy(Points, 2, 0, pLow);  // 缺最高价
+  AssignSegmentEnergy(Points, 2, pHigh, 0); // 缺最低价
+
+  return NearlyEqual(Points[0].fEnergy, 0.0f) && NearlyEqual(Points[1].fEnergy, 0.0f);
+}
+
+static bool TestDivergenceMacdRequiresEnergyData()
+{
+  // 无能量数据（fEnergy 全 0）时两段面积均为 0，不应判定 MACD 背驰，但几何背驰仍成立。
+  SegmentPoint PrevStart = MakeTestPoint(CZSC_POINT_TOP, 0, 12);
+  SegmentPoint PrevEnd = MakeTestPoint(CZSC_POINT_BOTTOM, 4, 2);
+  SegmentPoint CurrentStart = MakeTestPoint(CZSC_POINT_TOP, 8, 4.5f);
+  SegmentPoint CurrentEnd = MakeTestPoint(CZSC_POINT_BOTTOM, 12, 1);
+
+  DivergenceResult Result = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, -1);
+  return !Result.bWeakMacd && Result.bDivergence;
+}
+
+static bool TestApplyTradingQualityKeepsWinnerQuality()
+{
+  const int nCount = 4;
+  float pOut[nCount] = {-1, -1, -1, -1};
+  std::vector<TradingSignalCandidate> Candidates;
+
+  // 同一根K线：低优先级二买(STRONG) 与 高优先级三买(CONFIRMED)，质量须随胜出信号。
+  TradingSignalCandidate Second = MakeTestCandidate(2, 2.0f, 10);
+  Second.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  TradingSignalCandidate Third = MakeTestCandidate(2, 3.0f, 20);
+  Third.nQuality = CZSC_SIGNAL_QUALITY_CONFIRMED;
+  Candidates.push_back(Second);
+  Candidates.push_back(Third);
+
+  ApplyTradingSignalQuality(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], (float)CZSC_SIGNAL_QUALITY_CONFIRMED) &&
+         (pOut[0] == 0) && (pOut[1] == 0) && (pOut[3] == 0);
+}
+
+static bool TestFunc10HandlesEmptyInput()
+{
+  Func10(0, 0, 0, 0, 0);
+
+  const int nCount = 3;
+  float pHigh[nCount] = {1, 2, 3};
+  float pLow[nCount] = {1, 2, 3};
+  float pOut[nCount] = {9, 9, 9};
+
+  Func10(nCount, pOut, 0, pHigh, pLow); // 缺线段信号 → 提前返回，不改写输出
+
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
+}
+
+static bool TestFunc10MatchesFunc5SignalBars()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pSignal[nCount];
+  float pQuality[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = 7;
+  pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = 12;
+  pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = 8;
+  pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = 10;
+  pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = 3;
+  pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = 7;
+  pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = 4;
+  pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = 4.2f;
+  pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = 3.8f;
+  pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = 6;
+  pLow[36] = 6;
+  pIn[40] = -1;
+  pHigh[40] = 4.5f;
+  pLow[40] = 4.5f;
+
+  Func5(nCount, pSignal, pIn, pHigh, pLow);
+  Func10(nCount, pQuality, pIn, pHigh, pLow);
+
+  // 每个买卖点都应带有质量等级(1 或 2)，无信号处两者皆为 0，位置完全对应。
+  for (int i = 0; i < nCount; i++)
+  {
+    bool bHasSignal = !NearlyEqual(pSignal[i], 0.0f);
+    bool bHasQuality = !NearlyEqual(pQuality[i], 0.0f);
+    if (bHasSignal != bHasQuality)
+    {
+      return false;
+    }
+    if (bHasQuality && ((pQuality[i] < 0.9f) || (pQuality[i] > 2.1f)))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFunc10WritesSignalQuality()
 {
   // 复用一类买点背驰场景：index 32 出现一类买点，价差与速度同时走弱 → 标准强信号。
@@ -2120,6 +2266,30 @@ int main()
   if (!TestFunc10WritesSignalQuality())
   {
     return 55;
+  }
+  if (!TestMacdHistogramHandlesTinyInput())
+  {
+    return 56;
+  }
+  if (!TestAssignSegmentEnergyIgnoresDegenerateInput())
+  {
+    return 57;
+  }
+  if (!TestDivergenceMacdRequiresEnergyData())
+  {
+    return 58;
+  }
+  if (!TestApplyTradingQualityKeepsWinnerQuality())
+  {
+    return 59;
+  }
+  if (!TestFunc10HandlesEmptyInput())
+  {
+    return 60;
+  }
+  if (!TestFunc10MatchesFunc5SignalBars())
+  {
+    return 61;
   }
 
   return 0;
