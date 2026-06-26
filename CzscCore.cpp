@@ -993,9 +993,7 @@ static int FindLastCenterBeforeIndex(const std::vector<Center> &Centers, int nIn
   return nCenter;
 }
 
-static int ClassifyTradingSignalQuality(int nSource,
-                                        bool bOverlapped,
-                                        const DivergenceResult &Divergence)
+static int ClassifyTradingSignalQuality(int nSource, const DivergenceResult &Divergence)
 {
   if (nSource == SIGNAL_SOURCE_FIRST)
   {
@@ -1007,8 +1005,8 @@ static int ClassifyTradingSignalQuality(int nSource,
 
   if (nSource == SIGNAL_SOURCE_SECOND)
   {
-    // 二类买卖点：与三类买卖点重合（第61课「二三重合力度值得关注」）即为强信号。
-    return (bOverlapped && Divergence.bDivergence) ?
+    // 二类买卖点：与三类重合（第61课）或回抽段构成盘整背驰（第27课）即为强信号。
+    return Divergence.bDivergence ?
            CZSC_SIGNAL_QUALITY_STRONG :
            CZSC_SIGNAL_QUALITY_CONFIRMED;
   }
@@ -1125,7 +1123,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nCenter = nCenter;
   C.nBreakout = nBreakout;
   C.nSource = nSource;
-  C.nQuality = ClassifyTradingSignalQuality(nSource, bOverlapped, Divergence);
+  C.nQuality = ClassifyTradingSignalQuality(nSource, Divergence);
   C.nCenterPosition = nCenterPosition;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
@@ -1199,6 +1197,31 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
   }
 }
 
+// 第二类买卖点的盘整背驰（第27课）：比较进入一类买卖点的那一段(A段)与转折后回抽到
+// 二类买卖点的那一段(C段)的力度。C段更弱（价差与速度同时走弱，或 MACD 柱面积走弱）即构成
+// 盘整背驰。盘整背驰不要求创新高/新低。
+static DivergenceResult MeasureSecondDivergence(const std::vector<SegmentPoint> &Points,
+                                                std::size_t nFirstPoint,
+                                                int nDirection)
+{
+  DivergenceResult Result = MakeEmptyDivergence(nDirection);
+  if ((nFirstPoint < 1) || (nFirstPoint + 2 >= Points.size()))
+  {
+    return Result;
+  }
+
+  Result.Previous = MeasureStrength(Points[nFirstPoint - 1], Points[nFirstPoint]);
+  Result.Current = MeasureStrength(Points[nFirstPoint + 1], Points[nFirstPoint + 2]);
+  Result.bWeakSpace = Result.Current.fSpace < Result.Previous.fSpace;
+  Result.bWeakSpeed = Result.Current.fSpeed < Result.Previous.fSpeed;
+  Result.bWeakMacd = (Result.Current.fMacdArea > 0) &&
+                     (Result.Previous.fMacdArea > 0) &&
+                     (Result.Current.fMacdArea < Result.Previous.fMacdArea);
+  Result.bNewExtreme = false;
+  Result.bDivergence = (Result.bWeakSpace && Result.bWeakSpeed) || Result.bWeakMacd;
+  return Result;
+}
+
 static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pCandidates,
                                          const std::vector<SegmentPoint> &Points,
                                          const std::vector<Center> &Centers,
@@ -1230,7 +1253,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
       int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, 1);
       DivergenceResult Divergence = (nBreakout >= 0) ?
                                     Breakouts[(std::size_t)nBreakout].Divergence :
-                                    MakeEmptyDivergence(1);
+                                    MeasureSecondDivergence(Points, nPoint, 1);
       int nSecondPoint = (int)nPoint + 2;
       int nCenter = FindLastCenterBeforeIndex(Centers, Second.nIndex);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
@@ -1252,7 +1275,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
       int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, -1);
       DivergenceResult Divergence = (nBreakout >= 0) ?
                                     Breakouts[(std::size_t)nBreakout].Divergence :
-                                    MakeEmptyDivergence(-1);
+                                    MeasureSecondDivergence(Points, nPoint, -1);
       int nSecondPoint = (int)nPoint + 2;
       int nCenter = FindLastCenterBeforeIndex(Centers, Second.nIndex);
       pCandidates->push_back(MakeTradingSignalCandidate(Second.nIndex,
