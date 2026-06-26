@@ -183,6 +183,16 @@ static Center MakeTestCenter(int nStart, int nEnd, float fHigh, float fLow)
   C.nEnd = nEnd;
   C.fHigh = fHigh;
   C.fLow = fLow;
+  C.fTop = fHigh;
+  C.fBottom = fLow;
+  return C;
+}
+
+static Center MakeTestCenterFull(int nStart, int nEnd, float fHigh, float fLow, float fTop, float fBottom)
+{
+  Center C = MakeTestCenter(nStart, nEnd, fHigh, fLow);
+  C.fTop = fTop;
+  C.fBottom = fBottom;
   return C;
 }
 
@@ -2045,6 +2055,174 @@ static bool TestFirstCandidateMacdUpgradesQuality()
          (pEnergized->nQuality == CZSC_SIGNAL_QUALITY_STRONG);
 }
 
+static bool TestCenterAccumulatesGGDD()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+
+  std::vector<Center> Centers = BuildCenters(Points);
+  if (Centers.size() != 1)
+  {
+    return false;
+  }
+
+  // ZG/ZD 为重叠区间[4,9]，GG/DD 为全幅极值[1,10]
+  return NearlyEqual(Centers[0].fHigh, 9.0f) && NearlyEqual(Centers[0].fLow, 4.0f) &&
+         NearlyEqual(Centers[0].fTop, 10.0f) && NearlyEqual(Centers[0].fBottom, 1.0f);
+}
+
+static bool TestCenterExtendUpdatesGGDD()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 10));
+
+  std::vector<Center> Centers = BuildCenters(Points);
+  if (Centers.size() != 1)
+  {
+    return false;
+  }
+
+  // 延伸段(高点10)把 GG 从初始 9 扩张到 10，而 ZG/ZD 仍是收缩后的重叠区间
+  return (Centers[0].nEnd == 16) &&
+         NearlyEqual(Centers[0].fHigh, 8.0f) && NearlyEqual(Centers[0].fLow, 6.0f) &&
+         NearlyEqual(Centers[0].fTop, 10.0f) && NearlyEqual(Centers[0].fBottom, 5.0f);
+}
+
+static bool TestClassifyCenterRelationUp()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 10, 4);     // GG=10
+  Center Next = MakeTestCenterFull(16, 28, 14, 12, 15, 11); // DD=11 > 10
+  return ClassifyCenterRelation(Prev, Next) == CZSC_CENTER_RELATION_UP;
+}
+
+static bool TestClassifyCenterRelationDown()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 14, 12, 15, 11);  // DD=11
+  Center Next = MakeTestCenterFull(16, 28, 9, 5, 10, 4);    // GG=10 < 11
+  return ClassifyCenterRelation(Prev, Next) == CZSC_CENTER_RELATION_DOWN;
+}
+
+static bool TestClassifyCenterRelationExtension()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 12, 4);
+  Center Next = MakeTestCenterFull(16, 28, 15, 10, 16, 8);
+
+  // ZG/ZD 已不重叠(Next.fLow 10 > Prev.fHigh 9，旧判据会判上涨)，
+  // 但全幅 GG/DD 仍重叠 → 中心定理二判为中枢扩展，凸显新能力。
+  bool bZgZdSeparated = (Next.fLow > Prev.fHigh);
+  return bZgZdSeparated &&
+         (ClassifyCenterRelation(Prev, Next) == CZSC_CENTER_RELATION_EXTENSION);
+}
+
+static bool TestWriteCenterRelationSignalMarks()
+{
+  const int nCount = 20;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 4, 9, 5, 10, 4));
+  Centers.push_back(MakeTestCenterFull(5, 9, 15, 13, 16, 12));  // vs 前: DD12 > GG10 → 上涨
+  Centers.push_back(MakeTestCenterFull(10, 14, 7, 3, 8, 2));    // vs 前: GG8 < DD12 → 下跌
+  Centers.push_back(MakeTestCenterFull(15, 19, 8, 4, 9, 3));    // vs 前: 全幅重叠 → 扩展
+
+  WriteCenterRelationSignal(nCount, pOut, Centers);
+
+  for (int i = 0; i < nCount; i++)
+  {
+    float fExpected = 0;
+    if (i == 5)
+    {
+      fExpected = 1;   // 上涨延续
+    }
+    else if (i == 10)
+    {
+      fExpected = -1;  // 下跌延续
+    }
+    else if (i == 15)
+    {
+      fExpected = 2;   // 中枢扩展
+    }
+
+    if (!NearlyEqual(pOut[i], fExpected))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFunc11WritesCenterRelation()
+{
+  const int nCount = 25;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)，全幅区间重叠 → 中枢扩展
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 1;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 10;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 4;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 12;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 11;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 14;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 12;
+
+  Func11(nCount, pOut, pIn, pHigh, pLow);
+
+  for (int i = 0; i < nCount; i++)
+  {
+    float fExpected = (i == 12) ? 2.0f : 0.0f;  // 后中枢起点(index12)标记扩展
+    if (!NearlyEqual(pOut[i], fExpected))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFunc11HandlesEmptyInput()
+{
+  Func11(0, 0, 0, 0, 0);
+
+  const int nCount = 3;
+  float pHigh[nCount] = {1, 2, 3};
+  float pLow[nCount] = {1, 2, 3};
+  float pOut[nCount] = {9, 9, 9};
+
+  Func11(nCount, pOut, 0, pHigh, pLow); // 缺线段信号 → 提前返回，不改写输出
+
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -2290,6 +2468,38 @@ int main()
   if (!TestFunc10MatchesFunc5SignalBars())
   {
     return 61;
+  }
+  if (!TestCenterAccumulatesGGDD())
+  {
+    return 62;
+  }
+  if (!TestCenterExtendUpdatesGGDD())
+  {
+    return 63;
+  }
+  if (!TestClassifyCenterRelationUp())
+  {
+    return 64;
+  }
+  if (!TestClassifyCenterRelationDown())
+  {
+    return 65;
+  }
+  if (!TestClassifyCenterRelationExtension())
+  {
+    return 66;
+  }
+  if (!TestWriteCenterRelationSignalMarks())
+  {
+    return 67;
+  }
+  if (!TestFunc11WritesCenterRelation())
+  {
+    return 68;
+  }
+  if (!TestFunc11HandlesEmptyInput())
+  {
+    return 69;
   }
 
   return 0;
