@@ -2733,6 +2733,42 @@ static bool TestStrictStrokeUsesMergedGap()
   return StrictFar.size() == 1;
 }
 
+static bool TestFeatureLineSegmentEndsAtTopFractal()
+{
+  // 7 个笔端点构成一段上升后反转：特征序列(下降笔)顶分型在第二元素(顶12) → 线段终于该顶
+  std::vector<Fractal> Fractals;
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 7, 4));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 12, 8));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 9, 6));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 11, 7));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 5, 3));
+
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> StrokePoints = BuildSegmentPoints(Strokes);
+  std::vector<SegmentPoint> LinePoints = BuildLineSegmentPointsByFeature(Strokes);
+
+  if (StrokePoints.size() != 7)
+  {
+    return false;
+  }
+  // 特征序列法：起点(底@0) → 顶分型确认的线段终点(顶@12)
+  return (LinePoints.size() >= 2) &&
+         (LinePoints[0].nType == CZSC_POINT_BOTTOM) && (LinePoints[0].nIndex == 0) &&
+         (LinePoints[1].nType == CZSC_POINT_TOP) && (LinePoints[1].nIndex == 12);
+}
+
+static bool TestFeatureLineSegmentNeedsFourPoints()
+{
+  std::vector<Fractal> Fractals;
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> LinePoints = BuildLineSegmentPointsByFeature(Strokes);
+  return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -3106,6 +3142,14 @@ int main()
   if (!TestStrictStrokeUsesMergedGap())
   {
     return 93;
+  }
+  if (!TestFeatureLineSegmentEndsAtTopFractal())
+  {
+    return 94;
+  }
+  if (!TestFeatureLineSegmentNeedsFourPoints())
+  {
+    return 95;
   }
 
   return 0;
