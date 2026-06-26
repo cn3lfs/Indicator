@@ -2,3 +2,4 @@
 *.o
 tests/CzscCoreTests
 tests/*.exe
+todos.json
