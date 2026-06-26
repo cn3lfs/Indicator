@@ -18,9 +18,12 @@
 
 #ifndef __FXIndicator_h__
 #define __FXIndicator_h__
-#pragma pack(push,1)
 
+// windows.h 必须使用默认对齐：新版 Windows SDK 对 LARGE_INTEGER 等类型有
+// __alignof == 8 的静态断言，若放进 #pragma pack(push,1) 区域会编译失败。
 #include <windows.h>
+
+#pragma pack(push,1)
 
 #ifndef DECLSPEC_EXPORT
 #define DECLSPEC_EXPORT __declspec(dllexport)
