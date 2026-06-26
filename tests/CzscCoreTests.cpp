@@ -99,12 +99,14 @@ static bool TestStrokeRequiresFiveBars()
   Fractal Top;
   Top.nType = CZSC_POINT_TOP;
   Top.nIndex = 1;
+  Top.nMergedIndex = 1;
   Top.fHigh = 12;
   Top.fLow = 7;
 
   Fractal Bottom;
   Bottom.nType = CZSC_POINT_BOTTOM;
   Bottom.nIndex = 3;
+  Bottom.nMergedIndex = 3;
   Bottom.fHigh = 10;
   Bottom.fLow = 4;
 
@@ -153,8 +155,16 @@ static Fractal MakeTestFractal(int nType, int nIndex, float fHigh, float fLow)
   Fractal F;
   F.nType = nType;
   F.nIndex = nIndex;
+  F.nMergedIndex = nIndex;
   F.fHigh = fHigh;
   F.fLow = fLow;
+  return F;
+}
+
+static Fractal MakeTestFractalFull(int nType, int nIndex, int nMergedIndex, float fHigh, float fLow)
+{
+  Fractal F = MakeTestFractal(nType, nIndex, fHigh, fLow);
+  F.nMergedIndex = nMergedIndex;
   return F;
 }
 
@@ -2702,6 +2712,27 @@ static bool TestFunc17HandlesEmptyInput()
   return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
+static bool TestStrictStrokeUsesMergedGap()
+{
+  // 原始K线间隔 5（>=4，默认成笔），但合并K线间隔仅 2（<4，新笔标准不成笔）
+  std::vector<Fractal> Near;
+  Near.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));
+  Near.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 6, 3, 10, 4));
+  std::vector<Stroke> Loose = BuildStrokes(Near);          // 默认（原始K线）
+  std::vector<Stroke> Strict = BuildStrokes(Near, true);   // 新笔标准（合并K线）
+  if ((Loose.size() != 1) || !Strict.empty())
+  {
+    return false;
+  }
+
+  // 合并K线间隔 4（>=4），新笔标准成笔
+  std::vector<Fractal> Far;
+  Far.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));
+  Far.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 10, 5, 10, 4));
+  std::vector<Stroke> StrictFar = BuildStrokes(Far, true);
+  return StrictFar.size() == 1;
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -3071,6 +3102,10 @@ int main()
   if (!TestFunc17HandlesEmptyInput())
   {
     return 92;
+  }
+  if (!TestStrictStrokeUsesMergedGap())
+  {
+    return 93;
   }
 
   return 0;
