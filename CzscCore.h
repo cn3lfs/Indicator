@@ -248,6 +248,11 @@ DivergenceResult MeasureDivergence(const SegmentPoint &PrevStart,
                                    const SegmentPoint &CurrentEnd,
                                    int nDirection);
 bool IsWeakerStrength(const StrengthMetrics &Current, const StrengthMetrics &Previous);
+// 即时趋势平均力度（第15课）：对未走完的末段提前判背驰，返回 1 见顶 / -1 见底 / 0 无
+int DetectInstantDivergence(const std::vector<SegmentPoint> &Points,
+                            int nCount,
+                            const float *pHigh,
+                            const float *pLow);
 
 // 把候选/中枢结果按优先级写入通达信输出数组（信号、质量、背驰-转折、三买后续、中枢关系）
 void ApplyTradingSignalCandidates(int nCount,
@@ -272,7 +277,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // 通达信导出函数（按编号在 Main.cpp 的 Info[] 注册，公式示例见 README）：
 //  1 线段点  2/3 中枢高/低  4 中枢起止  5 三类买卖点  6 形态买卖点  7 强度  8 斜率
 //  9 线段(笔)  10 信号质量  11 中枢关系  12 背驰-转折  13 三买后续  14 背驰段
-//  15 均线差(体位符号/力度幅度)  16 均线吻(飞吻1/唇吻2/湿吻3)
+//  15 均线差(体位符号/力度幅度)  16 均线吻(飞吻1/唇吻2/湿吻3)  17 即时背驰预警
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
@@ -289,5 +294,6 @@ void Func13(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func14(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func15(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func16(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func17(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 
 #endif

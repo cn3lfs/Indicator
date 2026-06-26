@@ -2701,3 +2701,89 @@ void Func16(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     pOut[i] = (float)Kiss[(std::size_t)i];
   }
 }
+
+// 即时趋势平均力度（第15课）：把最后一个线段点到当下视作未走完的末段，构造合成终点，
+// 与上一完成同向段比较力度。末段已创新极值且力度走弱即提前预警（不必等末段走完）。
+int DetectInstantDivergence(const std::vector<SegmentPoint> &Points,
+                            int nCount,
+                            const float *pHigh,
+                            const float *pLow)
+{
+  if ((Points.size() < 4) || (nCount <= 1) || (pHigh == 0) || (pLow == 0))
+  {
+    return 0;
+  }
+
+  const SegmentPoint &Pivot = Points.back();
+  int nLast = Pivot.nIndex;
+  if ((nLast < 0) || (nLast >= nCount - 1))
+  {
+    return 0;  // 末段至少要有一根新K线
+  }
+
+  int nDir = (Pivot.nType == CZSC_POINT_TOP) ? -1 : 1;
+
+  // 末段当下的合成终点：向下取区间最低、向上取区间最高
+  SegmentPoint Now;
+  Now.nIndex = nCount - 1;
+  Now.fEnergy = 0;
+  if (nDir < 0)
+  {
+    float fLowest = pLow[nLast];
+    for (int i = nLast; i < nCount; i++)
+    {
+      if (pLow[i] < fLowest)
+      {
+        fLowest = pLow[i];
+      }
+    }
+    Now.nType = CZSC_POINT_BOTTOM;
+    Now.fHigh = fLowest;
+    Now.fLow = fLowest;
+  }
+  else
+  {
+    float fHighest = pHigh[nLast];
+    for (int i = nLast; i < nCount; i++)
+    {
+      if (pHigh[i] > fHighest)
+      {
+        fHighest = pHigh[i];
+      }
+    }
+    Now.nType = CZSC_POINT_TOP;
+    Now.fHigh = fHighest;
+    Now.fLow = fHighest;
+  }
+
+  // 上一完成的同向段 = Points 倒数第三、第二点
+  const SegmentPoint &PrevStart = Points[Points.size() - 3];
+  const SegmentPoint &PrevEnd = Points[Points.size() - 2];
+  if (GetMoveDirection(PrevStart, PrevEnd) != nDir)
+  {
+    return 0;
+  }
+
+  DivergenceResult Result = MeasureDivergence(PrevStart, PrevEnd, Pivot, Now, nDir);
+  return Result.bDivergence ? nDir : 0;
+}
+
+//=============================================================================
+// 输出函数17号：即时背驰预警（在当下末段未走完时预警：1 见顶 / -1 见底，第15课）
+//=============================================================================
+
+void Func17(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow) || (pIn == 0))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  int nWarn = DetectInstantDivergence(Points, nCount, pHigh, pLow);
+  if (nWarn != 0)
+  {
+    pOut[nCount - 1] = (float)nWarn;  // 在当下（最右一根）给出预警
+  }
+}
