@@ -50,6 +50,13 @@ enum CzscCenterPosition
   CZSC_CENTER_POSITION_UNKNOWN = 2,
 };
 
+enum CzscCenterRelation
+{
+  CZSC_CENTER_RELATION_DOWN      = -1,  // 后GG < 前DD：下跌及其延续
+  CZSC_CENTER_RELATION_EXTENSION = 0,   // 全幅区间重叠：形成高级别中枢（扩展/扩张）
+  CZSC_CENTER_RELATION_UP        = 1,   // 后DD > 前GG：上涨及其延续
+};
+
 struct KBar
 {
   int   nIndex;
@@ -95,8 +102,10 @@ struct Center
 {
   int   nStart;
   int   nEnd;
-  float fHigh;
-  float fLow;
+  float fHigh;    // ZG = min(各段高点)，重叠区间上沿
+  float fLow;     // ZD = max(各段低点)，重叠区间下沿
+  float fTop;     // GG = max(各段高点)，全幅上沿，恒 >= fHigh
+  float fBottom;  // DD = min(各段低点)，全幅下沿，恒 <= fLow
 };
 
 struct StrengthMetrics
@@ -169,6 +178,7 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers);
+int ClassifyCenterRelation(const Center &Prev, const Center &Next);
 std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint> &Points,
                                                  const std::vector<Center> &Centers,
                                                  const std::vector<TrendStructure> &Structures);
@@ -190,6 +200,7 @@ void ApplyTradingSignalQuality(int nCount,
                                float *pOut,
                                const std::vector<TradingSignalCandidate> &Candidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
+void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
 void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
@@ -204,5 +215,6 @@ void Func7(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func8(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 
 #endif

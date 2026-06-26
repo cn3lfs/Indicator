@@ -291,10 +291,33 @@ static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::
     return false;
   }
 
+  // 全幅极值 GG/DD（union extent，与 ZG/ZD 的 intersection 相反方向聚合）
+  float fTop = First.fHigh;
+  if (Second.fHigh > fTop)
+  {
+    fTop = Second.fHigh;
+  }
+  if (Third.fHigh > fTop)
+  {
+    fTop = Third.fHigh;
+  }
+
+  float fBottom = First.fLow;
+  if (Second.fLow < fBottom)
+  {
+    fBottom = Second.fLow;
+  }
+  if (Third.fLow < fBottom)
+  {
+    fBottom = Third.fLow;
+  }
+
   pCenter->nStart = Points[nStart].nIndex;
   pCenter->nEnd = Points[nStart + 3].nIndex;
   pCenter->fHigh = fHigh;
   pCenter->fLow = fLow;
+  pCenter->fTop = fTop;
+  pCenter->fBottom = fBottom;
   return true;
 }
 
@@ -314,6 +337,17 @@ static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
   {
     pCenter->fHigh = Interval.fHigh;
   }
+
+  // ZG/ZD 随延伸收缩，GG/DD 随延伸扩张
+  if (Interval.fHigh > pCenter->fTop)
+  {
+    pCenter->fTop = Interval.fHigh;
+  }
+  if (Interval.fLow < pCenter->fBottom)
+  {
+    pCenter->fBottom = Interval.fLow;
+  }
+
   pCenter->nEnd = Interval.nEnd;
   return true;
 }
@@ -537,6 +571,21 @@ static bool IsCenterAbove(const Center &Left, const Center &Right)
 static bool IsCenterBelow(const Center &Left, const Center &Right)
 {
   return Right.fHigh < Left.fLow;
+}
+
+// 走势中枢中心定理二（第20课）：用全幅极值 GG/DD 判定前后两个同级别中枢的关系。
+// 后DD > 前GG → 上涨延续；后GG < 前DD → 下跌延续；其余（全幅重叠）→ 形成高级别中枢（扩展）。
+int ClassifyCenterRelation(const Center &Prev, const Center &Next)
+{
+  if (Next.fBottom > Prev.fTop)
+  {
+    return CZSC_CENTER_RELATION_UP;
+  }
+  if (Next.fTop < Prev.fBottom)
+  {
+    return CZSC_CENTER_RELATION_DOWN;
+  }
+  return CZSC_CENTER_RELATION_EXTENSION;
 }
 
 static TrendStructure MakeTrendStructure(const std::vector<Center> &Centers,
@@ -1607,6 +1656,35 @@ static void WriteCenterMarkSignal(int nCount, float *pOut, const std::vector<Cen
   }
 }
 
+// 相邻中枢关系（第20课中心定理二）：在后中枢起点处标记
+// 2=中枢扩展（形成高级别中枢）、1=上涨延续、-1=下跌延续。
+void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
+{
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    int nMark = Centers[i].nStart;
+    if ((nMark < 0) || (nMark >= nCount))
+    {
+      continue;
+    }
+
+    int nRelation = ClassifyCenterRelation(Centers[i - 1], Centers[i]);
+    if (nRelation == CZSC_CENTER_RELATION_EXTENSION)
+    {
+      pOut[nMark] = 2;
+    }
+    else if (nRelation == CZSC_CENTER_RELATION_UP)
+    {
+      pOut[nMark] = 1;
+    }
+    else
+    {
+      pOut[nMark] = -1;
+    }
+  }
+}
+
 //=============================================================================
 // 数学函数部分
 //=============================================================================
@@ -2130,4 +2208,20 @@ void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
                                                                                 Structures,
                                                                                 Breakouts);
   ApplyTradingSignalQuality(nCount, pOut, Candidates);
+}
+
+//=============================================================================
+// 输出函数11号：相邻中枢关系（1=上涨延续 -1=下跌延续 2=中枢扩展，第20课中心定理二）
+//=============================================================================
+
+void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow) || (pIn == 0))
+  {
+    return;
+  }
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  WriteCenterRelationSignal(nCount, pOut, Centers);
 }
