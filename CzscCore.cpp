@@ -2474,3 +2474,57 @@ void Func13(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
                                                                                 Breakouts);
   ApplyTradingSignalAftermath(nCount, pOut, Candidates);
 }
+
+// 背驰段（第27课）：一类买卖点最后那段构成背驰的走势。在其起点标记 ±1、终点（买卖点）标记 ±2，
+// 买为正、卖为负，便于在通达信用 DRAWLINE 画出背驰段，作为区间套入场参考。
+static void WriteDivergenceSegmentSignal(int nCount,
+                                         float *pOut,
+                                         const std::vector<SegmentPoint> &Points,
+                                         const std::vector<TradingSignalCandidate> &Candidates)
+{
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nSource != SIGNAL_SOURCE_FIRST) ||
+        (C.nPoint < 1) || ((std::size_t)C.nPoint >= Points.size()))
+    {
+      continue;
+    }
+
+    int nStartBar = Points[(std::size_t)(C.nPoint - 1)].nIndex;
+    int nEndBar = C.nIndex;
+    int nSign = (C.fSignal == SIGNAL_FIRST_BUY) ? 1 : -1;
+    if ((nStartBar >= 0) && (nStartBar < nCount))
+    {
+      pOut[nStartBar] = (float)(nSign * 1);
+    }
+    if ((nEndBar >= 0) && (nEndBar < nCount))
+    {
+      pOut[nEndBar] = (float)(nSign * 2);
+    }
+  }
+}
+
+//=============================================================================
+// 输出函数14号：一类买卖点背驰段（买 起点1/终点2，卖 起点-1/终点-2，第27课）
+//=============================================================================
+
+void Func14(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow) || (pIn == 0))
+  {
+    return;
+  }
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
+  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
+                                                                                Centers,
+                                                                                Structures,
+                                                                                Breakouts);
+  WriteDivergenceSegmentSignal(nCount, pOut, Points, Candidates);
+}

@@ -247,5 +247,6 @@ void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func12(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func13(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
+void Func14(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 
 #endif
