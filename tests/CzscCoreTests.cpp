@@ -2466,6 +2466,79 @@ static bool TestSecondBuyStrongPullbackConfirmed()
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED);
 }
 
+static bool TestFunc14MarksDivergenceSegment()
+{
+  // 复用一买背驰场景：一买在 bar32，其背驰段为 bar28(上一点)→bar32。
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+
+  Func14(nCount, pOut, pIn, pHigh, pLow);
+
+  for (int i = 0; i < nCount; i++)
+  {
+    float fExpected = 0;
+    if (i == 28)
+    {
+      fExpected = 1;   // 背驰段起点（买）
+    }
+    else if (i == 32)
+    {
+      fExpected = 2;   // 背驰段终点（一买）
+    }
+
+    if (!NearlyEqual(pOut[i], fExpected))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFunc14HandlesEmptyInput()
+{
+  Func14(0, 0, 0, 0, 0);
+
+  const int nCount = 3;
+  float pHigh[nCount] = {1, 2, 3};
+  float pLow[nCount] = {1, 2, 3};
+  float pOut[nCount] = {9, 9, 9};
+
+  Func14(nCount, pOut, 0, pHigh, pLow); // 缺线段信号 → 提前返回，不改写输出
+
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -2799,6 +2872,14 @@ int main()
   if (!TestSecondBuyStrongPullbackConfirmed())
   {
     return 83;
+  }
+  if (!TestFunc14MarksDivergenceSegment())
+  {
+    return 84;
+  }
+  if (!TestFunc14HandlesEmptyInput())
+  {
+    return 85;
   }
 
   return 0;
