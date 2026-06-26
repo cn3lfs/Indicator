@@ -209,6 +209,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nQuality = CZSC_SIGNAL_QUALITY_WATCH;
   C.nCenterPosition = CZSC_CENTER_POSITION_UNKNOWN;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
+  C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
   C.Divergence.bNewExtreme = false;
@@ -2333,6 +2334,83 @@ static bool TestFunc12WritesReversalCode()
   return bFirstCoded && NearlyEqual(pOut[40], 0.0f) && NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestCenterAftermathExtended()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 10, 5, 12, 4));    // GG=12
+  Centers.push_back(MakeTestCenterFull(16, 28, 13, 9, 14, 8));   // 与前全幅重叠 → 扩展
+  return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_EXTENDED;
+}
+
+static bool TestCenterAftermathNewborn()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 9, 5, 10, 4));     // GG=10
+  Centers.push_back(MakeTestCenterFull(16, 28, 14, 12, 16, 12)); // DD=12 > 10 → 上涨新生
+  return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_NEWBORN;
+}
+
+static bool TestCenterAftermathUnknownNoNext()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 9, 5, 10, 4));     // 仅一个中枢，后续未形成
+  return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN;
+}
+
+static bool TestCenterAftermathSell()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 14, 12, 16, 12));  // DD=12
+  Centers.push_back(MakeTestCenterFull(16, 28, 9, 5, 10, 4));    // GG=10 < 12 → 下跌
+
+  // 三卖 + 下跌 → 中枢新生
+  if (ClassifyCenterAftermath(Centers, 0, 13.0f) != CZSC_CENTER_AFTERMATH_NEWBORN)
+  {
+    return false;
+  }
+  // 三买 + 下跌(反向) → 未知
+  return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN;
+}
+
+static bool TestApplyTradingAftermathMapsCodes()
+{
+  const int nCount = 6;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Extended = MakeTestCandidate(1, 3.0f, 20);
+  Extended.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
+  TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
+  Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
+  TradingSignalCandidate Unknown = MakeTestCandidate(5, 3.0f, 20);
+  Candidates.push_back(Extended);
+  Candidates.push_back(Newborn);
+  Candidates.push_back(Unknown);
+
+  ApplyTradingSignalAftermath(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], 2.0f) &&
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestFunc13HandlesEmptyInput()
+{
+  Func13(0, 0, 0, 0, 0);
+
+  const int nCount = 3;
+  float pHigh[nCount] = {1, 2, 3};
+  float pLow[nCount] = {1, 2, 3};
+  float pOut[nCount] = {9, 9, 9};
+
+  Func13(nCount, pOut, 0, pHigh, pLow); // 缺线段信号 → 提前返回，不改写输出
+
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -2634,6 +2712,30 @@ int main()
   if (!TestFunc12WritesReversalCode())
   {
     return 75;
+  }
+  if (!TestCenterAftermathExtended())
+  {
+    return 76;
+  }
+  if (!TestCenterAftermathNewborn())
+  {
+    return 77;
+  }
+  if (!TestCenterAftermathUnknownNoNext())
+  {
+    return 78;
+  }
+  if (!TestCenterAftermathSell())
+  {
+    return 79;
+  }
+  if (!TestApplyTradingAftermathMapsCodes())
+  {
+    return 80;
+  }
+  if (!TestFunc13HandlesEmptyInput())
+  {
+    return 81;
   }
 
   return 0;
