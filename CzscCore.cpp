@@ -932,9 +932,10 @@ static int ClassifyTradingSignalQuality(int nSource,
 
   if (nSource == SIGNAL_SOURCE_SECOND)
   {
-    // 二类买卖点：与三类重合，或离开段 MACD 背驰确认，即为强信号。
-    bool bStrong = Divergence.bDivergence && (bOverlapped || Divergence.bWeakMacd);
-    return bStrong ? CZSC_SIGNAL_QUALITY_STRONG : CZSC_SIGNAL_QUALITY_CONFIRMED;
+    // 二类买卖点：与三类买卖点重合（第61课「二三重合力度值得关注」）即为强信号。
+    return (bOverlapped && Divergence.bDivergence) ?
+           CZSC_SIGNAL_QUALITY_STRONG :
+           CZSC_SIGNAL_QUALITY_CONFIRMED;
   }
 
   if (nSource == SIGNAL_SOURCE_THIRD)
