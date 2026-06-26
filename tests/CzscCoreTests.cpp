@@ -2637,6 +2637,71 @@ static bool TestFunc15Func16HandleEmptyInput()
   return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
+static bool TestInstantDivergenceWarnsWeakNewLow()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 8));    // 上一完成下跌段 20→8（快）
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));     // 末段起点
+
+  const int nCount = 31;
+  float pHigh[nCount];
+  float pLow[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pHigh[i] = 20;
+    pLow[i] = 18;
+  }
+  // 末段从 @12 缓慢下行创新低（慢 → 力度走弱）
+  for (int i = 12; i < nCount; i++)
+  {
+    float fValue = 18.0f - (float)(i - 12) * 0.7f;
+    pHigh[i] = fValue + 0.5f;
+    pLow[i] = fValue;
+  }
+
+  return DetectInstantDivergence(Points, nCount, pHigh, pLow) == -1;
+}
+
+static bool TestInstantDivergenceSkipsStrongLeg()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));
+
+  const int nCount = 15;
+  float pHigh[nCount];
+  float pLow[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pHigh[i] = 20;
+    pLow[i] = 18;
+  }
+  // 末段从 @12 急速下行创新低（快 → 力度更强，不算背驰）
+  pLow[12] = 18;  pHigh[12] = 18.5f;
+  pLow[13] = 12;  pHigh[13] = 12.5f;
+  pLow[14] = 6;   pHigh[14] = 6.5f;
+
+  return DetectInstantDivergence(Points, nCount, pHigh, pLow) == 0;
+}
+
+static bool TestFunc17HandlesEmptyInput()
+{
+  Func17(0, 0, 0, 0, 0);
+
+  const int nCount = 3;
+  float pHigh[nCount] = {1, 2, 3};
+  float pLow[nCount] = {1, 2, 3};
+  float pOut[nCount] = {9, 9, 9};
+
+  Func17(nCount, pOut, 0, pHigh, pLow); // 缺线段信号 → 提前返回，不改写输出
+
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -2994,6 +3059,18 @@ int main()
   if (!TestFunc15Func16HandleEmptyInput())
   {
     return 89;
+  }
+  if (!TestInstantDivergenceWarnsWeakNewLow())
+  {
+    return 90;
+  }
+  if (!TestInstantDivergenceSkipsStrongLeg())
+  {
+    return 91;
+  }
+  if (!TestFunc17HandlesEmptyInput())
+  {
+    return 92;
   }
 
   return 0;
