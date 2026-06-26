@@ -2411,6 +2411,61 @@ static bool TestFunc13HandlesEmptyInput()
   return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
+static bool TestSecondBuyConsolidationDivergence()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 14));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 15));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 30, 8));    // 一买
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 34, 11));      // 反弹
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 9));    // 二买，回抽段(11→9)弱于前段(15→8)
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 18, 13));
+  Centers.push_back(MakeTestCenter(16, 24, 12, 9));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 2.0f);
+
+  return (pSecond != 0) &&
+         pSecond->Divergence.bDivergence &&
+         !pSecond->bOverlapped &&
+         (pSecond->nQuality == CZSC_SIGNAL_QUALITY_STRONG);
+}
+
+static bool TestSecondBuyStrongPullbackConfirmed()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 14));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 15));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 30, 8));    // 一买
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 34, 17));      // 反弹
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 8.5f)); // 二买，回抽段(17→8.5)强于前段 → 非背驰
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 18, 13));
+  Centers.push_back(MakeTestCenter(16, 24, 12, 9));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 2.0f);
+
+  return (pSecond != 0) &&
+         !pSecond->Divergence.bDivergence &&
+         (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED);
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -2736,6 +2791,14 @@ int main()
   if (!TestFunc13HandlesEmptyInput())
   {
     return 81;
+  }
+  if (!TestSecondBuyConsolidationDivergence())
+  {
+    return 82;
+  }
+  if (!TestSecondBuyStrongPullbackConfirmed())
+  {
+    return 83;
   }
 
   return 0;
