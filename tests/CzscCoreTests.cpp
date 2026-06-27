@@ -3046,6 +3046,40 @@ static bool TestFunc30HandlesEmptyInput()
   return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
+static bool TestInvalidPriceSanitized()
+{
+  union { unsigned int u; float f; } Invalid;
+  Invalid.u = 0xF8F8F8F8u;  // 通达信无效数
+
+  // 前 2 根无效 + 后 7 根（与 TestFractalsAndStrokes 同，产生 顶12 / 底2 两个分型）
+  const int nCount = 9;
+  float pHigh[nCount] = {Invalid.f, Invalid.f, 10, 12, 11, 10, 9, 8, 10};
+  float pLow[nCount]  = {Invalid.f, Invalid.f,  5,  7,  6,  5, 4, 2,  4};
+
+  std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+
+  // 无效前缀被清洗为首个有效值（平台），不产生伪分型：仍是 顶(高12) + 底(低2) 两个
+  if (Fractals.size() != 2)
+  {
+    return false;
+  }
+  bool bTop = false;
+  bool bBottom = false;
+  for (std::size_t i = 0; i < Fractals.size(); i++)
+  {
+    if ((Fractals[i].nType == CZSC_POINT_TOP) && NearlyEqual(Fractals[i].fHigh, 12.0f))
+    {
+      bTop = true;
+    }
+    if ((Fractals[i].nType == CZSC_POINT_BOTTOM) && NearlyEqual(Fractals[i].fLow, 2.0f))
+    {
+      bBottom = true;
+    }
+  }
+  return bTop && bBottom;
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -3463,6 +3497,10 @@ int main()
   if (!TestFunc30HandlesEmptyInput())
   {
     return 104;
+  }
+  if (!TestInvalidPriceSanitized())
+  {
+    return 105;
   }
 
   return 0;
