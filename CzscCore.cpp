@@ -1881,6 +1881,8 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
 // 由相邻顶底连成笔（受配置驱动）：
 //  笔类型 STRICT（严格笔）按原始K线间隔≥4，NEW（新笔）按合并K线间隔≥4（第62/65课）；
 //  笔结束 STRICT 取最严格极值收笔，SECOND 保留首个同型分型（允许次高/次低点）。
+// 关键：一笔不在首个反向分型处即封闭，而是先构建顶底交替的端点序列、允许同向更极端分型把端点
+// 向后「延伸（中继）」，并在中间反向分型不足一笔却被新极值反超时「破坏回退」弹出它，再连成笔。
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const CzscConfig &Config)
 {
   std::vector<Stroke> Strokes;
@@ -1889,33 +1891,55 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
     return Strokes;
   }
 
-  Fractal Candidate = Fractals[0];
+  // 第一阶段：构建顶底交替的笔端点序列（处理延伸/中继与破坏回退）
+  std::vector<Fractal> Ends;
+  Ends.push_back(Fractals[0]);
+
   for (std::size_t i = 1; i < Fractals.size(); i++)
   {
-    const Fractal &Current = Fractals[i];
-    if (Current.nType == Candidate.nType)
+    const Fractal &F = Fractals[i];
+    for (;;)
     {
-      if ((Config.nStrokeEnd == CZSC_END_STRICT) && IsMoreExtreme(Candidate, Current))
+      const Fractal &Last = Ends.back();
+      if (F.nType == Last.nType)
       {
-        Candidate = Current;
+        // 同型：严格取极值则用更极端者延伸端点（中继顶/底）；允许次高/次低则保留首个
+        if ((Config.nStrokeEnd == CZSC_END_STRICT) && IsMoreExtreme(Last, F))
+        {
+          Ends.back() = F;
+        }
+        break;
       }
-      continue;
-    }
 
-    int nGap = (Config.nStrokeType == CZSC_STROKE_NEW)
-               ? (Current.nMergedIndex - Candidate.nMergedIndex)
-               : (Current.nIndex - Candidate.nIndex);
-    if (nGap < 4)
-    {
-      continue;
-    }
+      // 异型：间隔够一笔即作为新端点（严格笔按原始K线、新笔按合并K线，第62/65课）
+      int nGap = (Config.nStrokeType == CZSC_STROKE_NEW)
+                 ? (F.nMergedIndex - Last.nMergedIndex)
+                 : (F.nIndex - Last.nIndex);
+      if (nGap >= 4)
+      {
+        Ends.push_back(F);
+        break;
+      }
 
+      // 不足一笔：若新分型反超倒数第二个同型端点，则中间这个反向端点被破坏，弹出后让新分型延伸前段
+      if ((Config.nStrokeEnd == CZSC_END_STRICT) && (Ends.size() >= 2) &&
+          IsMoreExtreme(Ends[Ends.size() - 2], F))
+      {
+        Ends.pop_back();
+        continue;
+      }
+      break;  // 否则忽略该分型（不足一笔且未破坏前段）
+    }
+  }
+
+  // 第二阶段：相邻交替端点连成笔
+  for (std::size_t i = 1; i < Ends.size(); i++)
+  {
     Stroke S;
-    S.Start = Candidate;
-    S.End = Current;
-    S.nDirection = (Candidate.nType == CZSC_POINT_BOTTOM) ? 1 : -1;
+    S.Start = Ends[i - 1];
+    S.End = Ends[i];
+    S.nDirection = (Ends[i - 1].nType == CZSC_POINT_BOTTOM) ? 1 : -1;
     Strokes.push_back(S);
-    Candidate = Current;
   }
 
   return Strokes;
