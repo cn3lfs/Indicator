@@ -1897,8 +1897,8 @@ static bool StrokeSpanEnough(const Fractal &A, const Fractal &B, const CzscConfi
 // 由相邻顶底连成笔（受配置驱动）：
 //  笔类型见 StrokeSpanEnough（严格笔=合并K线≥5、新笔=合并K线≥4且原始K线≥5）；
 //  笔结束 STRICT 取最严格极值收笔，SECOND 保留首个同型分型（允许次高/次低点）。
-// 关键：一笔不在首个反向分型处即封闭，而是先构建顶底交替的端点序列、允许同向更极端分型把端点
-// 向后「延伸（中继）」，并在中间反向分型不足一笔却被新极值反超时「破坏回退」弹出它，再连成笔。
+// 关键：先构建顶底交替的端点序列——同向更极端分型把端点向后「延伸（中继）」，反向分型仅当跨度达标
+// 才作为新端点；跨度不足的反向分型直接忽略，不弹出已与前端点构成达标笔的端点（第65课）。再连成笔。
 std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const CzscConfig &Config)
 {
   std::vector<Stroke> Strokes;
@@ -1907,42 +1907,27 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
     return Strokes;
   }
 
-  // 第一阶段：构建顶底交替的笔端点序列（处理延伸/中继与破坏回退）
+  // 第一阶段：构建顶底交替的笔端点序列
   std::vector<Fractal> Ends;
   Ends.push_back(Fractals[0]);
 
   for (std::size_t i = 1; i < Fractals.size(); i++)
   {
     const Fractal &F = Fractals[i];
-    for (;;)
+    const Fractal &Last = Ends.back();
+    if (F.nType == Last.nType)
     {
-      const Fractal &Last = Ends.back();
-      if (F.nType == Last.nType)
+      // 同型：严格取极值则用更极端者延伸端点（中继顶/底）；允许次高/次低则保留首个
+      if ((Config.nStrokeEnd == CZSC_END_STRICT) && IsMoreExtreme(Last, F))
       {
-        // 同型：严格取极值则用更极端者延伸端点（中继顶/底）；允许次高/次低则保留首个
-        if ((Config.nStrokeEnd == CZSC_END_STRICT) && IsMoreExtreme(Last, F))
-        {
-          Ends.back() = F;
-        }
-        break;
+        Ends.back() = F;
       }
-
-      // 异型：跨度达标即作为新端点（严格笔/新笔标准见 StrokeSpanEnough，第62/65课）
-      if (StrokeSpanEnough(Last, F, Config))
-      {
-        Ends.push_back(F);
-        break;
-      }
-
-      // 不足一笔：若新分型反超倒数第二个同型端点，则中间这个反向端点被破坏，弹出后让新分型延伸前段
-      if ((Config.nStrokeEnd == CZSC_END_STRICT) && (Ends.size() >= 2) &&
-          IsMoreExtreme(Ends[Ends.size() - 2], F))
-      {
-        Ends.pop_back();
-        continue;
-      }
-      break;  // 否则忽略该分型（不足一笔且未破坏前段）
     }
+    else if (StrokeSpanEnough(Last, F, Config))
+    {
+      Ends.push_back(F);  // 异型且跨度达标 → 新笔端点
+    }
+    // 异型但跨度不足 → 忽略该分型（不弹出已与前端点构成达标笔的端点，第65课）
   }
 
   // 第二阶段：相邻交替端点连成笔
@@ -2059,68 +2044,39 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
 // 线段划分·特征序列法（第67课）：与上面的保护点启发式并存的可选实现
 //=============================================================================
 
-// 反向走势是否已破坏前线段（第71课6.8/6.9）：从前线段极值 nFrom 起、反向方向 nRevDir 的走势，
-// 在价格重新突破「第一笔开始位置」（即前线段极值，回到原方向）之前，先破掉「第一笔的结束位置」
-// （反向延续：下降创新低 / 上升创新高），即反向已走出线段级别结构（上升线段见 lower high+lower low、
-// 下降线段见 higher low+higher high）→ 真破坏。须扫描后续而非只看第三笔（第71课6.9：第三笔在
-// 第一笔范围内时，看最终先破结束位置还是先破开始位置）。
-static bool ReversalConfirmed(const std::vector<SegmentPoint> &P, std::size_t nFrom, int nRevDir)
-{
-  if (nFrom + 1 >= P.size())
-  {
-    return false;
-  }
-  float fStart = GetPointPrice(P[nFrom]);          // 第一笔开始位置 = 前线段极值
-  float fFirstEnd = GetPointPrice(P[nFrom + 1]);   // 第一笔结束位置
-  for (std::size_t i = nFrom + 1; i < P.size(); i++)
-  {
-    float v = GetPointPrice(P[i]);
-    if (nRevDir < 0 ? (v < fFirstEnd) : (v > fFirstEnd))
-    {
-      return true;   // 先破第一笔结束位置 → 反向延续成线段，真破坏
-    }
-    if (nRevDir < 0 ? (v > fStart) : (v < fStart))
-    {
-      return false;  // 先破第一笔开始位置（极值被突破）→ 线段延续，非真破坏
-    }
-  }
-  return false;  // 数据末端未决
-}
-
-// 定位线段终点（第64/71课「线段只能被线段破坏」的当下程序）：跟踪段内极值（上升:最高顶 / 下降:最低底），
-// 一旦从该极值起的反向走势延伸出三笔并破掉第一笔的结束位置（反向自身已成线段级别结构），即真破坏，
-// 线段在该极值处结束；单笔/两笔回抽（未破第一笔结束位置）不破坏线段，线段延伸到真正的最高/最低点。
+// 定位线段终点（第64/67/71课「线段只能被线段破坏」，逆向笔自身构成反向线段级别结构即破坏）：
+//  逆向笔 j 占端点 P[nStart+1+2j]（内端）与 P[nStart+2+2j]（外端）——
+//   · 下降线段：逆向(向上)笔顶「创新高 higher high」(外端突破前一逆向笔外端) 且其后回调底「不创新低
+//     higher low」(下一内端高于本内端) → 已成上升线段结构，下降线段在本逆向笔的底(下跌局部低点)结束；
+//   · 上升线段：逆向(向下)笔底「创新低 lower low」且其后反弹顶「不创新高 lower high」→ 在本逆向笔的顶结束。
+//  关键：线段终点是该逆向笔的内端，不一定是全局最高/最低点（如 3723→2635 的下跌实终于 2863，非 2635）。
 static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
 {
-  if (nStart + 1 >= P.size())
+  for (std::size_t j = 1; (nStart + 3 + 2 * j) < P.size(); j++)
   {
-    return -1;
-  }
-  std::size_t nExt = nStart + 1;                       // 段内极值（与起点反型：上升的顶 / 下降的底）
-  float fExt = GetPointPrice(P[nExt]);
+    float fOuter     = GetPointPrice(P[nStart + 2 + 2 * j]);  // 逆向笔 j 外端（下降:顶 / 上升:底）
+    float fOuterPrev = GetPointPrice(P[nStart + 2 * j]);      // 逆向笔 j-1 外端
+    float fInner     = GetPointPrice(P[nStart + 1 + 2 * j]);  // 逆向笔 j 内端（下降:底 / 上升:顶）
+    float fInnerNext = GetPointPrice(P[nStart + 3 + 2 * j]);  // 逆向笔 j+1 内端
 
-  for (std::size_t i = nStart + 2; i < P.size(); i++)
-  {
-    bool bReverseType = (((i - nStart) % 2) == 1);
-    float fVal = GetPointPrice(P[i]);
-
-    if (bReverseType)
+    bool bExtremeBreak;  // 下降:外端 higher high / 上升:外端 lower low
+    bool bPullback;      // 下降:下一内端 higher low / 上升:下一内端 lower high
+    if (nDir < 0)
     {
-      if (nDir > 0 ? (fVal > fExt) : (fVal < fExt))    // 创同向新极值 → 线段延伸，极值后移
-      {
-        fExt = fVal;
-        nExt = i;
-      }
-      continue;
+      bExtremeBreak = (fOuter > fOuterPrev);
+      bPullback     = (fInnerNext > fInner);
     }
-
-    // 顺向起点型分型：若从极值起的反向走势已破第一笔结束位置 → 真破坏，线段在该极值结束
-    if (ReversalConfirmed(P, nExt, -nDir))
+    else
     {
-      return (int)nExt;
+      bExtremeBreak = (fOuter < fOuterPrev);
+      bPullback     = (fInnerNext < fInner);
+    }
+    if (bExtremeBreak && bPullback)
+    {
+      return (int)(nStart + 1 + 2 * j);  // 线段终点 = 逆向笔 j 的内端
     }
   }
-  return -1;  // 反向走势尚未成线段 → 线段当下未完成
+  return -1;  // 未出现反向线段结构 → 线段当下未完成
 }
 
 // 特征序列法划分线段（第67课），与 BuildLineSegmentPoints 的启发式并存
