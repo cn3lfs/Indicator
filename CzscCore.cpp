@@ -2044,12 +2044,13 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
 // 线段划分·特征序列法（第67课）：与上面的保护点启发式并存的可选实现
 //=============================================================================
 
-// 定位线段终点（第64/67/71课「线段只能被线段破坏」，逆向笔自身构成反向线段级别结构即破坏）：
-//  逆向笔 j 占端点 P[nStart+1+2j]（内端）与 P[nStart+2+2j]（外端）——
-//   · 下降线段：逆向(向上)笔顶「创新高 higher high」(外端突破前一逆向笔外端) 且其后回调底「不创新低
-//     higher low」(下一内端高于本内端) → 已成上升线段结构，下降线段在本逆向笔的底(下跌局部低点)结束；
-//   · 上升线段：逆向(向下)笔底「创新低 lower low」且其后反弹顶「不创新高 lower high」→ 在本逆向笔的顶结束。
-//  关键：线段终点是该逆向笔的内端，不一定是全局最高/最低点（如 3723→2635 的下跌实终于 2863，非 2635）。
+// 定位线段终点（第64/67课「线段只能被线段破坏」，逆向三笔自身构成反向线段级别结构即破坏）：
+//  逆向笔 j 占端点 P[nStart+1+2j]（内端=线段终点候选）与 P[nStart+2+2j]（外端）——
+//  第二笔回调确认（下降 higher low：下一内端高于本内端 / 上升 lower high：下一内端低于本内端）后，
+//  反向「创新极值」(下降 higher high / 上升 lower low) 可由两种情况之一给出：
+//   · 情况1（终点优先落在极值点）：第一笔不破前一逆向笔外端，但第三笔（下一逆向笔外端）破本笔外端；
+//   · 情况2（终点为局部点）：第一笔即破前一逆向笔外端（外端突破），第三笔仅需成笔确认。
+//  两者线段终点都是本逆向笔的内端，不一定是全局最高/最低点（如 3723→2635 的下跌实终于 2863，非 2635）。
 static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
 {
   for (std::size_t j = 1; (nStart + 3 + 2 * j) < P.size(); j++)
@@ -2059,19 +2060,25 @@ static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t
     float fInner     = GetPointPrice(P[nStart + 1 + 2 * j]);  // 逆向笔 j 内端（下降:底 / 上升:顶）
     float fInnerNext = GetPointPrice(P[nStart + 3 + 2 * j]);  // 逆向笔 j+1 内端
 
-    bool bExtremeBreak;  // 下降:外端 higher high / 上升:外端 lower low
-    bool bPullback;      // 下降:下一内端 higher low / 上升:下一内端 lower high
-    if (nDir < 0)
+    // 第二笔回调确认：下降 higher low / 上升 lower high
+    bool bPullback = (nDir < 0) ? (fInnerNext > fInner) : (fInnerNext < fInner);
+    if (!bPullback)
     {
-      bExtremeBreak = (fOuter > fOuterPrev);
-      bPullback     = (fInnerNext > fInner);
+      continue;
     }
-    else
+
+    // 情况2：第一笔即破前一逆向笔外端（下降 higher high / 上升 lower low）
+    bool bBreakFirst = (nDir < 0) ? (fOuter > fOuterPrev) : (fOuter < fOuterPrev);
+
+    // 情况1：第三笔（下一逆向笔外端）破本笔外端（终点优先落在极值点）
+    bool bBreakThird = false;
+    if ((nStart + 4 + 2 * j) < P.size())
     {
-      bExtremeBreak = (fOuter < fOuterPrev);
-      bPullback     = (fInnerNext < fInner);
+      float fOuterNext = GetPointPrice(P[nStart + 4 + 2 * j]);  // 逆向笔 j+1 外端
+      bBreakThird = (nDir < 0) ? (fOuterNext > fOuter) : (fOuterNext < fOuter);
     }
-    if (bExtremeBreak && bPullback)
+
+    if (bBreakFirst || bBreakThird)
     {
       return (int)(nStart + 1 + 2 * j);  // 线段终点 = 逆向笔 j 的内端
     }
