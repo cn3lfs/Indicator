@@ -2772,6 +2772,52 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
   return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
 }
 
+// 第67课第二种情况：特征序列顶分型有缺口，其后仅一笔回抽（反向特征序列无分型）
+// → 不构成线段破坏（第64课「线段只能被线段破坏」），线段不在该顶结束
+static bool TestFeatureSegmentGapNeedsReversal()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 6, 1));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 5));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 11, 9));    // X1：高10 低9
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));     // 跳空大涨，终点候选
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 24, 22));  // X2：高25 低22（缺口 22>10）
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 21));     // X3：高23 → 顶分型落在 X2
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  for (std::size_t i = 0; i < Line.size(); i++)   // 反向无确认 → 线段不在 idx12 结束
+  {
+    if (Line[i].nIndex == 12) return false;
+  }
+  return true;
+}
+
+// 第67课第二种情况：缺口顶分型之后走出反向线段（反向特征序列出现底分型）→ 确认线段在该顶结束
+static bool TestFeatureSegmentGapConfirmedByReversal()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 6, 1));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 5));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 11, 9));    // X1：高10 低9
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));     // 线段终点候选（顶25@idx12）
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 24, 22));  // X2：高25 低22（缺口）
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 21));     // X3：高23 → 顶分型落在 X2
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 16, 15));  // 反向下跌
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 19, 18));     // 反弹
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 17, 16));  // 反向特征序列底分型（15<16）
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 20, 19));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 40, 15, 14));
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return (Line.size() >= 2) &&
+         (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12);
+}
+
 static bool TestDecodeConfig()
 {
   CzscConfig c0 = DecodeConfig(0);
@@ -3711,6 +3757,14 @@ int main()
   if (!TestStrokeBrokenByNewExtreme())
   {
     return 112;
+  }
+  if (!TestFeatureSegmentGapNeedsReversal())
+  {
+    return 113;
+  }
+  if (!TestFeatureSegmentGapConfirmedByReversal())
+  {
+    return 114;
   }
 
   return 0;
