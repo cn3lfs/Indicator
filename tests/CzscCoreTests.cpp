@@ -2775,18 +2775,20 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
 static bool TestDecodeConfig()
 {
   CzscConfig c0 = DecodeConfig(0);
-  CzscConfig c1 = DecodeConfig(1);      // 个位1 → 新笔
-  CzscConfig c11 = DecodeConfig(11);    // 十位1 → 允许次高
-  CzscConfig c100 = DecodeConfig(100);  // 百位1 → 线段中枢
-  CzscConfig c111 = DecodeConfig(111);  // 全部非默认
+  CzscConfig c1 = DecodeConfig(1);        // 个位1 → 新笔
+  CzscConfig c11 = DecodeConfig(11);      // 十位1 → 允许次高
+  CzscConfig c100 = DecodeConfig(100);    // 百位1 → 线段中枢
+  CzscConfig c1000 = DecodeConfig(1000);  // 千位1 → 特征序列法
+  CzscConfig c1111 = DecodeConfig(1111);  // 全部非默认
 
   return (c0.nStrokeType == CZSC_STROKE_STRICT) && (c0.nStrokeEnd == CZSC_END_STRICT) &&
-         (c0.nCenterUnit == CZSC_UNIT_STROKE) &&
+         (c0.nCenterUnit == CZSC_UNIT_STROKE) && (c0.nSegmentMethod == CZSC_SEG_HEURISTIC) &&
          (c1.nStrokeType == CZSC_STROKE_NEW) &&
          (c11.nStrokeType == CZSC_STROKE_NEW) && (c11.nStrokeEnd == CZSC_END_SECOND) &&
          (c100.nCenterUnit == CZSC_UNIT_SEGMENT) &&
-         (c111.nStrokeType == CZSC_STROKE_NEW) && (c111.nStrokeEnd == CZSC_END_SECOND) &&
-         (c111.nCenterUnit == CZSC_UNIT_SEGMENT);
+         (c1000.nSegmentMethod == CZSC_SEG_FEATURE) &&
+         (c1111.nStrokeType == CZSC_STROKE_NEW) && (c1111.nStrokeEnd == CZSC_END_SECOND) &&
+         (c1111.nCenterUnit == CZSC_UNIT_SEGMENT) && (c1111.nSegmentMethod == CZSC_SEG_FEATURE);
 }
 
 static bool TestStrokeEndConfig()
@@ -2972,6 +2974,76 @@ static bool TestSignalCacheHitAndInvalidate()
   // 再查 A → 仍是 A 的正确结果（非 stale B）
   std::size_t candA3 = GetOrBuildSignalAnalyzer(nCount, pIn, pHigh, pLow).Candidates.size();
   return candA3 == candA1;
+}
+
+static bool TestFunc30MatchesLegacyPipeline()
+{
+  const int nCount = 21;
+  float pHigh[nCount] = {
+    5, 7, 8, 9, 10, 9, 8, 7, 7, 8, 9, 11, 12, 11, 10, 9, 9, 10, 11, 13, 14
+  };
+  float pLow[nCount] = {
+    1, 2, 3, 5, 6, 5, 4, 3, 3, 4, 5, 7, 8, 7, 6, 5, 5, 6, 7, 9, 10
+  };
+
+  float pStroke[nCount];   // 笔端点（旧两步法的 DLL 输入）
+  float pLegacy[nCount];
+  float pFunc30[nCount];
+  float fTime = 5;
+  float fCode;
+
+  Func1(nCount, pStroke, pHigh, pLow, &fTime);
+
+  // 输出 0（端点，配置 0 笔中枢）：Func30(码0) ≡ Func1
+  fCode = 0;
+  Func30(nCount, pFunc30, pHigh, pLow, &fCode);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pFunc30[i], pStroke[i]))
+    {
+      return false;
+    }
+  }
+
+  // 输出 1（中枢上沿）：Func30(码10) ≡ Func2(笔端点信号)
+  Func2(nCount, pLegacy, pStroke, pHigh, pLow);
+  fCode = 10;
+  Func30(nCount, pFunc30, pHigh, pLow, &fCode);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pFunc30[i], pLegacy[i]))
+    {
+      return false;
+    }
+  }
+
+  // 输出 4（三类买卖点）：Func30(码40) ≡ Func5(笔端点信号)
+  Func5(nCount, pLegacy, pStroke, pHigh, pLow);
+  fCode = 40;
+  Func30(nCount, pFunc30, pHigh, pLow, &fCode);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pFunc30[i], pLegacy[i]))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFunc30HandlesEmptyInput()
+{
+  Func30(0, 0, 0, 0, 0);
+
+  const int nCount = 3;
+  float pLow[nCount] = {1, 2, 3};
+  float pOut[nCount] = {9, 9, 9};
+  float fCode = 0;
+
+  Func30(nCount, pOut, 0, pLow, &fCode);  // 缺最高价 → 提前返回，不改写
+
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
 int main()
@@ -3383,6 +3455,14 @@ int main()
   if (!TestSignalCacheHitAndInvalidate())
   {
     return 102;
+  }
+  if (!TestFunc30MatchesLegacyPipeline())
+  {
+    return 103;
+  }
+  if (!TestFunc30HandlesEmptyInput())
+  {
+    return 104;
   }
 
   return 0;
