@@ -268,6 +268,8 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
 // 均线系统（第11-15课）：简单移动平均；短长均线的吻分类（飞吻/唇吻/湿吻）
 std::vector<float> ComputeMovingAverage(int nCount, const float *pPrice, int nPeriod);
 std::vector<int> ClassifyMaKisses(const std::vector<float> &Short, const std::vector<float> &Long);
+void ComputeShortLongMa(int nCount, float *pHigh, float *pLow,
+                        std::vector<float> *pShort, std::vector<float> *pLong);
 
 // 配置：默认配置复现现状；DecodeConfig 把单个数字码解出三维配置（供通达信传参）
 CzscConfig DefaultConfig();

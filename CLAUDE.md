@@ -74,9 +74,12 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 ```bash
 cd D:/github/czsc-tdx
 "/c/Program Files/LLVM/bin/clang++" -O2 -finput-charset=UTF-8 \
-  -o tests/CzscCoreTests.exe CzscCore.cpp tests/CzscCoreTests.cpp
+  -o tests/CzscCoreTests.exe CzscCore.cpp CzscAnalyzer.cpp tests/CzscCoreTests.cpp
 ./tests/CzscCoreTests.exe; echo $?   # exit 0 = 全过
 ```
+
+源码已部分模块化：`CzscAnalyzer.cpp` 持有中心化分析器与缓存层（`CzscCore.cpp` 仍含其余流水线
+与 Func 导出）。新增模块时同步 `Makefile` 的 `OBJECT1`/`TEST_OBJECTS` 与上面的 clang 命令。
 
 - `Main.cpp` 因 `FxIndicator.h` 含 windows.h，clang 仅能 `-fsyntax-only` 检查；真正的 DLL 构建
   走 WSL2 MinGW（`make mingw32`）。**不要为让 clang 过编译而改 pack/windows 头。**

@@ -35,9 +35,9 @@ FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
 
 # Objectives
-OBJECT1=Main.o CzscCore.o
+OBJECT1=Main.o CzscCore.o CzscAnalyzer.o
 TARGET1=CZSC.dll
-TEST_OBJECTS=CzscCore.o tests/CzscCoreTests.o
+TEST_OBJECTS=CzscCore.o CzscAnalyzer.o tests/CzscCoreTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
 TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
 LEGACY_OBJECTS=CCentroid.o
