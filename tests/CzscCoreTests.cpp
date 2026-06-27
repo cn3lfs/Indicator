@@ -2925,6 +2925,55 @@ static bool TestAnalyzerFromSignalAggregates()
          HasSignalCandidate(An.Candidates, 40, 2.0f);     // 二买
 }
 
+static bool TestSignalCacheHitAndInvalidate()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0; pHigh[i] = 0; pLow[i] = 0;
+  }
+  pIn[0] = -1; pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1; pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1; pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1; pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1; pHigh[16] = pLow[16] = 3;
+  pIn[20] = 1; pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1; pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1; pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1; pHigh[32] = pLow[32] = 3.8f;
+  pIn[36] = 1; pHigh[36] = pLow[36] = 6;
+  pIn[40] = -1; pHigh[40] = pLow[40] = 4.5f;
+
+  std::size_t candA1 = GetOrBuildSignalAnalyzer(nCount, pIn, pHigh, pLow).Candidates.size();
+  std::size_t candA2 = GetOrBuildSignalAnalyzer(nCount, pIn, pHigh, pLow).Candidates.size();  // 命中
+  if (candA1 != candA2)
+  {
+    return false;
+  }
+
+  // 改一个高点 → 缓存须失效、反映新输入（与手工构建一致，而非返回 stale A）
+  float pHighB[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pHighB[i] = pHigh[i];
+  }
+  pHighB[20] = 13;
+  std::size_t candB = GetOrBuildSignalAnalyzer(nCount, pIn, pHighB, pLow).Candidates.size();
+  CzscAnalyzer ManualB;
+  BuildAnalyzerFromSignal(ManualB, nCount, pIn, pHighB, pLow);
+  if (candB != ManualB.Candidates.size())
+  {
+    return false;
+  }
+
+  // 再查 A → 仍是 A 的正确结果（非 stale B）
+  std::size_t candA3 = GetOrBuildSignalAnalyzer(nCount, pIn, pHigh, pLow).Candidates.size();
+  return candA3 == candA1;
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -3330,6 +3379,10 @@ int main()
   if (!TestAnalyzerFromSignalAggregates())
   {
     return 101;
+  }
+  if (!TestSignalCacheHitAndInvalidate())
+  {
+    return 102;
   }
 
   return 0;
