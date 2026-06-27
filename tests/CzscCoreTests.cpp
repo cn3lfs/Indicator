@@ -302,6 +302,7 @@ static Center MakeTestCenter(int nStart, int nEnd, float fHigh, float fLow)
   C.fLow = fLow;
   C.fTop = fHigh;
   C.fBottom = fLow;
+  C.nDirection = 0;
   return C;
 }
 
@@ -1266,11 +1267,13 @@ static bool TestFunc9WritesLineSegmentSignal()
 
 static bool TestCentersUseThreeOverlappingSegments()
 {
+  // 第一笔(0->4)是进入段不算中枢；中枢由其后的第 2/3/4 笔（4->8、8->12、12->16）重叠构成。
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
 
   std::vector<Center> Centers = BuildCenters(Points);
 
@@ -1278,11 +1281,13 @@ static bool TestCentersUseThreeOverlappingSegments()
   {
     return false;
   }
-  if ((Centers[0].nStart != 0) || (Centers[0].nEnd != 12))
+  // 中枢从进入段终点(index4)起算，跨到第 4 笔终点(index16)
+  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 16))
   {
     return false;
   }
-  if (!NearlyEqual(Centers[0].fHigh, 9.0f) || !NearlyEqual(Centers[0].fLow, 4.0f))
+  // ZG=min(10,9,9)=9，ZD=max(4,4,5)=5（三段重叠区间）
+  if (!NearlyEqual(Centers[0].fHigh, 9.0f) || !NearlyEqual(Centers[0].fLow, 5.0f))
   {
     return false;
   }
@@ -1319,14 +1324,20 @@ static bool TestCenterExtendsWithOverlappingSegment()
 
 static bool TestCentersSplitWhenOverlapBreaks()
 {
+  // 第一个中枢在低位带[5,9]成形后，向上离开（20->...）打破重叠 → 中枢结束；
+  // 下一段走势从其终点(index20)起，在高位带[17,18]另成一枢，故分裂为两个中枢。
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
-  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 12));
-  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 11));
-  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 14));
-  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 15));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 19));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 16));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 36, 18));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 17));
 
   std::vector<Center> Centers = BuildCenters(Points);
 
@@ -1334,19 +1345,21 @@ static bool TestCentersSplitWhenOverlapBreaks()
   {
     return false;
   }
-  if ((Centers[0].nStart != 0) || (Centers[0].nEnd != 12))
+  // 中枢1：进入段终点(index4)到第 4 笔终点(index20)，ZG=min(10,9,9)=9、ZD=max(4,5,5)=5
+  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 20))
   {
     return false;
   }
-  if ((Centers[1].nStart != 12) || (Centers[1].nEnd != 24))
+  // 中枢2：从中枢1终点(index24)另起，高位带 ZG=18、ZD=17
+  if ((Centers[1].nStart != 24) || (Centers[1].nEnd != 40))
   {
     return false;
   }
-  if (!NearlyEqual(Centers[0].fHigh, 10.0f) || !NearlyEqual(Centers[0].fLow, 4.0f))
+  if (!NearlyEqual(Centers[0].fHigh, 9.0f) || !NearlyEqual(Centers[0].fLow, 5.0f))
   {
     return false;
   }
-  if (!NearlyEqual(Centers[1].fHigh, 12.0f) || !NearlyEqual(Centers[1].fLow, 12.0f))
+  if (!NearlyEqual(Centers[1].fHigh, 18.0f) || !NearlyEqual(Centers[1].fLow, 17.0f))
   {
     return false;
   }
@@ -1362,10 +1375,13 @@ static bool TestCenterFunctionsWriteSignals()
   float pLow[nCount] = {1, 0, 0, 0, 10, 0, 0, 0, 4, 0, 0, 0, 9, 0, 0, 0, 5};
   float pOut[nCount];
 
+  // 进入段(0->4)不算中枢；中枢从其终点(index4)起算，跨到第 4 笔终点(index16)。
+  // 故 ZG/ZD 仅在中枢跨度 index4..16 内写出，进入段(index0..3)留 0。
   Func2(nCount, pOut, pIn, pHigh, pLow);
   for (int i = 0; i < nCount; i++)
   {
-    if (!NearlyEqual(pOut[i], 9.0f))
+    float fExpected = ((i >= 4) && (i <= 16)) ? 9.0f : 0.0f;  // ZG=min(10,9,9)=9
+    if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
     }
@@ -1374,7 +1390,8 @@ static bool TestCenterFunctionsWriteSignals()
   Func3(nCount, pOut, pIn, pHigh, pLow);
   for (int i = 0; i < nCount; i++)
   {
-    if (!NearlyEqual(pOut[i], 5.0f))
+    float fExpected = ((i >= 4) && (i <= 16)) ? 5.0f : 0.0f;  // ZD=max(4,4,5)=5
+    if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
     }
@@ -1384,11 +1401,11 @@ static bool TestCenterFunctionsWriteSignals()
   for (int i = 0; i < nCount; i++)
   {
     float fExpected = 0;
-    if (i == 0)
+    if (i == 4)  // 中枢起点（进入段终点）
     {
       fExpected = 1;
     }
-    else if (i == 16)
+    else if (i == 16)  // 中枢终点
     {
       fExpected = 2;
     }
@@ -1465,47 +1482,9 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
 
 static bool TestFunc5WritesCenterThirdBuy()
 {
-  const int nCount = 21;
-  float pIn[nCount];
-  float pHigh[nCount];
-  float pLow[nCount];
-  float pOut[nCount];
-
-  for (int i = 0; i < nCount; i++)
-  {
-    pIn[i] = 0;
-    pHigh[i] = 0;
-    pLow[i] = 0;
-    pOut[i] = -1;
-  }
-
-  pIn[0] = 1;
-  pHigh[0] = 10;
-  pLow[0] = 10;
-  pIn[4] = -1;
-  pHigh[4] = 1;
-  pLow[4] = 1;
-  pIn[8] = 1;
-  pHigh[8] = 7;
-  pLow[8] = 7;
-  pIn[12] = -1;
-  pHigh[12] = 8;
-  pLow[12] = 8;
-  pIn[16] = 1;
-  pHigh[16] = 9;
-  pLow[16] = 9;
-  pIn[20] = -1;
-  pHigh[20] = 7.5f;
-  pLow[20] = 7.5f;
-
-  Func5(nCount, pOut, pIn, pHigh, pLow);
-
-  return NearlyEqual(pOut[20], 3.0f);
-}
-
-static bool TestFunc5WritesCenterThirdSell()
-{
-  const int nCount = 21;
+  // 上升中枢在低位带[4.5,5.5]成形后向上离开，回试不回中枢(底 7.5 > ZG 5.5) → 第三类买点。
+  // 进入段(0->4) + 中枢三笔(4->8、8->12、12->16) + 离开(20->28创新高) + 回试(底 index32)。
+  const int nCount = 33;
   float pIn[nCount];
   float pHigh[nCount];
   float pLow[nCount];
@@ -1523,24 +1502,84 @@ static bool TestFunc5WritesCenterThirdSell()
   pHigh[0] = 1;
   pLow[0] = 1;
   pIn[4] = 1;
-  pHigh[4] = 10;
-  pLow[4] = 10;
+  pHigh[4] = 6;
+  pLow[4] = 6;
   pIn[8] = -1;
   pHigh[8] = 4;
   pLow[8] = 4;
   pIn[12] = 1;
-  pHigh[12] = 3;
-  pLow[12] = 3;
+  pHigh[12] = 5.5f;
+  pLow[12] = 5.5f;
   pIn[16] = -1;
-  pHigh[16] = 2;
-  pLow[16] = 2;
+  pHigh[16] = 4.5f;
+  pLow[16] = 4.5f;
   pIn[20] = 1;
-  pHigh[20] = 3.5f;
-  pLow[20] = 3.5f;
+  pHigh[20] = 8;
+  pLow[20] = 8;
+  pIn[24] = -1;
+  pHigh[24] = 7;
+  pLow[24] = 7;
+  pIn[28] = 1;
+  pHigh[28] = 9;
+  pLow[28] = 9;
+  pIn[32] = -1;
+  pHigh[32] = 7.5f;
+  pLow[32] = 7.5f;
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
-  return NearlyEqual(pOut[20], 13.0f);
+  return NearlyEqual(pOut[32], 3.0f);
+}
+
+static bool TestFunc5WritesCenterThirdSell()
+{
+  // 下降中枢在高位带[9.5,10.5]成形后向下离开，回试不回中枢(顶 7.5 < ZD 9.5) → 第三类卖点。
+  // 进入段(0->4) + 中枢三笔(4->8、8->12、12->16) + 离开(20->28创新低) + 回试(顶 index32)。
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = 14;
+  pLow[0] = 14;
+  pIn[4] = -1;
+  pHigh[4] = 9;
+  pLow[4] = 9;
+  pIn[8] = 1;
+  pHigh[8] = 11;
+  pLow[8] = 11;
+  pIn[12] = -1;
+  pHigh[12] = 9.5f;
+  pLow[12] = 9.5f;
+  pIn[16] = 1;
+  pHigh[16] = 10.5f;
+  pLow[16] = 10.5f;
+  pIn[20] = -1;
+  pHigh[20] = 7;
+  pLow[20] = 7;
+  pIn[24] = 1;
+  pHigh[24] = 8;
+  pLow[24] = 8;
+  pIn[28] = -1;
+  pHigh[28] = 6;
+  pLow[28] = 6;
+  pIn[32] = 1;
+  pHigh[32] = 7.5f;
+  pLow[32] = 7.5f;
+
+  Func5(nCount, pOut, pIn, pHigh, pLow);
+
+  return NearlyEqual(pOut[32], 13.0f);
 }
 
 static bool TestFunc5WritesSecondBuyAfterFirstBuy()
@@ -2102,9 +2141,19 @@ static bool TestFunc10WritesSignalQuality()
 
   Func10(nCount, pOut, pIn, pHigh, pLow);
 
+  // 一类买点(index32)价差与速度同时走弱 → 标准强信号(2)。
+  // 新中枢划分下第一个中枢的离开/回试在 index28 另成一个第三类卖点(确认级 1)。
   for (int i = 0; i < nCount; i++)
   {
-    float fExpected = (i == 32) ? (float)CZSC_SIGNAL_QUALITY_STRONG : 0.0f;
+    float fExpected = 0.0f;
+    if (i == 32)
+    {
+      fExpected = (float)CZSC_SIGNAL_QUALITY_STRONG;
+    }
+    else if (i == 28)
+    {
+      fExpected = (float)CZSC_SIGNAL_QUALITY_CONFIRMED;
+    }
     if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
@@ -2162,11 +2211,13 @@ static bool TestFirstCandidateMacdUpgradesQuality()
 
 static bool TestCenterAccumulatesGGDD()
 {
+  // 进入段(0->4)不算中枢；中枢由其后三笔(4->8、8->12、12->16)重叠构成。
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
 
   std::vector<Center> Centers = BuildCenters(Points);
   if (Centers.size() != 1)
@@ -2174,19 +2225,23 @@ static bool TestCenterAccumulatesGGDD()
     return false;
   }
 
-  // ZG/ZD 为重叠区间[4,9]，GG/DD 为全幅极值[1,10]
-  return NearlyEqual(Centers[0].fHigh, 9.0f) && NearlyEqual(Centers[0].fLow, 4.0f) &&
-         NearlyEqual(Centers[0].fTop, 10.0f) && NearlyEqual(Centers[0].fBottom, 1.0f);
+  // ZG/ZD 为三段重叠区间[5,9]，GG/DD 为三段全幅极值[4,10]
+  return NearlyEqual(Centers[0].fHigh, 9.0f) && NearlyEqual(Centers[0].fLow, 5.0f) &&
+         NearlyEqual(Centers[0].fTop, 10.0f) && NearlyEqual(Centers[0].fBottom, 4.0f);
 }
 
 static bool TestCenterExtendUpdatesGGDD()
 {
+  // 进入段(0->4)不算中枢；中枢三笔(4->8、8->12、12->16)初成，GG=9；
+  // 其后两段(16->20、20->24)仍与中枢重叠故延伸：末段创新高 11 把 GG 从 9 扩张到 11，ZD 收缩到 7。
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 8));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 9));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 6));
-  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 7));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 11));
 
   std::vector<Center> Centers = BuildCenters(Points);
   if (Centers.size() != 1)
@@ -2194,10 +2249,10 @@ static bool TestCenterExtendUpdatesGGDD()
     return false;
   }
 
-  // 延伸段(高点10)把 GG 从初始 9 扩张到 10，而 ZG/ZD 仍是收缩后的重叠区间
-  return (Centers[0].nEnd == 16) &&
-         NearlyEqual(Centers[0].fHigh, 8.0f) && NearlyEqual(Centers[0].fLow, 6.0f) &&
-         NearlyEqual(Centers[0].fTop, 10.0f) && NearlyEqual(Centers[0].fBottom, 5.0f);
+  // 延伸把 GG 从初始 9 扩张到 11、ZD 从 6 收缩到 7；ZG=8（min 8,9,8），DD=5（min 5,6,6）
+  return (Centers[0].nEnd == 24) &&
+         NearlyEqual(Centers[0].fHigh, 8.0f) && NearlyEqual(Centers[0].fLow, 7.0f) &&
+         NearlyEqual(Centers[0].fTop, 11.0f) && NearlyEqual(Centers[0].fBottom, 5.0f);
 }
 
 static bool TestClassifyCenterRelationUp()
@@ -2270,7 +2325,7 @@ static bool TestWriteCenterRelationSignalMarks()
 
 static bool TestFunc11WritesCenterRelation()
 {
-  const int nCount = 25;
+  const int nCount = 41;
   float pIn[nCount];
   float pHigh[nCount];
   float pLow[nCount];
@@ -2284,7 +2339,8 @@ static bool TestFunc11WritesCenterRelation()
     pOut[i] = -1;
   }
 
-  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)，全幅区间重叠 → 中枢扩展
+  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)：中枢1全幅[4,20]、中枢2全幅[15,19]，
+  // 全幅区间重叠 → 中枢关系判为扩展，在后中枢起点(index24)标记 2。
   pIn[0] = -1;
   pHigh[0] = pLow[0] = 1;
   pIn[4] = 1;
@@ -2292,19 +2348,27 @@ static bool TestFunc11WritesCenterRelation()
   pIn[8] = -1;
   pHigh[8] = pLow[8] = 4;
   pIn[12] = 1;
-  pHigh[12] = pLow[12] = 12;
+  pHigh[12] = pLow[12] = 9;
   pIn[16] = -1;
-  pHigh[16] = pLow[16] = 11;
+  pHigh[16] = pLow[16] = 5;
   pIn[20] = 1;
-  pHigh[20] = pLow[20] = 14;
+  pHigh[20] = pLow[20] = 20;
   pIn[24] = -1;
-  pHigh[24] = pLow[24] = 12;
+  pHigh[24] = pLow[24] = 15;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 19;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 16;
+  pIn[36] = 1;
+  pHigh[36] = pLow[36] = 18;
+  pIn[40] = -1;
+  pHigh[40] = pLow[40] = 17;
 
   Func11(nCount, pOut, pIn, pHigh, pLow);
 
   for (int i = 0; i < nCount; i++)
   {
-    float fExpected = (i == 12) ? 2.0f : 0.0f;  // 后中枢起点(index12)标记扩展
+    float fExpected = (i == 24) ? 2.0f : 0.0f;  // 后中枢起点(index24)标记扩展
     if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
