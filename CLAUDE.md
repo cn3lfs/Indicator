@@ -39,8 +39,9 @@
 原始K线 H/L
   └ BuildMergedBars   包含处理(第62/65课)
       └ BuildFractals 顶/底分型(第62课)
-          └ BuildStrokes 笔(第62课)
-              └ BuildSegmentPoints / BuildLineSegmentPoints 线段点 / 线段(第67/71课)
+          └ BuildStrokes 笔(第62课, 端点序列支持延伸/中继与破坏回退, 非即时封闭)
+              └ BuildSegmentPoints 笔端点 / BuildLineSegmentPoints 启发式线段 /
+                BuildLineSegmentPointsByFeature 特征序列线段(第64/67课, 缺口须反向分型二次确认=线段被线段破坏)
                   └ BuildCenters 中枢(第17/18课, 含 ZG/ZD 与全幅 GG/DD)
                       ├ BuildTrendStructures 走势类型(盘整/趋势, 第17课)
                       ├ BuildCenterBreakouts 中枢突破 → 三类买卖点(第20课)

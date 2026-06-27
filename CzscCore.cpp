@@ -2116,8 +2116,28 @@ static std::vector<FeatureElement> BuildStandardFeatureSequence(const std::vecto
   return Seq;
 }
 
-// 在标准特征序列里找第一个分型（上升找顶分型/下降找底分型），返回线段终点的 StrokePoints 下标。
-// 注：第一种情况（无缺口）按原文在分型处结束；第二种情况（有缺口）此处作简化也在分型处确认。
+// 标准特征序列里是否存在分型（上升找顶分型 / 下降找底分型）
+static bool HasFeatureFractal(const std::vector<FeatureElement> &Seq, int nDir)
+{
+  for (std::size_t k = 1; k + 1 < Seq.size(); k++)
+  {
+    bool bFractal = (nDir > 0)
+                    ? ((Seq[k].fHigh > Seq[k - 1].fHigh) && (Seq[k].fHigh > Seq[k + 1].fHigh))
+                    : ((Seq[k].fLow < Seq[k - 1].fLow) && (Seq[k].fLow < Seq[k + 1].fLow));
+    if (bFractal)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 在标准特征序列里定位线段终点（第67课两种情况，并落实「线段只能被线段破坏」第64课）：
+//  找到分型后判断其第一、二元素间是否有缺口——
+//   · 无缺口（第一种）：线段即在分型极点处结束；
+//   · 有缺口（第二种）：须「从分型极点起、反方向的特征序列也出现分型」才确认结束——即必须有一个
+//     反向的线段级别结构来破坏（上升线段要见 lower high+lower low、下降线段要见 higher low+higher
+//     high），否则该分型只是一笔级别扰动，线段延续、继续考察后续分型。
 static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
 {
   std::vector<FeatureElement> Seq = BuildStandardFeatureSequence(P, nStart, nDir);
@@ -2126,12 +2146,30 @@ static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t
     bool bFractal = (nDir > 0)
                     ? ((Seq[k].fHigh > Seq[k - 1].fHigh) && (Seq[k].fHigh > Seq[k + 1].fHigh))
                     : ((Seq[k].fLow < Seq[k - 1].fLow) && (Seq[k].fLow < Seq[k + 1].fLow));
-    if (bFractal)
+    if (!bFractal)
+    {
+      continue;
+    }
+
+    // 缺口：构成分型的第一元素(k-1)与第二元素(k)无重合区间
+    bool bGap = (nDir > 0)
+                ? (Seq[k].fLow > Seq[k - 1].fHigh)
+                : (Seq[k].fHigh < Seq[k - 1].fLow);
+    if (!bGap)
+    {
+      return Seq[k].nPeak;  // 第一种情况：无缺口，线段在分型极点处结束
+    }
+
+    // 第二种情况：从分型极点开始的反向特征序列须出现分型，才算被反向线段破坏（真破坏）
+    std::vector<FeatureElement> Rev =
+        BuildStandardFeatureSequence(P, (std::size_t)Seq[k].nPeak, -nDir);
+    if (HasFeatureFractal(Rev, -nDir))
     {
       return Seq[k].nPeak;
     }
+    // 否则线段延续，继续考察后续分型
   }
-  return -1;  // 未出现分型 → 线段尚未完成
+  return -1;  // 未出现可确认的分型 → 线段尚未完成
 }
 
 // 特征序列法划分线段（第67课），与 BuildLineSegmentPoints 的启发式并存
