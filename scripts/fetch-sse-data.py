@@ -11,7 +11,7 @@
 from tqcenter import tq
 
 OUT = r"D:\github\czsc-tdx\tests\SseIndexDaily.h"
-COUNT = 500
+COUNT = 2000
 CODE = "000001.SH"
 
 tq.initialize(__file__)
@@ -36,6 +36,7 @@ highs = col("High")
 lows = col("Low")
 closes = col("Close")
 vols = col("Volume") or col("Amount")
+dates = [str(d)[:10] for d in df["High"][CODE].index]  # YYYY-MM-DD，供人工按日期比对
 n = len(highs)
 
 
@@ -55,6 +56,8 @@ lines = [
 ]
 if vols is not None:
     lines.append(arr("SSE_DAILY_VOLUME", vols))
+lines.append("static const char *SSE_DAILY_DATE[SSE_DAILY_COUNT] = {%s};"
+             % ",".join('"%s"' % d for d in dates))
 lines.append("#endif")
 
 with open(OUT, "w", encoding="utf-8") as f:
