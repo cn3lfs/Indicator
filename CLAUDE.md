@@ -28,6 +28,15 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 
 数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续等）见 `CzscCore.h` 注释。
 
+## 配置架构（CzscConfig）
+
+可选的算法分支集中为 `CzscConfig`（三维：`nStrokeType` 笔类型、`nStrokeEnd` 笔结束、
+`nCenterUnit` 中枢构件）。`DefaultConfig()` 复现历史默认行为，`DecodeConfig(码)` 把单个数字码
+（个位=笔类型/十位=笔结束/百位=中枢构件）解出配置。`BuildStrokes(Fractals, config)` 与
+`BuildConfiguredPoints(H/L, config)` 受配置驱动；`Func20` 是统一入口（`TDXDLL1(20,H,L,码)`），
+输出端点信号喂给 2-5 号即得对应的笔/线段中枢。新增可选分支时优先扩展 `CzscConfig` 并经 `Func20`
+暴露，**保持默认值=现状以零回归**，而非新增独立 Func。
+
 ## 通达信导出函数（编号见 `Main.cpp` 的 `Info[]`，公式示例见 `README.md`）
 
 | 编号 | 函数 | 输出 | 缠论依据 |
@@ -41,9 +50,13 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 12 | Func12 | 一类买卖点背驰-转折(1扩展/2盘整/3反趋势) | 第29课 |
 | 13 | Func13 | 三类买卖点后续(1扩张/2新生) | 第21课 |
 | 14 | Func14 | 一类买卖点背驰段(买1/2, 卖-1/-2) | 第27课 |
+| 15 / 16 | Func15 / Func16 | 均线差(体位/力度) / 均线吻(飞/唇/湿) | 第11/15课 |
+| 17 | Func17 | 即时背驰预警(1见顶/-1见底) | 第15课 |
+| 18 / 19 | Func18 / Func19 | 笔(新笔标准) / 线段(特征序列法) | 第62-67课 |
+| 20 | Func20 | 配置驱动端点(笔/线段中枢) | 见上「配置架构」 |
 
 新增输出函数时：在 `CzscCore.h` 声明、`CzscCore.cpp` 实现、`Main.cpp` 注册 `{n,&Funcn}`、
-`README.md` 补公式、`tests/` 加用例。
+`README.md` 补公式、`tests/` 加用例。可配置的分支优先并入 `CzscConfig` 经 `Func20` 暴露。
 
 ## 本机构建与测试（重要：无 make/g++/mingw）
 

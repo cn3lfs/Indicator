@@ -69,6 +69,32 @@ static float AbsF(float fValue)
   return (fValue < 0) ? -fValue : fValue;
 }
 
+// 默认配置：严格笔 + 严格极值收笔 + 笔中枢，复现历史默认行为
+CzscConfig DefaultConfig()
+{
+  CzscConfig Config;
+  Config.nStrokeType = CZSC_STROKE_STRICT;
+  Config.nStrokeEnd = CZSC_END_STRICT;
+  Config.nCenterUnit = CZSC_UNIT_STROKE;
+  return Config;
+}
+
+// 把单个数字码解出三维配置：个位=笔类型、十位=笔结束、百位=中枢构件；非法值回落默认
+CzscConfig DecodeConfig(float fCode)
+{
+  int nCode = (int)(fCode + 0.5f);
+  if (nCode < 0)
+  {
+    nCode = 0;
+  }
+
+  CzscConfig Config;
+  Config.nStrokeType = (nCode % 10 == CZSC_STROKE_NEW) ? CZSC_STROKE_NEW : CZSC_STROKE_STRICT;
+  Config.nStrokeEnd = ((nCode / 10) % 10 == CZSC_END_SECOND) ? CZSC_END_SECOND : CZSC_END_STRICT;
+  Config.nCenterUnit = ((nCode / 100) % 10 == CZSC_UNIT_SEGMENT) ? CZSC_UNIT_SEGMENT : CZSC_UNIT_STROKE;
+  return Config;
+}
+
 static MergedBar MakeMergedBar(int nIndex, float fHigh, float fLow)
 {
   MergedBar Bar;
@@ -1688,9 +1714,10 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
   return Fractals;
 }
 
-// 由相邻顶底连成笔。bStrict=false（默认）：按原始K线间隔≥4（共5根成一笔，现状）；
-// bStrict=true：新笔标准，按合并K线间隔≥4（两分型间至少1根独立合并K线，第62/65课）
-std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, bool bStrict)
+// 由相邻顶底连成笔（受配置驱动）：
+//  笔类型 STRICT（严格笔）按原始K线间隔≥4，NEW（新笔）按合并K线间隔≥4（第62/65课）；
+//  笔结束 STRICT 取最严格极值收笔，SECOND 保留首个同型分型（允许次高/次低点）。
+std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const CzscConfig &Config)
 {
   std::vector<Stroke> Strokes;
   if (Fractals.empty())
@@ -1704,15 +1731,16 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, bool bStr
     const Fractal &Current = Fractals[i];
     if (Current.nType == Candidate.nType)
     {
-      if (IsMoreExtreme(Candidate, Current))
+      if ((Config.nStrokeEnd == CZSC_END_STRICT) && IsMoreExtreme(Candidate, Current))
       {
         Candidate = Current;
       }
       continue;
     }
 
-    int nGap = bStrict ? (Current.nMergedIndex - Candidate.nMergedIndex)
-                       : (Current.nIndex - Candidate.nIndex);
+    int nGap = (Config.nStrokeType == CZSC_STROKE_NEW)
+               ? (Current.nMergedIndex - Candidate.nMergedIndex)
+               : (Current.nIndex - Candidate.nIndex);
     if (nGap < 4)
     {
       continue;
@@ -2927,7 +2955,9 @@ void Func18(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
 
   std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
   std::vector<Fractal> Fractals = BuildFractals(Bars);
-  std::vector<Stroke> Strokes = BuildStrokes(Fractals, true);
+  CzscConfig Config = DefaultConfig();
+  Config.nStrokeType = CZSC_STROKE_NEW;
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals, Config);
   std::vector<SegmentPoint> Points = BuildSegmentPoints(Strokes);
   WriteSegmentSignal(nCount, pOut, Points);
 }
@@ -2948,5 +2978,46 @@ void Func19(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   std::vector<Fractal> Fractals = BuildFractals(Bars);
   std::vector<Stroke> Strokes = BuildStrokes(Fractals);
   std::vector<SegmentPoint> Points = BuildLineSegmentPointsByFeature(Strokes);
+  WriteSegmentSignal(nCount, pOut, Points);
+}
+
+// 按配置从 H/L 直接产出供中枢使用的端点：笔类型/笔结束驱动笔，中枢构件选笔端点或线段端点
+std::vector<SegmentPoint> BuildConfiguredPoints(int nCount, float *pHigh, float *pLow, const CzscConfig &Config)
+{
+  std::vector<SegmentPoint> Points;
+  if ((nCount <= 0) || (pHigh == 0) || (pLow == 0))
+  {
+    return Points;
+  }
+
+  std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals, Config);
+  if (Config.nCenterUnit == CZSC_UNIT_SEGMENT)
+  {
+    Points = BuildLineSegmentPoints(Strokes);
+  }
+  else
+  {
+    Points = BuildSegmentPoints(Strokes);
+  }
+  return Points;
+}
+
+//=============================================================================
+// 输出函数20号：配置驱动的端点信号。第4参 pTime[0] 为配置码（笔类型/笔结束/中枢构件），
+// 输出可直接喂给 2-5 号中枢/买卖点函数，从而得到对应的笔中枢或线段中枢（第17/62/65/67课）
+//=============================================================================
+
+void Func20(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow))
+  {
+    return;
+  }
+
+  float fCode = (pTime != 0) ? pTime[0] : 0;
+  CzscConfig Config = DecodeConfig(fCode);
+  std::vector<SegmentPoint> Points = BuildConfiguredPoints(nCount, pHigh, pLow, Config);
   WriteSegmentSignal(nCount, pOut, Points);
 }

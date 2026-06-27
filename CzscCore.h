@@ -85,6 +85,35 @@ enum CzscKissType
   CZSC_KISS_WET  = 3,  // 湿吻：短均线升破/跌破长均线（反抗最强，转折多由此始）
 };
 
+// 笔类型：严格笔=按原始K线间隔；新笔=按合并K线间隔（第62/65课）
+enum CzscStrokeType
+{
+  CZSC_STROKE_STRICT = 0,
+  CZSC_STROKE_NEW    = 1,
+};
+
+// 笔结束：相邻同型分型取最严格极值，还是保留首个（允许次高/次低点收笔）
+enum CzscStrokeEnd
+{
+  CZSC_END_STRICT = 0,  // 严格最高/最低点
+  CZSC_END_SECOND = 1,  // 允许次高/次低点
+};
+
+// 中枢构件：中枢由笔端点构成（笔中枢），还是由线段端点构成（线段中枢）
+enum CzscCenterUnit
+{
+  CZSC_UNIT_STROKE  = 0,  // 笔中枢
+  CZSC_UNIT_SEGMENT = 1,  // 线段中枢
+};
+
+// 缠论计算配置：把可选的笔类型/笔结束/中枢构件集中为一处配置
+struct CzscConfig
+{
+  int nStrokeType;   // 见 CzscStrokeType
+  int nStrokeEnd;    // 见 CzscStrokeEnd
+  int nCenterUnit;   // 见 CzscCenterUnit
+};
+
 // 原始 K 线（下标 + 高低价）
 struct KBar
 {
@@ -216,14 +245,20 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
 std::vector<float> ComputeMovingAverage(int nCount, const float *pPrice, int nPeriod);
 std::vector<int> ClassifyMaKisses(const std::vector<float> &Short, const std::vector<float> &Long);
 
+// 配置：默认配置复现现状；DecodeConfig 把单个数字码解出三维配置（供通达信传参）
+CzscConfig DefaultConfig();
+CzscConfig DecodeConfig(float fCode);
+
 // 形态学流水线：合并K线 → 分型 → 笔 → 线段点 / 线段；以及由信号还原线段点
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow);
 std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars);
-std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, bool bStrict = false);
+std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const CzscConfig &Config = DefaultConfig());
 std::vector<SegmentPoint> BuildSegmentPoints(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
+// 按配置（笔类型/笔结束/中枢构件）从 H/L 直接产出供中枢使用的端点（笔端点或线段端点）
+std::vector<SegmentPoint> BuildConfiguredPoints(int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
 
 // 中枢与走势类型，以及中枢关系/三买后续/背驰-转折的分类
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
@@ -280,7 +315,8 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 //  1 线段点  2/3 中枢高/低  4 中枢起止  5 三类买卖点  6 形态买卖点  7 强度  8 斜率
 //  9 线段(笔)  10 信号质量  11 中枢关系  12 背驰-转折  13 三买后续  14 背驰段
 //  15 均线差(体位符号/力度幅度)  16 均线吻(飞吻1/唇吻2/湿吻3)  17 即时背驰预警
-//  18 笔(新笔标准)  19 线段(特征序列法)
+//  18 笔(新笔标准)  19 线段(特征序列法)  20 配置驱动端点(笔/线段中枢)
+// 配置码(20号的第4参 pTime[0])：个位=笔类型(0严格/1新)，十位=笔结束(0严格/1次高)，百位=中枢构件(0笔/1线段)
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
@@ -300,5 +336,6 @@ void Func16(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func17(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func18(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func19(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func20(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 
 #endif
