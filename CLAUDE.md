@@ -43,14 +43,18 @@
               └ BuildSegmentPoints 笔端点 / BuildLineSegmentPoints 启发式线段 /
                 BuildLineSegmentPointsByFeature 线段(第64/67课, 逆向笔 higher high+higher low/lower low+lower
                 high 即反向线段破坏; 终点是逆向笔内端, 不一定是极值)
-                  └ BuildCenters 中枢(第17/18课, 含 ZG/ZD 与全幅 GG/DD)
-                      ├ BuildTrendStructures 走势类型(盘整/趋势, 第17课)
-                      ├ BuildCenterBreakouts 中枢突破 → 三类买卖点(第20课)
+                  └ BuildCenters 中枢(第17/20课: 不含进入段第1笔, 由第2/3/4笔重叠成枢, 带方向
+                    nDirection ±1[进入向上=上升中枢/向下=下降中枢], 不与后中枢共用端点)
+                      ├ BuildTrendStructures 走势类型(盘整/趋势=≥2同向中枢, 第17课)
+                      ├ BuildCenterBreakouts 中枢首次离开+回试 → 三类买卖点(第20课)
                       └ BuildTradingSignalCandidates 三类买卖点候选(第20/21课)
 AssignSegmentEnergy / ComputeMacdHistogram 给线段点附 MACD 柱面积(动力学, 第24课)
 MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 ```
 
+买卖点判定（第20/21课，CzscCore.h/cpp）：**一类**针对趋势(≥2同向中枢)末端背驰，且**同一趋势只保留价格
+最极端的一个**(去重，否则趋势内每个创新高/低背驰都各成一类→泛滥)；**二类**紧随一类(一买后第一个不
+创新低=二买)；**三类**=中枢被首次离开(突破ZG/ZD)后回试不破ZG/ZD(上升中枢→三买、下降中枢→三卖)。
 数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续等）见 `CzscCore.h` 注释。
 
 ## 架构：CzscAnalyzer + 缓存 + 配置 + Func30
