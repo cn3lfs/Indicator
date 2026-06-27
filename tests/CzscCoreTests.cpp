@@ -226,6 +226,48 @@ static bool TestRealSseNewBiNotFewerThanStrict()
   return (New.size() >= Strict.size()) && !Strict.empty();
 }
 
+// 真实上证：买卖点结构良好——编码合法；三买/三卖都存在（曾因中枢首尾相连而全无）；
+// 一类经「每趋势一个」去重后不泛滥（8 年日线远少于笔数）
+static bool TestRealSseSignalsWellFormed()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> SP = BuildSegmentPoints(Strokes);
+  std::vector<Center> Ce = BuildCenters(SP);
+  std::vector<TrendStructure> Tr = BuildTrendStructures(Ce);
+  std::vector<CenterBreakout> Bk = BuildCenterBreakouts(SP, Ce, Tr);
+  std::vector<TradingSignalCandidate> Ca = BuildTradingSignalCandidates(SP, Ce, Tr, Bk);
+
+  int nFirst = 0;
+  int nThirdBuy = 0;
+  int nThirdSell = 0;
+  for (std::size_t i = 0; i < Ca.size(); i++)
+  {
+    float s = Ca[i].fSignal;
+    bool bValid = NearlyEqual(s, 1) || NearlyEqual(s, 2) || NearlyEqual(s, 3) ||
+                  NearlyEqual(s, 11) || NearlyEqual(s, 12) || NearlyEqual(s, 13);
+    if (!bValid)
+    {
+      return false;  // 信号编码须合法
+    }
+    if (NearlyEqual(s, 1) || NearlyEqual(s, 11)) nFirst++;
+    if (NearlyEqual(s, 3)) nThirdBuy++;
+    if (NearlyEqual(s, 13)) nThirdSell++;
+  }
+  if ((nThirdBuy == 0) || (nThirdSell == 0))
+  {
+    return false;  // 三买/三卖须都能检出
+  }
+  if (nFirst > 15)
+  {
+    return false;  // 一类去重后不泛滥
+  }
+  return true;
+}
+
 static bool TestFunc1WritesCompatibleSignal()
 {
   const int nCount = 7;
@@ -3502,6 +3544,10 @@ int main()
   if (!TestRealSseNewBiNotFewerThanStrict())
   {
     return 117;
+  }
+  if (!TestRealSseSignalsWellFormed())
+  {
+    return 118;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {
