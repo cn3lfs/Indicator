@@ -59,6 +59,7 @@ void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *p
   ComputeShortLongMa(nCount, pHigh, pLow, &An.MaShort, &An.MaLong);
   An.Kiss = ClassifyMaKisses(An.MaShort, An.MaLong);
   FillAuxVolume(An, nCount, pHigh, pLow);
+  An.KissVol = ClassifyMaKissesWithVolume(An.MaShort, An.MaLong, An.Volume);  // 带量校验，无量退化为纯价吻
 }
 
 //=============================================================================
@@ -86,11 +87,22 @@ static unsigned int HashHL(const float *pHigh, const float *pLow, int nCount)
   return hHash;
 }
 
-// 旁路收盘价指纹：校验通过则为其 FNV，否则 0；使「是否用了真实 C」进入缓存键，注册变化即失效
+// 旁路指纹：校验通过的收盘价（+成交量）的 FNV，否则 0；使「是否用了真实 C/V」进入缓存键，
+// 注册的 C 或 V 变化即失效重算（KissVol 取决于 V，故指纹须同时覆盖成交量）
 static unsigned int HashAux(int nCount, float *pHigh, float *pLow)
 {
   const std::vector<float> *pVC = GetValidatedClose(nCount, pHigh, pLow);
-  return pVC ? FnvAccumFloats(2166136261u, &(*pVC)[0], nCount) : 0u;
+  if (pVC == 0)
+  {
+    return 0u;
+  }
+  unsigned int hHash = FnvAccumFloats(2166136261u, &(*pVC)[0], nCount);
+  const std::vector<float> *pVV = GetValidatedVolume(nCount, pHigh, pLow);
+  if ((pVV != 0) && ((int)pVV->size() == nCount))
+  {
+    hHash = FnvAccumFloats(hHash, &(*pVV)[0], nCount);
+  }
+  return hHash;
 }
 
 const CzscAnalyzer &GetOrBuildSignalAnalyzer(int nCount, float *pIn, float *pHigh, float *pLow)

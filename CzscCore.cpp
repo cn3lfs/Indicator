@@ -621,6 +621,10 @@ static const int   MA_SHORT_PERIOD  = 5;
 static const int   MA_LONG_PERIOD   = 20;
 static const float MA_LIP_THRESHOLD = 0.01f;  // 唇吻：短长均线相对间距 < 1% 视为贴近
 
+static const int   VOL_MA_PERIOD     = 10;    // 成交量均线周期（放量基线）
+static const int   VOL_TRAP_LOOKBACK = 3;     // 湿吻前若干根（含当根）取近端平均量
+static const float VOL_TRAP_RATIO    = 1.5f;  // 近端量 > 量均线*该倍数 视为放量（骗线嫌疑）
+
 // 简单移动平均；序列开头不足一个周期时用已有数据的部分窗口平均
 std::vector<float> ComputeMovingAverage(int nCount, const float *pPrice, int nPeriod)
 {
@@ -683,6 +687,44 @@ std::vector<int> ClassifyMaKisses(const std::vector<float> &Short, const std::ve
       {
         Kiss[i] = CZSC_KISS_FLY;
       }
+    }
+  }
+  return Kiss;
+}
+
+// 在纯价吻基础上用成交量校验湿吻（第12课）：转折处的湿吻若其前 N 根近端平均量显著高于成交量均线
+// （放量），多为诱多/诱空的骗线 → 标 CZSC_KISS_WET_TRAP。无成交量（空）时退化为纯价吻分类。
+std::vector<int> ClassifyMaKissesWithVolume(const std::vector<float> &Short, const std::vector<float> &Long,
+                                            const std::vector<float> &Volume)
+{
+  std::vector<int> Kiss = ClassifyMaKisses(Short, Long);
+  std::size_t n = Kiss.size();
+  if ((n == 0) || (Volume.size() != n))
+  {
+    return Kiss;  // 无量或长度不符 → 退化为纯价吻
+  }
+
+  std::vector<float> VolMa = ComputeMovingAverage((int)n, &Volume[0], VOL_MA_PERIOD);
+  for (std::size_t i = 0; i < n; i++)
+  {
+    if (Kiss[i] != CZSC_KISS_WET)
+    {
+      continue;  // 仅校验湿吻（转折信号）
+    }
+    // 近端平均量（湿吻当根及前若干根）
+    float fRecent = 0;
+    int nLook = 0;
+    for (int k = (int)i; (k >= 0) && (k > (int)i - VOL_TRAP_LOOKBACK); k--)
+    {
+      fRecent += Volume[(std::size_t)k];
+      nLook++;
+    }
+    fRecent /= (nLook > 0) ? (float)nLook : 1.0f;
+
+    float fMa = VolMa[i];
+    if ((fMa > 0) && (fRecent > fMa * VOL_TRAP_RATIO))
+    {
+      Kiss[i] = CZSC_KISS_WET_TRAP;  // 放量湿吻 → 骗线嫌疑
     }
   }
   return Kiss;
@@ -3184,6 +3226,16 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       }
       break;
     }
+    case 13:                                                                 // 带量校验的吻（湿吻放量=骗线嫌疑4，需先 Func40 注册 V）
+      ClearOutput(nCount, pOut);
+      if ((int)An.KissVol.size() >= nCount)
+      {
+        for (int i = 0; i < nCount; i++)
+        {
+          pOut[i] = (float)An.KissVol[(std::size_t)i];
+        }
+      }
+      break;
     default: ClearOutput(nCount, pOut); break;
   }
 }

@@ -83,6 +83,7 @@ enum CzscKissType
   CZSC_KISS_FLY  = 1,  // 飞吻：短均线略走平即继续原趋势（反抗最弱）
   CZSC_KISS_LIP  = 2,  // 唇吻：短均线贴近长均线但不破
   CZSC_KISS_WET  = 3,  // 湿吻：短均线升破/跌破长均线（反抗最强，转折多由此始）
+  CZSC_KISS_WET_TRAP = 4,  // 湿吻+放量：转折处异常放量，骗线嫌疑（第12课，需旁路成交量校验）
 };
 
 // 笔类型：严格笔=按原始K线间隔；新笔=按合并K线间隔（第62/65课）
@@ -259,6 +260,7 @@ struct CzscAnalyzer
   std::vector<float>                  MaShort;     // 仅 H/L 家族填充
   std::vector<float>                  MaLong;
   std::vector<int>                    Kiss;
+  std::vector<int>                    KissVol;     // 带成交量校验的吻（湿吻放量=骗线嫌疑），无量退化为纯价吻
   std::vector<float>                  Volume;      // 旁路注册的成交量（未注册则空）
 };
 
@@ -269,6 +271,8 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
 // 均线系统（第11-15课）：简单移动平均；短长均线的吻分类（飞吻/唇吻/湿吻）
 std::vector<float> ComputeMovingAverage(int nCount, const float *pPrice, int nPeriod);
 std::vector<int> ClassifyMaKisses(const std::vector<float> &Short, const std::vector<float> &Long);
+std::vector<int> ClassifyMaKissesWithVolume(const std::vector<float> &Short, const std::vector<float> &Long,
+                                            const std::vector<float> &Volume);
 void ComputeShortLongMa(int nCount, float *pHigh, float *pLow,
                         std::vector<float> *pShort, std::vector<float> *pLong);
 
