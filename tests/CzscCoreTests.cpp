@@ -3211,6 +3211,57 @@ static bool TestKissVolumeTrap()
   return true;
 }
 
+// 向上笔中继延伸：顶 D1 后回踩不足一笔、又创新高到 D2，原向上笔应延伸到 D2（D1 变中继）
+static bool TestStrokeRelayExtendsUp()
+{
+  std::vector<Fractal> Fractals;
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));   // B0 起点
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));     // D1 顶
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 6, 9, 8));   // B1 回踩(gap 6-4=2<4, 不创新低)
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 10, 12, 7));    // D2 更高顶
+
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  if (Strokes.size() != 1) return false;
+  if (Strokes[0].Start.nIndex != 0) return false;
+  if (Strokes[0].End.nIndex != 10) return false;        // 延伸到 D2，而非停在 D1(idx4)
+  if (!NearlyEqual(Strokes[0].End.fHigh, 12)) return false;
+  return true;
+}
+
+// 向下笔中继延伸：底 B1 后反弹不足一笔、又创新低到 B2，原向下笔应延伸到 B2（B1 变中继）
+static bool TestStrokeRelayExtendsDown()
+{
+  std::vector<Fractal> Fractals;
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 0, 20, 15));    // T0 起点
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 4, 13, 10)); // B1 底
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 6, 11, 9));     // T1 反弹(gap 2<4, 不创新高)
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 10, 12, 8)); // B2 更低底
+
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  if (Strokes.size() != 1) return false;
+  if (Strokes[0].Start.nIndex != 0) return false;
+  if (Strokes[0].End.nIndex != 10) return false;        // 延伸到 B2，而非停在 B1(idx4)
+  if (!NearlyEqual(Strokes[0].End.fLow, 8)) return false;
+  return true;
+}
+
+// 破坏回退：D1→B1 本是有效一笔，但其后立即创新高 D2(反超 D1) 且不足一笔，B1 被破坏，整段并为 B0→D2 一笔
+static bool TestStrokeBrokenByNewExtreme()
+{
+  std::vector<Fractal> Fractals;
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));   // B0
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));     // D1
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 7, 3));   // B1 (gap 4，本可成笔)
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 10, 12, 7));    // D2 反超 D1，gap(10-8)=2<4
+
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  if (Strokes.size() != 1) return false;                // B1 被破坏弹出 → 单笔
+  if (Strokes[0].Start.nIndex != 0) return false;
+  if (Strokes[0].End.nIndex != 10) return false;        // 延伸到 D2
+  if (!NearlyEqual(Strokes[0].End.fHigh, 12)) return false;
+  return true;
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -3648,6 +3699,18 @@ int main()
   if (!TestKissVolumeTrap())
   {
     return 109;
+  }
+  if (!TestStrokeRelayExtendsUp())
+  {
+    return 110;
+  }
+  if (!TestStrokeRelayExtendsDown())
+  {
+    return 111;
+  }
+  if (!TestStrokeBrokenByNewExtreme())
+  {
+    return 112;
   }
 
   return 0;
