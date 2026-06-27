@@ -41,7 +41,7 @@
       └ BuildFractals 顶/底分型(第62课)
           └ BuildStrokes 笔(第62课, 端点序列支持延伸/中继与破坏回退, 非即时封闭)
               └ BuildSegmentPoints 笔端点 / BuildLineSegmentPoints 启发式线段 /
-                BuildLineSegmentPointsByFeature 特征序列线段(第64/67课, 缺口须反向分型二次确认=线段被线段破坏)
+                BuildLineSegmentPointsByFeature 线段(第64/71课, 反向走势第三笔破第一笔结束位置=线段被线段破坏)
                   └ BuildCenters 中枢(第17/18课, 含 ZG/ZD 与全幅 GG/DD)
                       ├ BuildTrendStructures 走势类型(盘整/趋势, 第17课)
                       ├ BuildCenterBreakouts 中枢突破 → 三类买卖点(第20课)
