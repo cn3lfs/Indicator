@@ -2772,33 +2772,29 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
   return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
 }
 
-// 中继：特征序列顶分型(顶15@idx12)其后被更高的顶(25@idx28)突破 → 只是中继，
-// 反向走势没成线段，线段不在 idx12 断开，而是延伸到真正最高点 idx28（修复「线段变平/被跳过」前的回归）
+// 中继：顶15(@idx4) 之后仅一笔回抽便创新高（反向第三笔未破第一笔结束位置）→ 顶15 只是中继，
+// 线段不在此断开，而是延伸到真正最高点顶25(@idx12)；之后顶25被反向线段(25→20→23→18)破坏才结束
 static bool TestFeatureSegmentExtendsPastRelay()
 {
   std::vector<Fractal> F;
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 6, 1));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 5));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 6, 5));     // 低5
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 15, 11));     // 顶15（中继候选）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 10, 9));   // 低9
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 14, 10));     // 顶14 < 15
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 9, 8));    // 低8
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 25, 20));     // 顶25 突破15 → 中继确认
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 14, 13));  // 低13
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 22, 18));     // 顶22 < 25
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 40, 11, 10));  // 低10
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 6, 1));     // 起点 低1
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 15, 11));      // 顶15（中继）
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 16, 12));   // 低12（仅一笔回抽）
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));     // 顶25（真正最高）
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 24, 20));  // 低20
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 19));     // 顶23 < 25
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 22, 18));  // 低18（反向第三笔破第一笔结束20）
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
   std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
-  bool bHas28 = false;
+  bool bHas12 = false;
   for (std::size_t i = 0; i < Line.size(); i++)
   {
-    if (Line[i].nIndex == 12) return false;    // 中继顶不应成为线段端点
-    if (Line[i].nIndex == 28) bHas28 = true;   // 线段延伸到真正最高点
+    if (Line[i].nIndex == 4) return false;     // 中继顶15 不应成为线段端点
+    if (Line[i].nIndex == 12) bHas12 = true;   // 线段延伸到真正最高点顶25
   }
-  return bHas28;
+  return bHas12;
 }
 
 // 第67课第二种情况：缺口顶分型之后走出反向线段（反向特征序列出现底分型）→ 确认线段在该顶结束
