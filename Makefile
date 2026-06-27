@@ -35,8 +35,9 @@ FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
 
 # Objectives
+BUILD_DIR=build
 OBJECT1=Main.o CzscCore.o CzscAnalyzer.o
-TARGET1=CZSC.dll
+TARGET1=$(BUILD_DIR)/CZSC.dll
 TEST_OBJECTS=CzscCore.o CzscAnalyzer.o tests/CzscCoreTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
 TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
@@ -63,9 +64,13 @@ check-mingw32:
 	@command -v $(MINGW32_PREFIX)g++
 	@command -v $(MINGW32_PREFIX)windres
 
-$(TARGET1) : $(OBJECTS)
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+# 静态链接 libgcc/libstdc++(+winpthread)，使 DLL 自包含，免在通达信机器另装 MinGW 运行时
+$(TARGET1) : $(OBJECTS) | $(BUILD_DIR)
 	@echo [LD] $@
-	@$(CXX) -shared -o $@ $^ $(LDFLAGS)
+	@$(CXX) -shared -o $@ $^ -static -static-libgcc -static-libstdc++ $(LDFLAGS)
 
 debug: all
 	@echo [DB] $(TARGETS)
