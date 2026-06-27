@@ -108,11 +108,13 @@ cd D:/github/czsc-tdx
 - `Main.cpp` 因 `FxIndicator.h` 含 windows.h，clang 仅能 `-fsyntax-only` 检查；真正的 DLL 构建
   走 WSL2 MinGW（`make mingw32`，本机 `wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make mingw32'`）。
   **不要为让 clang 过编译而改 pack/windows 头。**
-- **发布产物统一在 `build/`**：`make mingw32` 输出 `build/CZSC.dll`（Makefile `TARGET1=build/CZSC.dll`）。
-  链接加 `-static -static-libgcc -static-libstdc++` 使 DLL 自包含（仅依赖 `KERNEL32`/`msvcrt`），
-  免在通达信机器另装 MinGW 运行时。`build/CZSC.dll` 作为正式包**已纳入 git 跟踪**（覆盖发布即重新构建提交）。
-  打包/校验：`sh scripts/build-mingw32.sh`（check→原生测试→Win 测试构建→打 DLL）；
-  `i686-w64-mingw32-objdump -p build/CZSC.dll | grep "DLL Name"` 应只剩 KERNEL32/msvcrt。
+- **发布产物统一在 `build/`，32/64 双版本并存**：`make mingw32` → `build/CZSC.dll`（PE32，给 32 位通达信）；
+  `make mingw64` → `build/CZSC64.dll`（PE32+，给 64 位通达信，`x86_64-w64-mingw32-` 工具链，`TARGET1` 覆盖为
+  CZSC64.dll）。两版同源，导出/公式一致，仅指针宽度不同（`pack(1)`+cdecl 随架构自然移植，无需改头）。
+  链接均加 `-static -static-libgcc -static-libstdc++` 使 DLL 自包含（仅依赖 `KERNEL32`/`msvcrt`），
+  免在通达信机器另装 MinGW 运行时。两个 DLL 作为正式包**已纳入 git 跟踪**（覆盖发布即重新构建提交）。
+  打包/校验：`sh scripts/build-mingw32.sh` / `sh scripts/build-mingw64.sh`（均先 `make clean` 再 check→原生测试→
+  Win 测试构建→打 DLL）；`<prefix>objdump -p build/CZSC*.dll | grep "DLL Name"` 应只剩 KERNEL32/msvcrt。
 
 ## 测试约定
 

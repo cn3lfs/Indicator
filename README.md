@@ -64,23 +64,33 @@
 
 # 安装方法
 
-目前仅支持通达信软件使用。安装步骤：
+目前仅支持通达信软件使用。**按你的通达信位数选择对应 DLL**（位数不匹配会加载失败）：
 
-1. 将打包好的 `build/CZSC.dll` 复制到通达信安装目录下的 `T0002\dlls` 目录之中；
+| 通达信版本 | 复制哪个文件 |
+|------------|--------------|
+| 32 位（经典版） | `build/CZSC.dll` |
+| 64 位（新版） | `build/CZSC64.dll` |
+
+安装步骤：
+
+1. 将对应的 DLL 复制到通达信安装目录下的 `T0002\dlls` 目录之中；
 2. 在通达信「功能 → 公式系统 → 公式管理器」里把本 dll 加载到 **1 号 dll 插件**（公式中即用 `TDXDLL1(编号,...)` 调用）；
 3. 新建技术指标，粘贴下方示例公式即可。
 
-发布产物统一放在 **`build/`** 目录（构建脚本自动生成 `build/CZSC.dll`）。该 DLL 已**静态链接** MinGW 运行时
-（`libgcc`/`libstdc++`），自包含，无需在通达信机器另装任何运行库——仅依赖系统自带的 `KERNEL32.dll`/`msvcrt.dll`。
+发布产物统一放在 **`build/`** 目录。两个 DLL 均已**静态链接** MinGW 运行时（`libgcc`/`libstdc++`），自包含，
+无需在通达信机器另装任何运行库——仅依赖系统自带的 `KERNEL32.dll`/`msvcrt.dll`。导出函数与公式用法两版完全一致。
 
 # 编译方法
 
-通达信插件需要 32 位 Windows DLL。推荐在 WSL2 中使用 MinGW-w64 交叉编译，产物输出到 `build/CZSC.dll`：
+通达信插件需要 Windows DLL（32 位或 64 位）。推荐在 WSL2 中使用 MinGW-w64 交叉编译，产物输出到 `build/`：
 
 ```bash
 sudo apt update
-sudo apt install make g++ mingw-w64 gcc-mingw-w64-i686 g++-mingw-w64-i686 binutils-mingw-w64-i686
-make mingw32        # → build/CZSC.dll（已静态链接，自包含）
+sudo apt install make g++ mingw-w64 \
+  gcc-mingw-w64-i686 g++-mingw-w64-i686 binutils-mingw-w64-i686 \
+  gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 binutils-mingw-w64-x86-64
+make mingw32        # → build/CZSC.dll    （32 位，已静态链接，自包含）
+make mingw64        # → build/CZSC64.dll  （64 位，已静态链接，自包含）
 ```
 
 也可以直接运行仓库脚本安装工具链：
@@ -101,10 +111,11 @@ make mingw32-test
 make test
 ```
 
-检查工具链、运行测试并构建 DLL：
+检查工具链、运行测试并打包 DLL（脚本会先 `make clean` 再做 检查→原生测试→Win 测试构建→打 DLL）：
 
 ```bash
-sh scripts/build-mingw32.sh
+sh scripts/build-mingw32.sh    # 32 位 → build/CZSC.dll
+sh scripts/build-mingw64.sh    # 64 位 → build/CZSC64.dll
 ```
 
 # 配置（笔类型 / 笔结束 / 中枢构件）
