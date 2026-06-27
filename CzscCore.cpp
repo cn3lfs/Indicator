@@ -1476,6 +1476,46 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
         ClassifyReversalStrength(Points, Centers, (int)i, nCenter, SIGNAL_FIRST_SELL);
     }
   }
+
+  // 去重：一个趋势只有一个一类买卖点——同一趋势内的同向一类只保留价格最极端的（趋势顶/底处的背驰）。
+  // 否则趋势内每个创新高/低背驰都各成一卖/一买，造成泛滥（如一段上涨趋势出现多个一卖）。
+  std::vector<TradingSignalCandidate> Deduped;
+  for (std::size_t a = 0; a < pCandidates->size(); a++)
+  {
+    const TradingSignalCandidate &Ca = (*pCandidates)[a];
+    int nDir = (Ca.fSignal == SIGNAL_FIRST_BUY) ? -1 : 1;  // 一买←下跌趋势 / 一卖←上涨趋势
+    int nTrendA = -1;
+    FindLastTrendStructure(Structures, Ca.nIndex, nDir, &nTrendA);
+    float fA = (Ca.fSignal == SIGNAL_FIRST_BUY) ? Points[Ca.nPoint].fLow : Points[Ca.nPoint].fHigh;
+
+    bool bKeep = true;
+    for (std::size_t b = 0; b < pCandidates->size(); b++)
+    {
+      if ((b == a) || ((*pCandidates)[b].fSignal != Ca.fSignal))
+      {
+        continue;
+      }
+      const TradingSignalCandidate &Cb = (*pCandidates)[b];
+      int nTrendB = -1;
+      FindLastTrendStructure(Structures, Cb.nIndex, nDir, &nTrendB);
+      if (nTrendB != nTrendA)
+      {
+        continue;  // 不同趋势，各保留
+      }
+      float fB = (Cb.fSignal == SIGNAL_FIRST_BUY) ? Points[Cb.nPoint].fLow : Points[Cb.nPoint].fHigh;
+      bool bBmoreExtreme = (Ca.fSignal == SIGNAL_FIRST_BUY) ? (fB < fA) : (fB > fA);
+      if (bBmoreExtreme || ((AbsF(fB - fA) < 0.0001f) && (b < a)))
+      {
+        bKeep = false;  // 同趋势内 b 更极端（或同值取靠前）→ 丢弃 a
+        break;
+      }
+    }
+    if (bKeep)
+    {
+      Deduped.push_back(Ca);
+    }
+  }
+  *pCandidates = Deduped;
 }
 
 // 第二类买卖点的盘整背驰（第27课）：比较进入一类买卖点的那一段(A段)与转折后回抽到
