@@ -2835,30 +2835,27 @@ static bool TestStrictStrokeUsesMergedGap()
   return true;
 }
 
+// 下降线段被 higher high + higher low 破坏：逆向(向上)笔顶创新高(92>88)、其后回调底不创新低(75>70)
+// → 下降线段在该逆向笔的底(idx20)结束。终点是逆向笔内端，不必是全局最低点（第64/67课）。
 static bool TestFeatureLineSegmentEndsAtTopFractal()
 {
-  // 7 个笔端点构成一段上升后反转：特征序列(下降笔)顶分型在第二元素(顶12) → 线段终于该顶
-  std::vector<Fractal> Fractals;
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 7, 4));
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 12, 8));
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 9, 6));
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 11, 7));
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 5, 3));
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 0, 100, 95));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 4, 92, 90));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 8, 95, 88));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 12, 82, 80));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 16, 88, 82));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 20, 72, 70));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 24, 92, 82));   // 顶92 > 前顶88（higher high）
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 28, 77, 75)); // 底75 > 前底70（higher low）
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 32, 85, 78));
 
-  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
-  std::vector<SegmentPoint> StrokePoints = BuildSegmentPoints(Strokes);
-  std::vector<SegmentPoint> LinePoints = BuildLineSegmentPointsByFeature(Strokes);
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
-  if (StrokePoints.size() != 7)
-  {
-    return false;
-  }
-  // 特征序列法：起点(底@0) → 顶分型确认的线段终点(顶@12)
-  return (LinePoints.size() >= 2) &&
-         (LinePoints[0].nType == CZSC_POINT_BOTTOM) && (LinePoints[0].nIndex == 0) &&
-         (LinePoints[1].nType == CZSC_POINT_TOP) && (LinePoints[1].nIndex == 12);
+  return (Line.size() >= 2) &&
+         (Line[0].nType == CZSC_POINT_TOP) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_BOTTOM) && (Line[1].nIndex == 20);
 }
 
 static bool TestFeatureLineSegmentNeedsFourPoints()
@@ -2871,53 +2868,58 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
   return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
 }
 
-// 中继：顶15(@idx4) 之后仅一笔回抽便创新高（反向第三笔未破第一笔结束位置）→ 顶15 只是中继，
-// 线段不在此断开，而是延伸到真正最高点顶25(@idx12)；之后顶25被反向线段(25→20→23→18)破坏才结束
+// 上升线段被 lower low + lower high 破坏：逆向(向下)笔底创新低(12<18)、其后反弹顶不创新高(22<30)
+// → 上升线段在该逆向笔的顶(idx20)结束（对称于下降线段）。
 static bool TestFeatureSegmentExtendsPastRelay()
 {
   std::vector<Fractal> F;
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 6, 1));     // 起点 低1
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 15, 11));      // 顶15（中继）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 16, 12));   // 低12（仅一笔回抽）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));     // 顶25（真正最高）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 24, 20));  // 低20
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 19));     // 顶23 < 25
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 22, 18));  // 低18（反向第三笔破第一笔结束20）
-
-  std::vector<Stroke> Strokes = BuildStrokes(F);
-  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
-
-  bool bHas12 = false;
-  for (std::size_t i = 0; i < Line.size(); i++)
-  {
-    if (Line[i].nIndex == 4) return false;     // 中继顶15 不应成为线段端点
-    if (Line[i].nIndex == 12) bHas12 = true;   // 线段延伸到真正最高点顶25
-  }
-  return bHas12;
-}
-
-// 第67课第二种情况：缺口顶分型之后走出反向线段（反向特征序列出现底分型）→ 确认线段在该顶结束
-static bool TestFeatureSegmentGapConfirmedByReversal()
-{
-  std::vector<Fractal> F;
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 6, 1));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 5));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 11, 9));    // X1：高10 低9
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));     // 线段终点候选（顶25@idx12）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 24, 22));  // X2：高25 低22（缺口）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 21));     // X3：高23 → 顶分型落在 X2
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 16, 15));  // 反向下跌
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 19, 18));     // 反弹
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 17, 16));  // 反向特征序列底分型（15<16）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 20, 19));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 40, 15, 14));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 15));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 20, 18));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 30, 24));     // 顶30（创 lower low 的回调起点）
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 14, 12));  // 底12 < 前底18（lower low）
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 22, 18));     // 顶22 < 30（lower high）
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 17, 16));
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
   std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
   return (Line.size() >= 2) &&
          (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
-         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12);
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 20);
+}
+
+// 真实上证：线段终点不一定是全局极值——存在某下降线段端点(底)，其后续笔端点里仍有更低的底
+// （如 2.5 年下跌实终于 2863，而其后才到 2635）
+static bool TestFeatureSegmentGapConfirmedByReversal()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> StrokePts = BuildSegmentPoints(Strokes);
+  std::vector<SegmentPoint> Seg = BuildLineSegmentPointsByFeature(Strokes);
+
+  for (std::size_t i = 0; i < Seg.size(); i++)
+  {
+    if (Seg[i].nType != CZSC_POINT_BOTTOM)
+    {
+      continue;
+    }
+    for (std::size_t j = 0; j < StrokePts.size(); j++)
+    {
+      if ((StrokePts[j].nIndex > Seg[i].nIndex) &&
+          (StrokePts[j].nType == CZSC_POINT_BOTTOM) &&
+          (StrokePts[j].fLow < Seg[i].fLow))
+      {
+        return true;  // 该线段终点(底)之后还有更低的底 → 终点非全局最低
+      }
+    }
+  }
+  return false;
 }
 
 static bool TestDecodeConfig()
@@ -3390,20 +3392,20 @@ static bool TestStrokeRelayExtendsDown()
   return true;
 }
 
-// 破坏回退：D1→B1 本是有效一笔，但其后立即创新高 D2(反超 D1) 且不足一笔，B1 被破坏，整段并为 B0→D2 一笔
+// 达标笔不被后续不足一笔的分型弹出：D1→B1 已达标(跨度4)，其后 D2 虽创新高但 B1→D2 不足一笔(跨度2)被忽略，
+// B1 保留 → 仍是 B0→D1、D1→B1 两笔（修复「9/5→9/13 达标笔被破坏回退误弹」前的回归）
 static bool TestStrokeBrokenByNewExtreme()
 {
   std::vector<Fractal> Fractals;
   Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));   // B0
   Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));     // D1
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 7, 3));   // B1 (gap 4，本可成笔)
-  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 10, 12, 7));    // D2 反超 D1，gap(10-8)=2<4
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 7, 3));   // B1（D1→B1 跨度4，达标成笔）
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 10, 12, 7));    // D2（B1→D2 跨度2 不足一笔，忽略）
 
   std::vector<Stroke> Strokes = BuildStrokes(Fractals);
-  if (Strokes.size() != 1) return false;                // B1 被破坏弹出 → 单笔
-  if (Strokes[0].Start.nIndex != 0) return false;
-  if (Strokes[0].End.nIndex != 10) return false;        // 延伸到 D2
-  if (!NearlyEqual(Strokes[0].End.fHigh, 12)) return false;
+  if (Strokes.size() != 2) return false;                            // B0→D1、D1→B1 两笔均保留
+  if ((Strokes[0].Start.nIndex != 0) || (Strokes[0].End.nIndex != 4)) return false;
+  if ((Strokes[1].Start.nIndex != 4) || (Strokes[1].End.nIndex != 8)) return false;
   return true;
 }
 
