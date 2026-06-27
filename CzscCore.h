@@ -237,6 +237,22 @@ struct TradingSignalCandidate
   DivergenceResult Divergence;
 };
 
+// 中心化分析器：对一组输入一次算成全部中间与最终结果，各 Func 只做投影，消除重复重算。
+// 两个 Build 入口对应两类输入家族（信号 pIn / 原始 H/L+config），Points 就绪后共用下游。
+struct CzscAnalyzer
+{
+  int        nCount;
+  CzscConfig Config;
+  std::vector<SegmentPoint>           Points;      // 已 AssignSegmentEnergy
+  std::vector<Center>                 Centers;
+  std::vector<TrendStructure>         Structures;
+  std::vector<CenterBreakout>         Breakouts;
+  std::vector<TradingSignalCandidate> Candidates;
+  std::vector<float>                  MaShort;     // 仅 H/L 家族填充
+  std::vector<float>                  MaLong;
+  std::vector<int>                    Kiss;
+};
+
 // 动力学：MACD 柱面积及其在线段点上的累积能量
 std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice);
 void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const float *pHigh, const float *pLow);
@@ -259,6 +275,10 @@ std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stro
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
 // 按配置（笔类型/笔结束/中枢构件）从 H/L 直接产出供中枢使用的端点（笔端点或线段端点）
 std::vector<SegmentPoint> BuildConfiguredPoints(int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
+
+// 中心化分析器的两个构建入口：信号 pIn 家族 / 原始 H/L+config 家族
+void BuildAnalyzerFromSignal(CzscAnalyzer &An, int nCount, float *pIn, float *pHigh, float *pLow);
+void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
 
 // 中枢与走势类型，以及中枢关系/三买后续/背驰-转折的分类
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);

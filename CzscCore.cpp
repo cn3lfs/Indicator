@@ -2403,9 +2403,9 @@ void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  WriteCenterHighSignal(nCount, pOut, Centers);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  WriteCenterHighSignal(nCount, pOut, An.Centers);
 }
 
 //=============================================================================
@@ -2419,9 +2419,9 @@ void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  WriteCenterLowSignal(nCount, pOut, Centers);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  WriteCenterLowSignal(nCount, pOut, An.Centers);
 }
 
 //=============================================================================
@@ -2435,9 +2435,9 @@ void Func4(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  WriteCenterMarkSignal(nCount, pOut, Centers);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  WriteCenterMarkSignal(nCount, pOut, An.Centers);
 }
 
 //=============================================================================
@@ -2451,16 +2451,9 @@ void Func5(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
-  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
-  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
-                                                                                Centers,
-                                                                                Structures,
-                                                                                Breakouts);
-  ApplyTradingSignalCandidates(nCount, pOut, Candidates);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  ApplyTradingSignalCandidates(nCount, pOut, An.Candidates);
 }
 
 //=============================================================================
@@ -2669,16 +2662,9 @@ void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
-  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
-  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
-                                                                                Centers,
-                                                                                Structures,
-                                                                                Breakouts);
-  ApplyTradingSignalQuality(nCount, pOut, Candidates);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  ApplyTradingSignalQuality(nCount, pOut, An.Candidates);
 }
 
 //=============================================================================
@@ -2692,9 +2678,9 @@ void Func11(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  WriteCenterRelationSignal(nCount, pOut, Centers);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  WriteCenterRelationSignal(nCount, pOut, An.Centers);
 }
 
 //=============================================================================
@@ -2708,16 +2694,9 @@ void Func12(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
-  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
-  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
-                                                                                Centers,
-                                                                                Structures,
-                                                                                Breakouts);
-  ApplyTradingSignalReversal(nCount, pOut, Candidates);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  ApplyTradingSignalReversal(nCount, pOut, An.Candidates);
 }
 
 //=============================================================================
@@ -2731,15 +2710,9 @@ void Func13(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
-  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
-  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
-                                                                                Centers,
-                                                                                Structures,
-                                                                                Breakouts);
-  ApplyTradingSignalAftermath(nCount, pOut, Candidates);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  ApplyTradingSignalAftermath(nCount, pOut, An.Candidates);
 }
 
 // 背驰段（第27课）：一类买卖点最后那段构成背驰的走势。在其起点标记 ±1、终点（买卖点）标记 ±2，
@@ -2784,16 +2757,9 @@ void Func14(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
     return;
   }
 
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
-  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
-  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
-  std::vector<TradingSignalCandidate> Candidates = BuildTradingSignalCandidates(Points,
-                                                                                Centers,
-                                                                                Structures,
-                                                                                Breakouts);
-  WriteDivergenceSegmentSignal(nCount, pOut, Points, Candidates);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  WriteDivergenceSegmentSignal(nCount, pOut, An.Points, An.Candidates);
 }
 
 // 由 H/L 算出短长均线（收盘价用 (H+L)/2 代理），写出 Price 缓冲供 Func15/16 复用
@@ -2933,8 +2899,9 @@ void Func17(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
   }
 
   ClearOutput(nCount, pOut);
-  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  int nWarn = DetectInstantDivergence(Points, nCount, pHigh, pLow);
+  CzscAnalyzer An;
+  BuildAnalyzerFromSignal(An, nCount, pIn, pHigh, pLow);
+  int nWarn = DetectInstantDivergence(An.Points, nCount, pHigh, pLow);
   if (nWarn != 0)
   {
     pOut[nCount - 1] = (float)nWarn;  // 在当下（最右一根）给出预警
@@ -3020,4 +2987,38 @@ void Func20(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   CzscConfig Config = DecodeConfig(fCode);
   std::vector<SegmentPoint> Points = BuildConfiguredPoints(nCount, pHigh, pLow, Config);
   WriteSegmentSignal(nCount, pOut, Points);
+}
+
+//=============================================================================
+// 中心化分析器：Points 就绪后统一走中枢及以下流水线，供各 Func 投影（消除重复重算）
+//=============================================================================
+
+// 从线段点一次算成 中枢→走势→突破→买卖点候选（统一赋 MACD 能量；不读能量的输出不受影响）
+static void BuildCentersStage(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow)
+{
+  AssignSegmentEnergy(An.Points, nCount, pHigh, pLow);
+  An.Centers = BuildCenters(An.Points);
+  An.Structures = BuildTrendStructures(An.Centers);
+  An.Breakouts = BuildCenterBreakouts(An.Points, An.Centers, An.Structures);
+  An.Candidates = BuildTradingSignalCandidates(An.Points, An.Centers, An.Structures, An.Breakouts);
+}
+
+// 信号 pIn 家族：由通达信传入的 ±1 线段点信号还原 Points，再走统一下游
+void BuildAnalyzerFromSignal(CzscAnalyzer &An, int nCount, float *pIn, float *pHigh, float *pLow)
+{
+  An.nCount = nCount;
+  An.Config = DefaultConfig();
+  An.Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  BuildCentersStage(An, nCount, pHigh, pLow);
+}
+
+// 原始 H/L+config 家族：按配置直接算出 Points，再走统一下游，并附带均线序列与吻
+void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow, const CzscConfig &Config)
+{
+  An.nCount = nCount;
+  An.Config = Config;
+  An.Points = BuildConfiguredPoints(nCount, pHigh, pLow, Config);
+  BuildCentersStage(An, nCount, pHigh, pLow);
+  ComputeShortLongMa(nCount, pHigh, pLow, &An.MaShort, &An.MaLong);
+  An.Kiss = ClassifyMaKisses(An.MaShort, An.MaLong);
 }
