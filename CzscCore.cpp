@@ -2054,14 +2054,17 @@ struct FeatureElement
   int   nPeak;
 };
 
-// 提取从 nStart 起、方向 nDir 的线段的标准特征序列：逆向笔为元素，并做非包含处理
+// 提取从 nStart 起、方向 nDir 的线段的标准特征序列：逆向笔为元素，并做非包含处理。
+// nLimit 为构建上限（逆向笔终点须 < nLimit）：反向确认时截断到「价格突破极值」处，
+// 避免把走势重新反转后的笔也并进来污染分型判断。
 static std::vector<FeatureElement> BuildStandardFeatureSequence(const std::vector<SegmentPoint> &P,
                                                                 std::size_t nStart,
-                                                                int nDir)
+                                                                int nDir,
+                                                                std::size_t nLimit = (std::size_t)-1)
 {
   std::vector<FeatureElement> Seq;
   // nStart->nStart+1 为顺向笔，第一条逆向笔从 nStart+1 开始，之后每隔一笔
-  for (std::size_t i = nStart + 1; i + 1 < P.size(); i += 2)
+  for (std::size_t i = nStart + 1; (i + 1 < P.size()) && (i + 1 < nLimit); i += 2)
   {
     FeatureElement E;
     if (nDir > 0)  // 上升线段：逆向笔 顶->底，候选终点取顶
@@ -2132,12 +2135,13 @@ static bool HasFeatureFractal(const std::vector<FeatureElement> &Seq, int nDir)
   return false;
 }
 
-// 在标准特征序列里定位线段终点（第67课两种情况，并落实「线段只能被线段破坏」第64课）：
-//  找到分型后判断其第一、二元素间是否有缺口——
-//   · 无缺口（第一种）：线段即在分型极点处结束；
-//   · 有缺口（第二种）：须「从分型极点起、反方向的特征序列也出现分型」才确认结束——即必须有一个
-//     反向的线段级别结构来破坏（上升线段要见 lower high+lower low、下降线段要见 higher low+higher
-//     high），否则该分型只是一笔级别扰动，线段延续、继续考察后续分型。
+// 在标准特征序列里定位线段终点（第67课特征序列分型 + 第64课「线段只能被线段破坏」）：
+//  对每个特征序列分型（候选线段终点），看从其极点起、价格重新突破该极点之前的这段反向走势——
+//   · 反向走势已成线段（其特征序列出现反向分型，即上升线段见 lower high+lower low、下降线段见
+//     higher low+higher high）→ 真破坏，线段在该极点结束；
+//   · 反向未成线段却已创同向新极值（价格先突破该极点）→ 该极点只是中继，线段延伸，继续考察后续分型；
+//   · 既无反向线段也未被突破（数据末端）→ 该极点即段内极值，线段停在此。
+//  关键：反向特征序列只构建到「突破点」为止，避免把走势重新反转后的笔并进来污染分型判断。
 static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
 {
   std::vector<FeatureElement> Seq = BuildStandardFeatureSequence(P, nStart, nDir);
@@ -2151,23 +2155,32 @@ static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t
       continue;
     }
 
-    // 缺口：构成分型的第一元素(k-1)与第二元素(k)无重合区间
-    bool bGap = (nDir > 0)
-                ? (Seq[k].fLow > Seq[k - 1].fHigh)
-                : (Seq[k].fHigh < Seq[k - 1].fLow);
-    if (!bGap)
+    std::size_t nPeak = (std::size_t)Seq[k].nPeak;
+    float fPeakVal = (nDir > 0) ? Seq[k].fHigh : Seq[k].fLow;
+
+    // 极点之后第一笔「创同向新极值」（突破该极点）的位置 —— 反向走势到此为止
+    std::size_t nBreak = P.size();
+    for (std::size_t m = nPeak + 1; m < P.size(); m++)
     {
-      return Seq[k].nPeak;  // 第一种情况：无缺口，线段在分型极点处结束
+      float fVal = GetPointPrice(P[m]);
+      if (nDir > 0 ? (fVal > fPeakVal) : (fVal < fPeakVal))
+      {
+        nBreak = m;
+        break;
+      }
     }
 
-    // 第二种情况：从分型极点开始的反向特征序列须出现分型，才算被反向线段破坏（真破坏）
-    std::vector<FeatureElement> Rev =
-        BuildStandardFeatureSequence(P, (std::size_t)Seq[k].nPeak, -nDir);
+    // 突破前的反向走势若已成线段（反向特征序列出现分型）→ 线段被线段破坏，在该极点结束
+    std::vector<FeatureElement> Rev = BuildStandardFeatureSequence(P, nPeak, -nDir, nBreak);
     if (HasFeatureFractal(Rev, -nDir))
     {
-      return Seq[k].nPeak;
+      return (int)nPeak;
     }
-    // 否则线段延续，继续考察后续分型
+    if (nBreak < P.size())
+    {
+      continue;  // 反向只是一笔回抽、却先创新极值 → 中继，线段延伸
+    }
+    return (int)nPeak;  // 既未被突破也无反向线段 → 该段极值，线段停在此
   }
   return -1;  // 未出现可确认的分型 → 线段尚未完成
 }
