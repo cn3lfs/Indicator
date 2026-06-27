@@ -259,6 +259,7 @@ struct CzscAnalyzer
   std::vector<float>                  MaShort;     // 仅 H/L 家族填充
   std::vector<float>                  MaLong;
   std::vector<int>                    Kiss;
+  std::vector<float>                  Volume;      // 旁路注册的成交量（未注册则空）
 };
 
 // 动力学：MACD 柱面积及其在线段点上的累积能量
@@ -293,6 +294,12 @@ void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *p
 // 带缓存的入口：通达信就同一序列依次调多个 Func，首调用计算+缓存、后续命中（单槽+全字节指纹）
 const CzscAnalyzer &GetOrBuildSignalAnalyzer(int nCount, float *pIn, float *pHigh, float *pLow);
 const CzscAnalyzer &GetOrBuildPriceAnalyzer(int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
+
+// 旁路数据：通达信 3 槽不够同时传 H/L/C/V，故用一个注册函数把真实收盘价/成交量存入全局旁路缓存，
+// 其余函数在 nCount 匹配且 Close∈[Low,High] 内容校验通过时自动改用真实 C（否则回落 (H+L)/2）。
+void RegisterAuxData(int nCount, float *pClose, float *pVolume);
+const std::vector<float> *GetValidatedClose(int nCount, const float *pHigh, const float *pLow);
+const std::vector<float> *GetValidatedVolume(int nCount, const float *pHigh, const float *pLow);
 
 // 中枢与走势类型，以及中枢关系/三买后续/背驰-转折的分类
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
@@ -373,5 +380,6 @@ void Func18(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func19(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func20(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func40(int nCount, float *pOut, float *pClose, float *pVolume, float *pUnused);
 
 #endif

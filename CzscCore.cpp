@@ -114,6 +114,74 @@ static std::vector<float> SanitizeSeries(int nCount, const float *pSrc)
   return Out;
 }
 
+//=============================================================================
+// 旁路数据：注册真实收盘价/成交量，消费端按 Close∈[Low,High] 内容校验自动启用（防串台）
+//=============================================================================
+
+struct CzscAuxData
+{
+  int                nCount;
+  std::vector<float> Close;
+  std::vector<float> Volume;
+  bool               bValid;
+};
+
+static CzscAuxData g_Aux = {0, std::vector<float>(), std::vector<float>(), false};
+
+// 注册旁路数据：清洗后存入；pClose 为空或 nCount<=0 则失效
+void RegisterAuxData(int nCount, float *pClose, float *pVolume)
+{
+  if ((nCount <= 0) || (pClose == 0))
+  {
+    g_Aux.bValid = false;
+    return;
+  }
+  g_Aux.nCount = nCount;
+  g_Aux.Close = SanitizeSeries(nCount, pClose);
+  g_Aux.Volume = (pVolume != 0) ? SanitizeSeries(nCount, pVolume) : std::vector<float>();
+  g_Aux.bValid = true;
+}
+
+// 内容校验：每根有效K线上 Low-ε ≤ Close ≤ High+ε 全成立才返回注册的收盘价，否则 0（回落代理）
+const std::vector<float> *GetValidatedClose(int nCount, const float *pHigh, const float *pLow)
+{
+  if (!g_Aux.bValid || (g_Aux.nCount != nCount) || ((int)g_Aux.Close.size() != nCount) ||
+      (pHigh == 0) || (pLow == 0) || (nCount <= 0))
+  {
+    return 0;
+  }
+  for (int i = 0; i < nCount; i++)
+  {
+    float fHigh = pHigh[i];
+    float fLow = pLow[i];
+    if (IsInvalidFloat(fHigh) || IsInvalidFloat(fLow))
+    {
+      continue;  // 该根无法校验，跳过
+    }
+    float fClose = g_Aux.Close[(std::size_t)i];
+    float fTol = (AbsF(fHigh) + 1.0f) * 0.001f;  // 容差防浮点边界误否决
+    if ((fClose < fLow - fTol) || (fClose > fHigh + fTol))
+    {
+      return 0;  // 收盘价越界 → 错配/过期序列，否决
+    }
+  }
+  return &g_Aux.Close;
+}
+
+// 成交量随收盘价同次注册，收盘价校验通过即信任配套成交量（V 无法用 H/L 交叉校验）
+const std::vector<float> *GetValidatedVolume(int nCount, const float *pHigh, const float *pLow)
+{
+  if (GetValidatedClose(nCount, pHigh, pLow) == 0)
+  {
+    return 0;
+  }
+  if ((int)g_Aux.Volume.size() != nCount)
+  {
+    return 0;
+  }
+  return &g_Aux.Volume;
+}
+
 // 默认配置：严格笔 + 严格极值收笔 + 笔中枢 + 启发式线段，复现历史默认行为
 CzscConfig DefaultConfig()
 {
@@ -511,11 +579,13 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
 
   std::vector<float> High = SanitizeSeries(nCount, pHigh);
   std::vector<float> Low = SanitizeSeries(nCount, pLow);
+  const std::vector<float> *pClose = GetValidatedClose(nCount, pHigh, pLow);  // 有真实收盘价则用之
   std::vector<float> Price;
   Price.resize((std::size_t)nCount);
   for (int i = 0; i < nCount; i++)
   {
-    Price[(std::size_t)i] = (High[(std::size_t)i] + Low[(std::size_t)i]) * 0.5f;
+    Price[(std::size_t)i] = pClose ? (*pClose)[(std::size_t)i]
+                                   : (High[(std::size_t)i] + Low[(std::size_t)i]) * 0.5f;
   }
 
   std::vector<float> Histogram = ComputeMacdHistogram(nCount, &Price[0]);
@@ -2822,11 +2892,13 @@ void ComputeShortLongMa(int nCount, float *pHigh, float *pLow,
 
   std::vector<float> High = SanitizeSeries(nCount, pHigh);
   std::vector<float> Low = SanitizeSeries(nCount, pLow);
+  const std::vector<float> *pClose = GetValidatedClose(nCount, pHigh, pLow);  // 有真实收盘价则用之
   std::vector<float> Price;
   Price.resize((std::size_t)nCount);
   for (int i = 0; i < nCount; i++)
   {
-    Price[(std::size_t)i] = (High[(std::size_t)i] + Low[(std::size_t)i]) * 0.5f;
+    Price[(std::size_t)i] = pClose ? (*pClose)[(std::size_t)i]
+                                   : (High[(std::size_t)i] + Low[(std::size_t)i]) * 0.5f;
   }
   *pShort = ComputeMovingAverage(nCount, &Price[0], MA_SHORT_PERIOD);
   *pLong = ComputeMovingAverage(nCount, &Price[0], MA_LONG_PERIOD);
@@ -3113,5 +3185,31 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       break;
     }
     default: ClearOutput(nCount, pOut); break;
+  }
+}
+
+//=============================================================================
+// 输出函数40号：旁路注册真实收盘价 C 与成交量 V。公式 XC:=TDXDLL1(40,C,V,0); 置于消费函数之前，
+// 之后中枢/买卖点/均线等会在内容校验通过时自动改用真实 C；输出透传 C（便于核对）。
+//=============================================================================
+
+void Func40(int nCount, float *pOut, float *pClose, float *pVolume, float *pUnused)
+{
+  (void)pUnused;
+  RegisterAuxData(nCount, pClose, pVolume);
+
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+  if (pClose == 0)
+  {
+    ClearOutput(nCount, pOut);
+    return;
+  }
+  std::vector<float> Close = SanitizeSeries(nCount, pClose);
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = Close[(std::size_t)i];
   }
 }

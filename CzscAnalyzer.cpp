@@ -32,6 +32,13 @@ static void BuildCentersStage(CzscAnalyzer &An, int nCount, float *pHigh, float 
   An.Candidates = BuildTradingSignalCandidates(An.Points, An.Centers, An.Structures, An.Breakouts);
 }
 
+// 旁路成交量（注册且校验通过则填，否则空）
+static void FillAuxVolume(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow)
+{
+  const std::vector<float> *pVV = GetValidatedVolume(nCount, pHigh, pLow);
+  An.Volume = pVV ? *pVV : std::vector<float>();
+}
+
 // 信号 pIn 家族：由通达信传入的 ±1 线段点信号还原 Points，再走统一下游
 void BuildAnalyzerFromSignal(CzscAnalyzer &An, int nCount, float *pIn, float *pHigh, float *pLow)
 {
@@ -39,6 +46,7 @@ void BuildAnalyzerFromSignal(CzscAnalyzer &An, int nCount, float *pIn, float *pH
   An.Config = DefaultConfig();
   An.Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
   BuildCentersStage(An, nCount, pHigh, pLow);
+  FillAuxVolume(An, nCount, pHigh, pLow);
 }
 
 // 原始 H/L+config 家族：按配置直接算出 Points，再走统一下游，并附带均线序列与吻
@@ -50,6 +58,7 @@ void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *p
   BuildCentersStage(An, nCount, pHigh, pLow);
   ComputeShortLongMa(nCount, pHigh, pLow, &An.MaShort, &An.MaLong);
   An.Kiss = ClassifyMaKisses(An.MaShort, An.MaLong);
+  FillAuxVolume(An, nCount, pHigh, pLow);
 }
 
 //=============================================================================
@@ -77,23 +86,32 @@ static unsigned int HashHL(const float *pHigh, const float *pLow, int nCount)
   return hHash;
 }
 
+// 旁路收盘价指纹：校验通过则为其 FNV，否则 0；使「是否用了真实 C」进入缓存键，注册变化即失效
+static unsigned int HashAux(int nCount, float *pHigh, float *pLow)
+{
+  const std::vector<float> *pVC = GetValidatedClose(nCount, pHigh, pLow);
+  return pVC ? FnvAccumFloats(2166136261u, &(*pVC)[0], nCount) : 0u;
+}
+
 const CzscAnalyzer &GetOrBuildSignalAnalyzer(int nCount, float *pIn, float *pHigh, float *pLow)
 {
   static CzscAnalyzer s_Analyzer;
   static int s_nCount = -1;
   static unsigned int s_hHL = 0;
   static unsigned int s_hIn = 0;
+  static unsigned int s_hAux = 0;
   static bool s_bValid = false;
 
   unsigned int hHL = HashHL(pHigh, pLow, nCount);
   unsigned int hIn = FnvAccumFloats(2166136261u, pIn, nCount);
-  if (s_bValid && (s_nCount == nCount) && (s_hHL == hHL) && (s_hIn == hIn))
+  unsigned int hAux = HashAux(nCount, pHigh, pLow);
+  if (s_bValid && (s_nCount == nCount) && (s_hHL == hHL) && (s_hIn == hIn) && (s_hAux == hAux))
   {
     return s_Analyzer;  // 命中
   }
 
   BuildAnalyzerFromSignal(s_Analyzer, nCount, pIn, pHigh, pLow);
-  s_nCount = nCount; s_hHL = hHL; s_hIn = hIn; s_bValid = true;
+  s_nCount = nCount; s_hHL = hHL; s_hIn = hIn; s_hAux = hAux; s_bValid = true;
   return s_Analyzer;
 }
 
@@ -103,17 +121,19 @@ const CzscAnalyzer &GetOrBuildPriceAnalyzer(int nCount, float *pHigh, float *pLo
   static int s_nCount = -1;
   static unsigned int s_hHL = 0;
   static int s_nConfig = -1;
+  static unsigned int s_hAux = 0;
   static bool s_bValid = false;
 
   unsigned int hHL = HashHL(pHigh, pLow, nCount);
   int nConfig = Config.nStrokeType + Config.nStrokeEnd * 10 +
                 Config.nCenterUnit * 100 + Config.nSegmentMethod * 1000;
-  if (s_bValid && (s_nCount == nCount) && (s_hHL == hHL) && (s_nConfig == nConfig))
+  unsigned int hAux = HashAux(nCount, pHigh, pLow);
+  if (s_bValid && (s_nCount == nCount) && (s_hHL == hHL) && (s_nConfig == nConfig) && (s_hAux == hAux))
   {
     return s_Analyzer;  // 命中
   }
 
   BuildAnalyzerFromPrice(s_Analyzer, nCount, pHigh, pLow, Config);
-  s_nCount = nCount; s_hHL = hHL; s_nConfig = nConfig; s_bValid = true;
+  s_nCount = nCount; s_hHL = hHL; s_nConfig = nConfig; s_hAux = hAux; s_bValid = true;
   return s_Analyzer;
 }
