@@ -69,6 +69,51 @@ static float AbsF(float fValue)
   return (fValue < 0) ? -fValue : fValue;
 }
 
+// 通达信无效数：位模式 0xF8F8F8F8（约 -4e34 的巨大负 float）。官方规范要求计算前判断并跳过。
+static bool IsInvalidFloat(float fValue)
+{
+  unsigned int uBits;
+  const unsigned char *pSrc = (const unsigned char *)&fValue;
+  unsigned char *pDst = (unsigned char *)&uBits;
+  for (int i = 0; i < (int)sizeof(float); i++)
+  {
+    pDst[i] = pSrc[i];
+  }
+  return uBits == 0xF8F8F8F8u;
+}
+
+// 清洗输入序列：无效数用上一有效值前向填充；开头的无效数用首个有效值回填；整段无效则置 0。
+static std::vector<float> SanitizeSeries(int nCount, const float *pSrc)
+{
+  std::vector<float> Out;
+  if ((nCount <= 0) || (pSrc == 0))
+  {
+    return Out;
+  }
+  Out.resize((std::size_t)nCount);
+
+  float fLastValid = 0;
+  bool bHaveValid = false;
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!IsInvalidFloat(pSrc[i]))
+    {
+      fLastValid = pSrc[i];
+      bHaveValid = true;
+      break;
+    }
+  }
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!IsInvalidFloat(pSrc[i]))
+    {
+      fLastValid = pSrc[i];
+    }
+    Out[(std::size_t)i] = bHaveValid ? fLastValid : 0;
+  }
+  return Out;
+}
+
 // 默认配置：严格笔 + 严格极值收笔 + 笔中枢 + 启发式线段，复现历史默认行为
 CzscConfig DefaultConfig()
 {
@@ -464,11 +509,13 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
     return;
   }
 
+  std::vector<float> High = SanitizeSeries(nCount, pHigh);
+  std::vector<float> Low = SanitizeSeries(nCount, pLow);
   std::vector<float> Price;
   Price.resize((std::size_t)nCount);
   for (int i = 0; i < nCount; i++)
   {
-    Price[(std::size_t)i] = (pHigh[i] + pLow[i]) * 0.5f;
+    Price[(std::size_t)i] = (High[(std::size_t)i] + Low[(std::size_t)i]) * 0.5f;
   }
 
   std::vector<float> Histogram = ComputeMacdHistogram(nCount, &Price[0]);
@@ -1638,12 +1685,15 @@ std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
     return Bars;
   }
 
+  std::vector<float> High = SanitizeSeries(nCount, pHigh);
+  std::vector<float> Low = SanitizeSeries(nCount, pLow);
+
   int nDirection = 0;
-  Bars.push_back(MakeMergedBar(0, pHigh[0], pLow[0]));
+  Bars.push_back(MakeMergedBar(0, High[0], Low[0]));
 
   for (int i = 1; i < nCount; i++)
   {
-    MergedBar Bar = MakeMergedBar(i, pHigh[i], pLow[i]);
+    MergedBar Bar = MakeMergedBar(i, High[(std::size_t)i], Low[(std::size_t)i]);
     MergedBar &Last = Bars.back();
 
     if (IsIncluded(Last, Bar))
@@ -2005,14 +2055,18 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
     return Points;
   }
 
+  std::vector<float> High = SanitizeSeries(nCount, pHigh);
+  std::vector<float> Low = SanitizeSeries(nCount, pLow);
+
   for (int i = 0; i < nCount; i++)
   {
+    float fSignal = IsInvalidFloat(pIn[i]) ? 0.0f : pIn[i];  // 无效信号视作无端点
     int nType = CZSC_POINT_NONE;
-    if (pIn[i] > 0)
+    if (fSignal > 0)
     {
       nType = CZSC_POINT_TOP;
     }
-    else if (pIn[i] < 0)
+    else if (fSignal < 0)
     {
       nType = CZSC_POINT_BOTTOM;
     }
@@ -2022,7 +2076,7 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
       continue;
     }
 
-    SegmentPoint Point = MakeSignalPoint(i, nType, pHigh[i], pLow[i]);
+    SegmentPoint Point = MakeSignalPoint(i, nType, High[(std::size_t)i], Low[(std::size_t)i]);
     if (!Points.empty() && (Points.back().nType == Point.nType))
     {
       if (IsMoreExtremePoint(Points.back(), Point))
@@ -2759,11 +2813,20 @@ void Func14(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
 void ComputeShortLongMa(int nCount, float *pHigh, float *pLow,
                         std::vector<float> *pShort, std::vector<float> *pLong)
 {
+  if (nCount <= 0)
+  {
+    pShort->clear();
+    pLong->clear();
+    return;
+  }
+
+  std::vector<float> High = SanitizeSeries(nCount, pHigh);
+  std::vector<float> Low = SanitizeSeries(nCount, pLow);
   std::vector<float> Price;
   Price.resize((std::size_t)nCount);
   for (int i = 0; i < nCount; i++)
   {
-    Price[(std::size_t)i] = (pHigh[i] + pLow[i]) * 0.5f;
+    Price[(std::size_t)i] = (High[(std::size_t)i] + Low[(std::size_t)i]) * 0.5f;
   }
   *pShort = ComputeMovingAverage(nCount, &Price[0], MA_SHORT_PERIOD);
   *pLong = ComputeMovingAverage(nCount, &Price[0], MA_LONG_PERIOD);

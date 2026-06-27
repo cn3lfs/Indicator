@@ -10,6 +10,18 @@
 `CzscCore.cpp/.h`（可测试、无 Windows 依赖）；`Main.cpp` 把函数按编号注册给通达信。
 设计目标是尽量贴近缠师原文的线段、中枢、买卖点等概念。
 
+## TDX DLL 数据契约（官方规范）
+
+- 计算函数签名固定 `void Func(int DataLen, float*pOut, float*a, float*b, float*c)` —— **只有 3 个输入序列**，
+  无回调可取更多数据（HISDAT/REPORTDAT2 等结构是「选股插件」用的，计算型 DLL 取不到）。3 个序列可为公式里
+  任意表达式（`H/L/O/C/VOL/AMOUNT`）。
+- **无效数 `0xF8F8F8F8`**（约 -4e34 的巨大负 float）：官方要求计算前判断并跳过。已在 4 个 H/L 摄入点
+  （`BuildMergedBars`/`BuildSignalPoints`/`ComputeShortLongMa`/`AssignSegmentEnergy`）用 `SanitizeSeries`
+  前向填充清洗（无效 pIn 视作无端点）。新增读 H/L/pIn 的入口须同样清洗。
+- **未用数据（受 3 槽限制）**：真实收盘价 C（我们用 `(H+L)/2` 代理，因信号家族 `(pIn,H,L)`、Func30 `(H,L,mode)`
+  槽已占满）；成交量 V（第12课骗线过滤可用，优先级低）。输出逐根写 `pOut[i]`，`0`=无信号 + 公式端
+  `IF/DRAWNULL/DRAWICON`，符合规范。
+
 ## 计算流水线（形态学 → 动力学 → 买卖点）
 
 ```
