@@ -19,6 +19,7 @@
 # Configurations
 CROSS_PREFIX=
 MINGW32_PREFIX=i686-w64-mingw32-
+MINGW64_PREFIX=x86_64-w64-mingw32-
 EXEEXT=
 CC=$(CROSS_PREFIX)gcc
 CXX=$(CROSS_PREFIX)g++
@@ -48,7 +49,8 @@ TARGETS=$(TARGET1)
 DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep)
 
 # Build Commands
-.PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 test test-build run clean debug
+.PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
+        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build run clean debug
 
 all : $(TARGETS)
 
@@ -63,6 +65,19 @@ check-mingw32:
 	@command -v $(MINGW32_PREFIX)gcc
 	@command -v $(MINGW32_PREFIX)g++
 	@command -v $(MINGW32_PREFIX)windres
+
+# 64 位通达信版本：x86_64 工具链，产物 build/CZSC64.dll（指针随架构变 8 字节，pack/cdecl 不变）
+mingw64: clean
+	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) TARGET1=$(BUILD_DIR)/CZSC64.dll
+
+mingw64-test:
+	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) test
+
+check-mingw64:
+	@command -v make
+	@command -v $(MINGW64_PREFIX)gcc
+	@command -v $(MINGW64_PREFIX)g++
+	@command -v $(MINGW64_PREFIX)windres
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
@@ -84,6 +99,9 @@ test-build: $(TEST_TARGET)
 
 mingw32-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build
+
+mingw64-test-build: clean
+	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) EXEEXT=.exe test-build
 
 $(TEST_TARGET) : $(TEST_OBJECTS)
 	@echo [LD] $@
