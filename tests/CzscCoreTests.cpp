@@ -3080,6 +3080,98 @@ static bool TestInvalidPriceSanitized()
   return bTop && bBottom;
 }
 
+static bool TestAuxDataValidation()
+{
+  RegisterAuxData(0, 0, 0);  // 起始清空
+
+  const int n = 8;
+  float pHigh[n] = {10, 11, 12, 11, 10, 9, 10, 11};
+  float pLow[n]  = { 8,  9, 10,  9,  8, 7,  8,  9};
+  float close[n] = { 9, 10, 11, 10,  9, 8,  9, 10};   // 每根都在 [L,H] 内 → 有效
+  float vol[n]   = {100, 120, 150, 110, 90, 80, 95, 130};
+
+  bool bOk = true;
+  // 未注册 → 空
+  if (GetValidatedClose(n, pHigh, pLow) != 0) bOk = false;
+
+  // 注册有效收盘价 → 校验通过
+  RegisterAuxData(n, close, vol);
+  const std::vector<float> *pVC = GetValidatedClose(n, pHigh, pLow);
+  if ((pVC == 0) || ((int)pVC->size() != n) || !NearlyEqual((*pVC)[2], 11.0f)) bOk = false;
+  const std::vector<float> *pVV = GetValidatedVolume(n, pHigh, pLow);
+  if ((pVV == 0) || !NearlyEqual((*pVV)[2], 150.0f)) bOk = false;
+
+  // 越界收盘价 → 否决
+  float badClose[n] = {9, 10, 99, 10, 9, 8, 9, 10};   // bar2 close=99 > high12
+  RegisterAuxData(n, badClose, vol);
+  if (GetValidatedClose(n, pHigh, pLow) != 0) bOk = false;
+
+  // nCount 不匹配 → 否决
+  RegisterAuxData(n, close, vol);
+  if (GetValidatedClose(n + 1, pHigh, pLow) != 0) bOk = false;
+
+  RegisterAuxData(0, 0, 0);  // 收尾清空
+  return bOk;
+}
+
+static bool TestAuxCloseAffectsEnergy()
+{
+  RegisterAuxData(0, 0, 0);
+
+  const int n = 30;
+  float pHigh[n];
+  float pLow[n];
+  float close[n];
+  for (int i = 0; i < n; i++)
+  {
+    pLow[i] = 10;
+    pHigh[i] = 20;
+    close[i] = 10.0f + 10.0f * ((float)i / (float)(n - 1));  // 斜坡，∈[10,20]
+  }
+
+  std::vector<SegmentPoint> A;
+  A.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 5, 15));
+  A.push_back(MakeTestPoint(CZSC_POINT_TOP, 25, 15));
+  std::vector<SegmentPoint> B = A;
+
+  AssignSegmentEnergy(A, n, pHigh, pLow);        // 无旁路 → (H+L)/2=15 常数 → MACD/能量为 0
+  RegisterAuxData(n, close, 0);
+  AssignSegmentEnergy(B, n, pHigh, pLow);        // 用真实收盘价(斜坡) → 能量非 0
+  RegisterAuxData(0, 0, 0);
+
+  float eA = A[1].fEnergy - A[0].fEnergy;
+  float eB = B[1].fEnergy - B[0].fEnergy;
+  return !NearlyEqual(eA, eB);  // 真实收盘价改变了 MACD 面积
+}
+
+static bool TestFunc40Registers()
+{
+  RegisterAuxData(0, 0, 0);
+
+  const int n = 6;
+  float pHigh[n] = {12, 13, 14, 13, 12, 11};
+  float pLow[n]  = {10, 11, 12, 11, 10, 9};
+  float close[n] = {11, 12, 13, 12, 11, 10};
+  float vol[n]   = {100, 110, 120, 105, 95, 90};
+  float pOut[n]  = {-1, -1, -1, -1, -1, -1};
+  float fUnused = 0;
+
+  Func40(n, pOut, close, vol, &fUnused);  // 注册 + 透传
+
+  bool bPass = true;
+  for (int i = 0; i < n; i++)
+  {
+    if (!NearlyEqual(pOut[i], close[i]))
+    {
+      bPass = false;
+    }
+  }
+  bool bRegistered = (GetValidatedClose(n, pHigh, pLow) != 0);
+
+  RegisterAuxData(0, 0, 0);
+  return bPass && bRegistered;
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -3501,6 +3593,18 @@ int main()
   if (!TestInvalidPriceSanitized())
   {
     return 105;
+  }
+  if (!TestAuxDataValidation())
+  {
+    return 106;
+  }
+  if (!TestAuxCloseAffectsEnergy())
+  {
+    return 107;
+  }
+  if (!TestFunc40Registers())
+  {
+    return 108;
   }
 
   return 0;
