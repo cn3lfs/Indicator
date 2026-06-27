@@ -18,9 +18,20 @@
 - **无效数 `0xF8F8F8F8`**（约 -4e34 的巨大负 float）：官方要求计算前判断并跳过。已在 4 个 H/L 摄入点
   （`BuildMergedBars`/`BuildSignalPoints`/`ComputeShortLongMa`/`AssignSegmentEnergy`）用 `SanitizeSeries`
   前向填充清洗（无效 pIn 视作无端点）。新增读 H/L/pIn 的入口须同样清洗。
-- **未用数据（受 3 槽限制）**：真实收盘价 C（我们用 `(H+L)/2` 代理，因信号家族 `(pIn,H,L)`、Func30 `(H,L,mode)`
-  槽已占满）；成交量 V（第12课骗线过滤可用，优先级低）。输出逐根写 `pOut[i]`，`0`=无信号 + 公式端
-  `IF/DRAWNULL/DRAWICON`，符合规范。
+- **3 槽已被 H/L+（pIn 或 mode）占满**，真实收盘价 C 与成交量 V 进不了主入口。默认用 `(H+L)/2` 代理 C；
+  二者改由下方「旁路注册」按需启用。输出逐根写 `pOut[i]`，`0`=无信号 + 公式端 `IF/DRAWNULL/DRAWICON`，符合规范。
+
+### 旁路注册数据契约（Func40 / 真实 C、V）
+
+- `Func40`（`XC:=TDXDLL1(40,C,V,0)`）调 `RegisterAuxData` 把清洗后的 C/V 存入进程内全局单槽 `g_Aux`，
+  输出透传 C；须在公式里**置于消费函数之前**（通达信按行序求值）。
+- 消费端经 `GetValidatedClose/GetValidatedVolume` 取值：仅当 `g_Aux.bValid && nCount 匹配 && 每根 Close∈[L,H]`
+  （真实 OHLC 必然成立）才返回真实序列，否则返回 0 → **回落 `(H+L)/2` 代理**。该内容校验天然否决跨股票/过期
+  的错配数据，故未注册或注册错误都不会算错，只退化为现状（零回归）。
+- 消费点：`AssignSegmentEnergy`、`ComputeShortLongMa` 用真实 C 算 MACD/均线；`An.Volume` 供湿吻放量骗线过滤
+  （`ClassifyMaKissesWithVolume`，Func30 输出 13）。
+- **缓存正确性**：`GetOrBuild*` 缓存键加一维 `hAux = FNV(校验通过的 C[+V])`；注册的 C 或 V 变化即失效重算，
+  撤销（`RegisterAuxData(0,0,0)`）则 `hAux=0` 回落。测试用 g_Aux 全局，aux 用例须首尾 `RegisterAuxData(0,0,0)` 清场防泄漏。
 
 ## 计算流水线（形态学 → 动力学 → 买卖点）
 
@@ -75,13 +86,14 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 18 / 19 | Func18 / Func19 | 笔(新笔标准) / 线段(特征序列法) | 第62-67课 |
 | 20 | Func20 | 配置驱动端点(笔/线段中枢) | 见上「架构」 |
 | 30 | Func30 | mode 统一入口(配置+输出，一步算全链路) | 见上「架构」 |
+| 40 | Func40 | 旁路注册真实 C/V(透传 C)，供后续函数启用 | 见上「旁路注册数据契约」 |
 
 新增输出函数时：在 `CzscCore.h` 声明、`CzscCore.cpp` 实现、`Main.cpp` 注册 `{n,&Funcn}`、
 `README.md` 补公式、`tests/` 加用例。可配置的分支优先并入 `CzscConfig` 经 `Func20` 暴露。
 
 ## 本机构建与测试（重要：无 make/g++/mingw）
 
-本 Windows 机器只装了 clang，Makefile 的 `make test` 用不了。跑核心回归（当前 85 用例）：
+本 Windows 机器只装了 clang，Makefile 的 `make test` 用不了。跑核心回归（当前 109 用例）：
 
 ```bash
 cd D:/github/czsc-tdx
