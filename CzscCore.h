@@ -174,10 +174,11 @@ struct Center
 {
   int   nStart;
   int   nEnd;
-  float fHigh;    // ZG = min(各段高点)，重叠区间上沿
-  float fLow;     // ZD = max(各段低点)，重叠区间下沿
-  float fTop;     // GG = max(各段高点)，全幅上沿，恒 >= fHigh
-  float fBottom;  // DD = min(各段低点)，全幅下沿，恒 <= fLow
+  float fHigh;       // ZG = min(各段高点)，重叠区间上沿
+  float fLow;        // ZD = max(各段低点)，重叠区间下沿
+  float fTop;        // GG = max(各段高点)，全幅上沿，恒 >= fHigh
+  float fBottom;     // DD = min(各段低点)，全幅下沿，恒 <= fLow
+  int   nDirection;  // 进入段方向：+1 上升中枢(下上下,后向上离开) / -1 下降中枢(上下上,后向下离开)
 };
 
 // 一段走势的力度度量：价差、平均速度、MACD 柱面积（fDif/fDea/bRsi 预留）

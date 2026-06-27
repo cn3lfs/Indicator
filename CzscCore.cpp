@@ -481,6 +481,7 @@ static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::
   pCenter->fLow = fLow;
   pCenter->fTop = fTop;
   pCenter->fBottom = fBottom;
+  pCenter->nDirection = 0;  // 方向由 BuildCenters 按进入段设定
   return true;
 }
 
@@ -1221,48 +1222,37 @@ std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint>
   for (std::size_t i = 0; i < Centers.size(); i++)
   {
     const Center &C = Centers[i];
-    int nBoundary = (i + 1 < Centers.size()) ? Centers[i + 1].nStart : 0x7fffffff;
+    // 离开点 = 中枢结束后第一个突破 ZG/ZD 的笔端点（次级别走势离开中枢，第20课）。
+    // 注：中枢首尾相连，离开段同时是下一中枢的首段，故不以下一中枢起点为界。
     for (std::size_t j = 1; j < Points.size(); j++)
     {
       const SegmentPoint &Start = Points[j - 1];
       const SegmentPoint &End = Points[j];
       if (End.nIndex <= C.nEnd)
       {
-        continue;
-      }
-      if (End.nIndex >= nBoundary)
-      {
-        break;
+        continue;  // 中枢内部，跳过
       }
 
       int nDirection = GetMoveDirection(Start, End);
-      bool bLeavesUp = (nDirection > 0) &&
-                       (End.nType == CZSC_POINT_TOP) &&
-                       (End.fHigh > C.fHigh);
-      bool bLeavesDown = (nDirection < 0) &&
-                         (End.nType == CZSC_POINT_BOTTOM) &&
-                         (End.fLow < C.fLow);
+      bool bLeavesUp = (nDirection > 0) && (End.nType == CZSC_POINT_TOP) && (End.fHigh > C.fHigh);
+      bool bLeavesDown = (nDirection < 0) && (End.nType == CZSC_POINT_BOTTOM) && (End.fLow < C.fLow);
       if (!bLeavesUp && !bLeavesDown)
       {
-        continue;
+        continue;  // 尚未突破中枢（回拉/震荡），继续找
       }
 
       int nBreakDirection = bLeavesUp ? 1 : -1;
+      // 回试点 = 离开后第一个反向端点（第20课「必须是第一次」回试）
       for (std::size_t k = j + 1; k < Points.size(); k++)
       {
-        const SegmentPoint &Retest = Points[k];
-        if (Retest.nIndex >= nBoundary)
-        {
-          break;
-        }
-        if (((nBreakDirection > 0) && (Retest.nType == CZSC_POINT_BOTTOM)) ||
-            ((nBreakDirection < 0) && (Retest.nType == CZSC_POINT_TOP)))
+        if (((nBreakDirection > 0) && (Points[k].nType == CZSC_POINT_BOTTOM)) ||
+            ((nBreakDirection < 0) && (Points[k].nType == CZSC_POINT_TOP)))
         {
           Breakouts.push_back(MakeCenterBreakout(Points, C, i, j, k, nBreakDirection));
           break;
         }
       }
-      break;
+      break;  // 每个中枢只取第一次离开+回试
     }
   }
 
@@ -2180,26 +2170,30 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
   return Points;
 }
 
-// 扫描线段点序列，构造中枢序列：先取三段重叠成枢，再向后延伸到重叠中断（第17/18课）
+// 扫描线段点序列构造中枢（第17/20课，按用户定义）：每段走势由极值点 i 开始，第一笔 i->i+1 为进入段，
+// 中枢由其后的第 2/3/4 笔（上升走势=下上下、下降走势=上下上）重叠构成（不含进入段），可向后延伸；
+// 方向由进入段定（i 为底→上升中枢、i 为顶→下降中枢）；下一段走势从本中枢终点起，不与本中枢共用端点。
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
 {
   std::vector<Center> Centers;
-  if (Points.size() < 4)
+  if (Points.size() < 5)
   {
     return Centers;
   }
 
   std::size_t i = 0;
-  while (i + 3 < Points.size())
+  while (i + 4 < Points.size())
   {
+    // 中枢候选 = 进入段(i->i+1)之后的第 2/3/4 笔，即从 i+1 起的三段
     Center C;
-    if (!TryBuildInitialCenter(Points, i, &C))
+    if (!TryBuildInitialCenter(Points, i + 1, &C))
     {
       i++;
       continue;
     }
+    C.nDirection = (Points[i].nType == CZSC_POINT_BOTTOM) ? 1 : -1;  // 进入段向上=上升中枢
 
-    std::size_t nInterval = i + 3;
+    std::size_t nInterval = i + 4;
     while (nInterval + 1 < Points.size())
     {
       SegmentInterval Interval = MakeSegmentInterval(Points[nInterval], Points[nInterval + 1]);
@@ -2216,6 +2210,7 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
       break;
     }
 
+    // 下一段走势从本中枢终点起（其离开段即下一段的进入段），不与本中枢共用端点
     i = (nInterval > i) ? nInterval : (i + 1);
   }
 
