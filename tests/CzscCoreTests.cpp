@@ -2772,26 +2772,33 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
   return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
 }
 
-// 第67课第二种情况：特征序列顶分型有缺口，其后仅一笔回抽（反向特征序列无分型）
-// → 不构成线段破坏（第64课「线段只能被线段破坏」），线段不在该顶结束
-static bool TestFeatureSegmentGapNeedsReversal()
+// 中继：特征序列顶分型(顶15@idx12)其后被更高的顶(25@idx28)突破 → 只是中继，
+// 反向走势没成线段，线段不在 idx12 断开，而是延伸到真正最高点 idx28（修复「线段变平/被跳过」前的回归）
+static bool TestFeatureSegmentExtendsPastRelay()
 {
   std::vector<Fractal> F;
   F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 6, 1));
   F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 5));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 11, 9));    // X1：高10 低9
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));     // 跳空大涨，终点候选
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 24, 22));  // X2：高25 低22（缺口 22>10）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 21));     // X3：高23 → 顶分型落在 X2
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 6, 5));     // 低5
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 15, 11));     // 顶15（中继候选）
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 10, 9));   // 低9
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 14, 10));     // 顶14 < 15
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 9, 8));    // 低8
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 25, 20));     // 顶25 突破15 → 中继确认
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 14, 13));  // 低13
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 22, 18));     // 顶22 < 25
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 40, 11, 10));  // 低10
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
   std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
-  for (std::size_t i = 0; i < Line.size(); i++)   // 反向无确认 → 线段不在 idx12 结束
+  bool bHas28 = false;
+  for (std::size_t i = 0; i < Line.size(); i++)
   {
-    if (Line[i].nIndex == 12) return false;
+    if (Line[i].nIndex == 12) return false;    // 中继顶不应成为线段端点
+    if (Line[i].nIndex == 28) bHas28 = true;   // 线段延伸到真正最高点
   }
-  return true;
+  return bHas28;
 }
 
 // 第67课第二种情况：缺口顶分型之后走出反向线段（反向特征序列出现底分型）→ 确认线段在该顶结束
@@ -3758,7 +3765,7 @@ int main()
   {
     return 112;
   }
-  if (!TestFeatureSegmentGapNeedsReversal())
+  if (!TestFeatureSegmentExtendsPastRelay())
   {
     return 113;
   }
