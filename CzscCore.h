@@ -106,12 +106,20 @@ enum CzscCenterUnit
   CZSC_UNIT_SEGMENT = 1,  // 线段中枢
 };
 
-// 缠论计算配置：把可选的笔类型/笔结束/中枢构件集中为一处配置
+// 线段划分法（仅线段中枢时生效）：保护点启发式 / 第67课特征序列法
+enum CzscSegmentMethod
+{
+  CZSC_SEG_HEURISTIC = 0,  // 保护点启发式
+  CZSC_SEG_FEATURE   = 1,  // 特征序列法
+};
+
+// 缠论计算配置：把可选的笔类型/笔结束/中枢构件/线段法集中为一处配置
 struct CzscConfig
 {
-  int nStrokeType;   // 见 CzscStrokeType
-  int nStrokeEnd;    // 见 CzscStrokeEnd
-  int nCenterUnit;   // 见 CzscCenterUnit
+  int nStrokeType;     // 见 CzscStrokeType
+  int nStrokeEnd;      // 见 CzscStrokeEnd
+  int nCenterUnit;     // 见 CzscCenterUnit
+  int nSegmentMethod;  // 见 CzscSegmentMethod
 };
 
 // 原始 K 线（下标 + 高低价）
@@ -339,8 +347,9 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 //  1 线段点  2/3 中枢高/低  4 中枢起止  5 三类买卖点  6 形态买卖点  7 强度  8 斜率
 //  9 线段(笔)  10 信号质量  11 中枢关系  12 背驰-转折  13 三买后续  14 背驰段
 //  15 均线差(体位符号/力度幅度)  16 均线吻(飞吻1/唇吻2/湿吻3)  17 即时背驰预警
-//  18 笔(新笔标准)  19 线段(特征序列法)  20 配置驱动端点(笔/线段中枢)
-// 配置码(20号的第4参 pTime[0])：个位=笔类型(0严格/1新)，十位=笔结束(0严格/1次高)，百位=中枢构件(0笔/1线段)
+//  18 笔(新笔标准)  19 线段(特征序列法)  20 配置驱动端点(笔/线段中枢)  30 mode 统一入口
+// 配置码：个位=笔类型(0严格/1新)，十位=笔结束(0严格/1次高)，百位=中枢构件(0笔/1线段)，千位=线段法(0启发/1特征)
+// 30 号 mode 码(第4参 pTime[0]) = 配置码*1000 + 输出类型*10；输出类型见 exports 里 Func30 的 switch
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
@@ -361,5 +370,6 @@ void Func17(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func18(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func19(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func20(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
+void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 
 #endif

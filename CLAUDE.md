@@ -28,14 +28,22 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 
 数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续等）见 `CzscCore.h` 注释。
 
-## 配置架构（CzscConfig）
+## 架构：CzscAnalyzer + 缓存 + 配置 + Func30
 
-可选的算法分支集中为 `CzscConfig`（三维：`nStrokeType` 笔类型、`nStrokeEnd` 笔结束、
-`nCenterUnit` 中枢构件）。`DefaultConfig()` 复现历史默认行为，`DecodeConfig(码)` 把单个数字码
-（个位=笔类型/十位=笔结束/百位=中枢构件）解出配置。`BuildStrokes(Fractals, config)` 与
-`BuildConfiguredPoints(H/L, config)` 受配置驱动；`Func20` 是统一入口（`TDXDLL1(20,H,L,码)`），
-输出端点信号喂给 2-5 号即得对应的笔/线段中枢。新增可选分支时优先扩展 `CzscConfig` 并经 `Func20`
-暴露，**保持默认值=现状以零回归**，而非新增独立 Func。
+- **中心化 `CzscAnalyzer`**（`CzscCore.h`）一次算成全部结果（Points/Centers/Structures/Breakouts/
+  Candidates/MaShort/MaLong/Kiss）。两个 Build 入口：`BuildAnalyzerFromSignal`（pIn 家族）与
+  `BuildAnalyzerFromPrice`（H/L+config 家族），`Points` 就绪后共用私有 `BuildCentersStage`。
+  各 Func 只做**投影**，不再各自重跑流水线。
+- **缓存层** `GetOrBuildSignalAnalyzer` / `GetOrBuildPriceAnalyzer`：按 nCount + 全字节 FNV-1a 指纹
+  （H/L 与 pIn 或 config 码）做**单槽**缓存；通达信就同一序列连调多 Func 时，首调用算、其余命中。
+  统一在 analyzer 内 `AssignSegmentEnergy`（不读 fEnergy 的输出不受影响 → 等价）。
+- **配置 `CzscConfig`**（四维：`nStrokeType` 笔类型 / `nStrokeEnd` 笔结束 / `nCenterUnit` 中枢构件 /
+  `nSegmentMethod` 线段法）。`DefaultConfig()` 复现现状，`DecodeConfig(码)` 按 个位/十位/百位/千位 解码。
+- **`Func30` mode 统一入口**（`TDXDLL1(30,H,L,mode)`，`mode = 配置码*1000 + 输出*10`）：内部走带缓存的
+  `BuildAnalyzerFromPrice` 一步算全链路再投影，等价于旧 Func1→Func2..5 连调（`TestFunc30MatchesLegacyPipeline`）。
+
+新增可选分支时**优先扩展 `CzscConfig` 并经 `Func30`/`Func20` 暴露，保持默认=现状以零回归**；
+新增信号/中枢类计算时让 Func 走 `GetOrBuild*` 投影，而非自建流水线。
 
 ## 通达信导出函数（编号见 `Main.cpp` 的 `Info[]`，公式示例见 `README.md`）
 
@@ -53,7 +61,8 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 15 / 16 | Func15 / Func16 | 均线差(体位/力度) / 均线吻(飞/唇/湿) | 第11/15课 |
 | 17 | Func17 | 即时背驰预警(1见顶/-1见底) | 第15课 |
 | 18 / 19 | Func18 / Func19 | 笔(新笔标准) / 线段(特征序列法) | 第62-67课 |
-| 20 | Func20 | 配置驱动端点(笔/线段中枢) | 见上「配置架构」 |
+| 20 | Func20 | 配置驱动端点(笔/线段中枢) | 见上「架构」 |
+| 30 | Func30 | mode 统一入口(配置+输出，一步算全链路) | 见上「架构」 |
 
 新增输出函数时：在 `CzscCore.h` 声明、`CzscCore.cpp` 实现、`Main.cpp` 注册 `{n,&Funcn}`、
 `README.md` 补公式、`tests/` 加用例。可配置的分支优先并入 `CzscConfig` 经 `Func20` 暴露。

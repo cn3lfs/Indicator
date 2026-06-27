@@ -69,17 +69,18 @@ static float AbsF(float fValue)
   return (fValue < 0) ? -fValue : fValue;
 }
 
-// 默认配置：严格笔 + 严格极值收笔 + 笔中枢，复现历史默认行为
+// 默认配置：严格笔 + 严格极值收笔 + 笔中枢 + 启发式线段，复现历史默认行为
 CzscConfig DefaultConfig()
 {
   CzscConfig Config;
   Config.nStrokeType = CZSC_STROKE_STRICT;
   Config.nStrokeEnd = CZSC_END_STRICT;
   Config.nCenterUnit = CZSC_UNIT_STROKE;
+  Config.nSegmentMethod = CZSC_SEG_HEURISTIC;
   return Config;
 }
 
-// 把单个数字码解出三维配置：个位=笔类型、十位=笔结束、百位=中枢构件；非法值回落默认
+// 把单个数字码解出四维配置：个位=笔类型、十位=笔结束、百位=中枢构件、千位=线段法；非法值回落默认
 CzscConfig DecodeConfig(float fCode)
 {
   int nCode = (int)(fCode + 0.5f);
@@ -92,6 +93,7 @@ CzscConfig DecodeConfig(float fCode)
   Config.nStrokeType = (nCode % 10 == CZSC_STROKE_NEW) ? CZSC_STROKE_NEW : CZSC_STROKE_STRICT;
   Config.nStrokeEnd = ((nCode / 10) % 10 == CZSC_END_SECOND) ? CZSC_END_SECOND : CZSC_END_STRICT;
   Config.nCenterUnit = ((nCode / 100) % 10 == CZSC_UNIT_SEGMENT) ? CZSC_UNIT_SEGMENT : CZSC_UNIT_STROKE;
+  Config.nSegmentMethod = ((nCode / 1000) % 10 == CZSC_SEG_FEATURE) ? CZSC_SEG_FEATURE : CZSC_SEG_HEURISTIC;
   return Config;
 }
 
@@ -2952,7 +2954,9 @@ std::vector<SegmentPoint> BuildConfiguredPoints(int nCount, float *pHigh, float 
   std::vector<Stroke> Strokes = BuildStrokes(Fractals, Config);
   if (Config.nCenterUnit == CZSC_UNIT_SEGMENT)
   {
-    Points = BuildLineSegmentPoints(Strokes);
+    Points = (Config.nSegmentMethod == CZSC_SEG_FEATURE)
+             ? BuildLineSegmentPointsByFeature(Strokes)
+             : BuildLineSegmentPoints(Strokes);
   }
   else
   {
@@ -3067,7 +3071,8 @@ const CzscAnalyzer &GetOrBuildPriceAnalyzer(int nCount, float *pHigh, float *pLo
   static bool s_bValid = false;
 
   unsigned int hHL = HashHL(pHigh, pLow, nCount);
-  int nConfig = Config.nStrokeType + Config.nStrokeEnd * 10 + Config.nCenterUnit * 100;
+  int nConfig = Config.nStrokeType + Config.nStrokeEnd * 10 +
+                Config.nCenterUnit * 100 + Config.nSegmentMethod * 1000;
   if (s_bValid && (s_nCount == nCount) && (s_hHL == hHL) && (s_nConfig == nConfig))
   {
     return s_Analyzer;  // 命中
@@ -3076,4 +3081,73 @@ const CzscAnalyzer &GetOrBuildPriceAnalyzer(int nCount, float *pHigh, float *pLo
   BuildAnalyzerFromPrice(s_Analyzer, nCount, pHigh, pLow, Config);
   s_nCount = nCount; s_hHL = hHL; s_nConfig = nConfig; s_bValid = true;
   return s_Analyzer;
+}
+
+//=============================================================================
+// 输出函数30号：mode 驱动的统一入口。pTime[0] = 配置码*1000 + 输出类型*10。
+// 内部走 H/L 家族中心化分析器（带缓存），一步算出从笔到买卖点的全部结果再按输出类型投影，
+// 无需先 Func1/9 产端点再喂中枢函数；旧 Func1-20 保留兼容。
+//=============================================================================
+
+void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
+{
+  if (!HasPriceInput(nCount, pOut, pHigh, pLow))
+  {
+    return;
+  }
+
+  int nMode = (pTime != 0) ? (int)(pTime[0] + 0.5f) : 0;
+  if (nMode < 0)
+  {
+    nMode = 0;
+  }
+  CzscConfig Config = DecodeConfig((float)(nMode / 1000));
+  int nOutput = (nMode % 1000) / 10;
+
+  const CzscAnalyzer &An = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, Config);
+
+  switch (nOutput)
+  {
+    case 0:  WriteSegmentSignal(nCount, pOut, An.Points); break;            // 端点
+    case 1:  WriteCenterHighSignal(nCount, pOut, An.Centers); break;        // 中枢上沿 ZG
+    case 2:  WriteCenterLowSignal(nCount, pOut, An.Centers); break;         // 中枢下沿 ZD
+    case 3:  WriteCenterMarkSignal(nCount, pOut, An.Centers); break;        // 中枢起止
+    case 4:  ApplyTradingSignalCandidates(nCount, pOut, An.Candidates); break; // 三类买卖点
+    case 5:  ApplyTradingSignalQuality(nCount, pOut, An.Candidates); break;    // 信号质量
+    case 6:  WriteCenterRelationSignal(nCount, pOut, An.Centers); break;       // 中枢关系
+    case 7:  ApplyTradingSignalReversal(nCount, pOut, An.Candidates); break;   // 背驰-转折
+    case 8:  ApplyTradingSignalAftermath(nCount, pOut, An.Candidates); break;  // 三买后续
+    case 9:  WriteDivergenceSegmentSignal(nCount, pOut, An.Points, An.Candidates); break; // 背驰段
+    case 10:                                                                 // 均线差
+      ClearOutput(nCount, pOut);
+      if ((int)An.MaShort.size() >= nCount && (int)An.MaLong.size() >= nCount)
+      {
+        for (int i = 0; i < nCount; i++)
+        {
+          pOut[i] = An.MaShort[(std::size_t)i] - An.MaLong[(std::size_t)i];
+        }
+      }
+      break;
+    case 11:                                                                 // 均线吻
+      ClearOutput(nCount, pOut);
+      if ((int)An.Kiss.size() >= nCount)
+      {
+        for (int i = 0; i < nCount; i++)
+        {
+          pOut[i] = (float)An.Kiss[(std::size_t)i];
+        }
+      }
+      break;
+    case 12:                                                                 // 即时背驰预警
+    {
+      ClearOutput(nCount, pOut);
+      int nWarn = DetectInstantDivergence(An.Points, nCount, pHigh, pLow);
+      if (nWarn != 0)
+      {
+        pOut[nCount - 1] = (float)nWarn;
+      }
+      break;
+    }
+    default: ClearOutput(nCount, pOut); break;
+  }
 }
