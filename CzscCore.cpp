@@ -1878,8 +1878,24 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
   return Fractals;
 }
 
+// 一笔的跨度是否达标（第62/65课，两端含顶底分型的极值K线）：
+//  严格笔（旧笔）——处理包含关系后顶底间至少 1 根独立合并K线，即含顶底 ≥5 根合并K线
+//                （nMergedIndex 跨度 ≥4，顶底分型不共用合并K线）；
+//  新笔（宽笔）——放宽为处理后 ≥4 根合并K线（nMergedIndex 跨度 ≥3、仍不共用）且
+//                处理前 ≥5 根原始K线（nIndex 跨度 ≥4）。
+static bool StrokeSpanEnough(const Fractal &A, const Fractal &B, const CzscConfig &Config)
+{
+  int nMergedGap = B.nMergedIndex - A.nMergedIndex;  // 处理包含后的合并K线跨度
+  int nRawGap = B.nIndex - A.nIndex;                 // 处理包含前的原始K线跨度
+  if (Config.nStrokeType == CZSC_STROKE_NEW)
+  {
+    return (nMergedGap >= 3) && (nRawGap >= 4);
+  }
+  return (nMergedGap >= 4);
+}
+
 // 由相邻顶底连成笔（受配置驱动）：
-//  笔类型 STRICT（严格笔）按原始K线间隔≥4，NEW（新笔）按合并K线间隔≥4（第62/65课）；
+//  笔类型见 StrokeSpanEnough（严格笔=合并K线≥5、新笔=合并K线≥4且原始K线≥5）；
 //  笔结束 STRICT 取最严格极值收笔，SECOND 保留首个同型分型（允许次高/次低点）。
 // 关键：一笔不在首个反向分型处即封闭，而是先构建顶底交替的端点序列、允许同向更极端分型把端点
 // 向后「延伸（中继）」，并在中间反向分型不足一笔却被新极值反超时「破坏回退」弹出它，再连成笔。
@@ -1911,11 +1927,8 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
         break;
       }
 
-      // 异型：间隔够一笔即作为新端点（严格笔按原始K线、新笔按合并K线，第62/65课）
-      int nGap = (Config.nStrokeType == CZSC_STROKE_NEW)
-                 ? (F.nMergedIndex - Last.nMergedIndex)
-                 : (F.nIndex - Last.nIndex);
-      if (nGap >= 4)
+      // 异型：跨度达标即作为新端点（严格笔/新笔标准见 StrokeSpanEnough，第62/65课）
+      if (StrokeSpanEnough(Last, F, Config))
       {
         Ends.push_back(F);
         break;
@@ -2046,18 +2059,32 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
 // 线段划分·特征序列法（第67课）：与上面的保护点启发式并存的可选实现
 //=============================================================================
 
-// 反向走势是否已破坏前线段（第71课6.8/6.9）：从前线段极值 nFrom 起、反向方向 nRevDir 的走势
-// 延伸出三笔，且第三笔的结束位置「破掉第一笔的结束位置」（下降破新低 / 上升破新高）。这意味着反向
-// 已是线段级别结构（上升线段见 lower high+lower low、下降线段见 higher low+higher high），是真破坏。
+// 反向走势是否已破坏前线段（第71课6.8/6.9）：从前线段极值 nFrom 起、反向方向 nRevDir 的走势，
+// 在价格重新突破「第一笔开始位置」（即前线段极值，回到原方向）之前，先破掉「第一笔的结束位置」
+// （反向延续：下降创新低 / 上升创新高），即反向已走出线段级别结构（上升线段见 lower high+lower low、
+// 下降线段见 higher low+higher high）→ 真破坏。须扫描后续而非只看第三笔（第71课6.9：第三笔在
+// 第一笔范围内时，看最终先破结束位置还是先破开始位置）。
 static bool ReversalConfirmed(const std::vector<SegmentPoint> &P, std::size_t nFrom, int nRevDir)
 {
-  if (nFrom + 3 >= P.size())
+  if (nFrom + 1 >= P.size())
   {
-    return false;  // 反向不足三笔，尚未成线段
+    return false;
   }
-  float fFirstEnd = GetPointPrice(P[nFrom + 1]);  // 反向第一笔的结束位置
-  float fThirdEnd = GetPointPrice(P[nFrom + 3]);  // 反向第三笔的结束位置
-  return (nRevDir < 0) ? (fThirdEnd < fFirstEnd) : (fThirdEnd > fFirstEnd);
+  float fStart = GetPointPrice(P[nFrom]);          // 第一笔开始位置 = 前线段极值
+  float fFirstEnd = GetPointPrice(P[nFrom + 1]);   // 第一笔结束位置
+  for (std::size_t i = nFrom + 1; i < P.size(); i++)
+  {
+    float v = GetPointPrice(P[i]);
+    if (nRevDir < 0 ? (v < fFirstEnd) : (v > fFirstEnd))
+    {
+      return true;   // 先破第一笔结束位置 → 反向延续成线段，真破坏
+    }
+    if (nRevDir < 0 ? (v > fStart) : (v < fStart))
+    {
+      return false;  // 先破第一笔开始位置（极值被突破）→ 线段延续，非真破坏
+    }
+  }
+  return false;  // 数据末端未决
 }
 
 // 定位线段终点（第64/71课「线段只能被线段破坏」的当下程序）：跟踪段内极值（上升:最高顶 / 下降:最低底），
