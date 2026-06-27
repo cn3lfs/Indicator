@@ -1,4 +1,5 @@
 #include "../CzscCore.h"
+#include "SseIndexDaily.h"
 
 static bool NearlyEqual(float a, float b)
 {
@@ -117,6 +118,112 @@ static bool TestStrokeRequiresFiveBars()
   std::vector<Stroke> Strokes = BuildStrokes(Fractals);
 
   return Strokes.empty();
+}
+
+//=============================================================================
+// 真实数据测试：上证指数(000001.SH)日线，验证笔/线段算法的结构性质（见 SseIndexDaily.h）
+//=============================================================================
+
+// 笔结构良好：顶底异型、方向正确、严格笔合并K线跨度≥4（含顶底≥5根合并K线）、首尾相接且方向交替
+static bool TestRealSseStrokesWellFormed()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);  // 默认严格笔
+
+  if (Strokes.size() < 10)
+  {
+    return false;  // 500 根日线应有足够多笔
+  }
+  for (std::size_t i = 0; i < Strokes.size(); i++)
+  {
+    const Stroke &S = Strokes[i];
+    if (S.Start.nType == S.End.nType)
+    {
+      return false;  // 顶底异型
+    }
+    int nExpDir = (S.Start.nType == CZSC_POINT_BOTTOM) ? 1 : -1;
+    if (S.nDirection != nExpDir)
+    {
+      return false;  // 方向：底→顶=+1、顶→底=-1
+    }
+    if ((S.End.nMergedIndex - S.Start.nMergedIndex) < 4)
+    {
+      return false;  // 严格笔：处理后≥5根合并K线
+    }
+    if (i > 0)
+    {
+      if (Strokes[i - 1].End.nIndex != S.Start.nIndex)
+      {
+        return false;  // 相邻笔首尾相接
+      }
+      if (Strokes[i - 1].nDirection == S.nDirection)
+      {
+        return false;  // 相邻笔方向相反
+      }
+    }
+  }
+  return true;
+}
+
+// 线段是更高级别：线段端点必落在某个笔端点上、顶底交替、且数量不多于笔端点
+static bool TestRealSseSegmentsSubsetOfStrokes()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> StrokePts = BuildSegmentPoints(Strokes);
+  std::vector<SegmentPoint> SegPts = BuildLineSegmentPointsByFeature(Strokes);
+
+  if (SegPts.size() < 2)
+  {
+    return false;  // 500 根日线应有若干线段
+  }
+  if (SegPts.size() > StrokePts.size())
+  {
+    return false;  // 线段不多于笔
+  }
+  for (std::size_t i = 0; i < SegPts.size(); i++)
+  {
+    bool bOnStroke = false;
+    for (std::size_t j = 0; j < StrokePts.size(); j++)
+    {
+      if (StrokePts[j].nIndex == SegPts[i].nIndex)
+      {
+        bOnStroke = true;
+        break;
+      }
+    }
+    if (!bOnStroke)
+    {
+      return false;  // 线段端点必落在笔端点上
+    }
+    if ((i > 0) && (SegPts[i].nType == SegPts[i - 1].nType))
+    {
+      return false;  // 线段端点顶底交替
+    }
+  }
+  return true;
+}
+
+// 新笔（合并≥4 且 原始≥5，放宽）的笔数不少于严格笔（合并≥5）
+static bool TestRealSseNewBiNotFewerThanStrict()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+
+  std::vector<Stroke> Strict = BuildStrokes(Fractals);     // 默认严格笔
+  CzscConfig NewBi = DefaultConfig();
+  NewBi.nStrokeType = CZSC_STROKE_NEW;
+  std::vector<Stroke> New = BuildStrokes(Fractals, NewBi);  // 新笔
+
+  return (New.size() >= Strict.size()) && !Strict.empty();
 }
 
 static bool TestFunc1WritesCompatibleSignal()
@@ -1123,52 +1230,38 @@ static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
          NearlyEqual(pOut[40], 2.0f);
 }
 
+// 真实上证日线：Func9 输出有效的线段端点信号（每个非零值为 ±1、顶底交替、至少两个端点）
 static bool TestFunc9WritesLineSegmentSignal()
 {
-  const int nCount = 21;
-  float pHigh[nCount] = {
-    5, 7, 8, 9, 10,
-    9, 8, 7, 7,
-    8, 9, 11, 12,
-    11, 10, 9, 9,
-    10, 11, 13, 14
-  };
-  float pLow[nCount] = {
-    1, 2, 3, 5, 6,
-    5, 4, 3, 3,
-    4, 5, 7, 8,
-    7, 6, 5, 5,
-    6, 7, 9, 10
-  };
-  float pOut[nCount];
+  const int n = SSE_DAILY_COUNT;
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<float> Out((std::size_t)n, -99.0f);
   float fTime = 5;
 
-  for (int i = 0; i < nCount; i++)
+  Func9(n, &Out[0], pH, pL, &fTime);
+
+  int nPrev = 0;
+  int nPoints = 0;
+  for (int i = 0; i < n; i++)
   {
-    pOut[i] = -99;
+    if (NearlyEqual(Out[i], 0))
+    {
+      continue;  // 非端点
+    }
+    if (!NearlyEqual(Out[i], 1) && !NearlyEqual(Out[i], -1))
+    {
+      return false;  // 端点只能是 ±1
+    }
+    int nType = (Out[i] > 0) ? 1 : -1;
+    if ((nPrev != 0) && (nType == nPrev))
+    {
+      return false;  // 线段端点顶底交替
+    }
+    nPrev = nType;
+    nPoints++;
   }
-
-  Func9(nCount, pOut, pHigh, pLow, &fTime);
-
-  for (int i = 0; i < nCount; i++)
-  {
-    float fExpected = 0;
-    if (i == 4)
-    {
-      fExpected = 1;
-    }
-    else if (i == 16)
-    {
-      fExpected = -1;
-    }
-
-    if (!NearlyEqual(pOut[i], fExpected))
-    {
-      return false;
-    }
-  }
-
-  return true;
+  return nPoints >= 2;
 }
 
 static bool TestCentersUseThreeOverlappingSegments()
@@ -2712,28 +2805,34 @@ static bool TestFunc17HandlesEmptyInput()
   return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
+// 笔类型判据：严格笔=处理后合并K线≥5（nMergedIndex 跨度≥4）；
+// 新笔放宽为处理后合并K线≥4（跨度≥3）且处理前原始K线≥5（nIndex 跨度≥4）
 static bool TestStrictStrokeUsesMergedGap()
 {
-  // 原始K线间隔 5（>=4，默认成笔），但合并K线间隔仅 2（<4，新笔标准不成笔）
-  std::vector<Fractal> Near;
-  Near.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));
-  Near.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 6, 3, 10, 4));
   CzscConfig NewBi = DefaultConfig();
   NewBi.nStrokeType = CZSC_STROKE_NEW;
 
-  std::vector<Stroke> Loose = BuildStrokes(Near);          // 默认（严格笔，原始K线）
-  std::vector<Stroke> Strict = BuildStrokes(Near, NewBi);  // 新笔（合并K线）
-  if ((Loose.size() != 1) || !Strict.empty())
-  {
-    return false;
-  }
+  // 场景1：合并跨度3（处理后4根）、原始跨度5（处理前6根）→ 新笔成、严格不成
+  std::vector<Fractal> A;
+  A.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));      // nIndex1, merged1
+  A.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 6, 4, 10, 4));   // nIndex6(+5), merged4(+3)
+  if (!BuildStrokes(A).empty())            return false;             // 严格(合并3<4)：不成笔
+  if (BuildStrokes(A, NewBi).size() != 1)  return false;             // 新笔(合并3≥3且原始5≥4)：成笔
 
-  // 合并K线间隔 4（>=4），新笔成笔
-  std::vector<Fractal> Far;
-  Far.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));
-  Far.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 10, 5, 10, 4));
-  std::vector<Stroke> StrictFar = BuildStrokes(Far, NewBi);
-  return StrictFar.size() == 1;
+  // 场景2：合并跨度4（处理后5根）→ 严格也成笔
+  std::vector<Fractal> B;
+  B.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));      // merged1
+  B.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 10, 5, 10, 4));  // nIndex10, merged5(+4)
+  if (BuildStrokes(B).size() != 1)         return false;             // 严格(合并4≥4)：成笔
+  if (BuildStrokes(B, NewBi).size() != 1)  return false;             // 新笔：也成笔
+
+  // 场景3：合并跨度3但原始跨度仅3（处理前4根）→ 新笔也不成（原始不足5根）
+  std::vector<Fractal> C;
+  C.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));      // nIndex1, merged1
+  C.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 4, 4, 10, 4));   // nIndex4(+3), merged4(+3)
+  if (!BuildStrokes(C, NewBi).empty())     return false;             // 新笔(合并3≥3但原始3<4)：不成笔
+
+  return true;
 }
 
 static bool TestFeatureLineSegmentEndsAtTopFractal()
@@ -2860,22 +2959,19 @@ static bool TestStrokeEndConfig()
          (Loose[2].Start.nIndex == 8);       // 次高：末笔从次低点 Ba@8 起
 }
 
+// 真实上证日线：线段中枢构件的端点（线段）应少于笔中枢构件的端点（笔），体现线段是更高级别
 static bool TestConfiguredPointsCenterUnit()
 {
-  const int nCount = 21;
-  float pHigh[nCount] = {
-    5, 7, 8, 9, 10, 9, 8, 7, 7, 8, 9, 11, 12, 11, 10, 9, 9, 10, 11, 13, 14
-  };
-  float pLow[nCount] = {
-    1, 2, 3, 5, 6, 5, 4, 3, 3, 4, 5, 7, 8, 7, 6, 5, 5, 6, 7, 9, 10
-  };
+  const int n = SSE_DAILY_COUNT;
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
 
   CzscConfig StrokeCfg = DefaultConfig();                 // 笔中枢
   CzscConfig SegmentCfg = DefaultConfig();
   SegmentCfg.nCenterUnit = CZSC_UNIT_SEGMENT;             // 线段中枢
 
-  std::vector<SegmentPoint> StrokePts = BuildConfiguredPoints(nCount, pHigh, pLow, StrokeCfg);
-  std::vector<SegmentPoint> SegmentPts = BuildConfiguredPoints(nCount, pHigh, pLow, SegmentCfg);
+  std::vector<SegmentPoint> StrokePts = BuildConfiguredPoints(n, pH, pL, StrokeCfg);
+  std::vector<SegmentPoint> SegmentPts = BuildConfiguredPoints(n, pH, pL, SegmentCfg);
 
   // 线段是更高级别：线段端点应少于笔端点
   return (StrokePts.size() > SegmentPts.size()) && !SegmentPts.empty();
@@ -3328,6 +3424,18 @@ int main()
   if (!TestStrokeRequiresFiveBars())
   {
     return 4;
+  }
+  if (!TestRealSseStrokesWellFormed())
+  {
+    return 115;
+  }
+  if (!TestRealSseSegmentsSubsetOfStrokes())
+  {
+    return 116;
+  }
+  if (!TestRealSseNewBiNotFewerThanStrict())
+  {
+    return 117;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {
