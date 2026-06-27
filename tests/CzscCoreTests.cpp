@@ -2718,18 +2718,21 @@ static bool TestStrictStrokeUsesMergedGap()
   std::vector<Fractal> Near;
   Near.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));
   Near.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 6, 3, 10, 4));
-  std::vector<Stroke> Loose = BuildStrokes(Near);          // 默认（原始K线）
-  std::vector<Stroke> Strict = BuildStrokes(Near, true);   // 新笔标准（合并K线）
+  CzscConfig NewBi = DefaultConfig();
+  NewBi.nStrokeType = CZSC_STROKE_NEW;
+
+  std::vector<Stroke> Loose = BuildStrokes(Near);          // 默认（严格笔，原始K线）
+  std::vector<Stroke> Strict = BuildStrokes(Near, NewBi);  // 新笔（合并K线）
   if ((Loose.size() != 1) || !Strict.empty())
   {
     return false;
   }
 
-  // 合并K线间隔 4（>=4），新笔标准成笔
+  // 合并K线间隔 4（>=4），新笔成笔
   std::vector<Fractal> Far;
   Far.push_back(MakeTestFractalFull(CZSC_POINT_TOP, 1, 1, 12, 7));
   Far.push_back(MakeTestFractalFull(CZSC_POINT_BOTTOM, 10, 5, 10, 4));
-  std::vector<Stroke> StrictFar = BuildStrokes(Far, true);
+  std::vector<Stroke> StrictFar = BuildStrokes(Far, NewBi);
   return StrictFar.size() == 1;
 }
 
@@ -2767,6 +2770,115 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
   std::vector<Stroke> Strokes = BuildStrokes(Fractals);
   std::vector<SegmentPoint> LinePoints = BuildLineSegmentPointsByFeature(Strokes);
   return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
+}
+
+static bool TestDecodeConfig()
+{
+  CzscConfig c0 = DecodeConfig(0);
+  CzscConfig c1 = DecodeConfig(1);      // 个位1 → 新笔
+  CzscConfig c11 = DecodeConfig(11);    // 十位1 → 允许次高
+  CzscConfig c100 = DecodeConfig(100);  // 百位1 → 线段中枢
+  CzscConfig c111 = DecodeConfig(111);  // 全部非默认
+
+  return (c0.nStrokeType == CZSC_STROKE_STRICT) && (c0.nStrokeEnd == CZSC_END_STRICT) &&
+         (c0.nCenterUnit == CZSC_UNIT_STROKE) &&
+         (c1.nStrokeType == CZSC_STROKE_NEW) &&
+         (c11.nStrokeType == CZSC_STROKE_NEW) && (c11.nStrokeEnd == CZSC_END_SECOND) &&
+         (c100.nCenterUnit == CZSC_UNIT_SEGMENT) &&
+         (c111.nStrokeType == CZSC_STROKE_NEW) && (c111.nStrokeEnd == CZSC_END_SECOND) &&
+         (c111.nCenterUnit == CZSC_UNIT_SEGMENT);
+}
+
+static bool TestStrokeEndConfig()
+{
+  // 中间有更极端的次低点：严格收笔取最低(Bb@10)，允许次高保留首个(Ba@8)
+  std::vector<Fractal> Fractals;
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 5, 1));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 10, 6));
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 7, 5));    // Ba 低=5
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 10, 5, 3));   // Bb 低=3 更极端
+  Fractals.push_back(MakeTestFractal(CZSC_POINT_TOP, 14, 11, 7));
+
+  std::vector<Stroke> Strict = BuildStrokes(Fractals);  // 默认：严格极值
+  CzscConfig Second = DefaultConfig();
+  Second.nStrokeEnd = CZSC_END_SECOND;
+  std::vector<Stroke> Loose = BuildStrokes(Fractals, Second);  // 允许次高
+
+  return (Strict.size() == 3) && (Loose.size() == 3) &&
+         (Strict[2].Start.nIndex == 10) &&   // 严格：末笔从最低点 Bb@10 起
+         (Loose[2].Start.nIndex == 8);       // 次高：末笔从次低点 Ba@8 起
+}
+
+static bool TestConfiguredPointsCenterUnit()
+{
+  const int nCount = 21;
+  float pHigh[nCount] = {
+    5, 7, 8, 9, 10, 9, 8, 7, 7, 8, 9, 11, 12, 11, 10, 9, 9, 10, 11, 13, 14
+  };
+  float pLow[nCount] = {
+    1, 2, 3, 5, 6, 5, 4, 3, 3, 4, 5, 7, 8, 7, 6, 5, 5, 6, 7, 9, 10
+  };
+
+  CzscConfig StrokeCfg = DefaultConfig();                 // 笔中枢
+  CzscConfig SegmentCfg = DefaultConfig();
+  SegmentCfg.nCenterUnit = CZSC_UNIT_SEGMENT;             // 线段中枢
+
+  std::vector<SegmentPoint> StrokePts = BuildConfiguredPoints(nCount, pHigh, pLow, StrokeCfg);
+  std::vector<SegmentPoint> SegmentPts = BuildConfiguredPoints(nCount, pHigh, pLow, SegmentCfg);
+
+  // 线段是更高级别：线段端点应少于笔端点
+  return (StrokePts.size() > SegmentPts.size()) && !SegmentPts.empty();
+}
+
+static bool TestFunc20DrivesConfig()
+{
+  const int nCount = 21;
+  float pHigh[nCount] = {
+    5, 7, 8, 9, 10, 9, 8, 7, 7, 8, 9, 11, 12, 11, 10, 9, 9, 10, 11, 13, 14
+  };
+  float pLow[nCount] = {
+    1, 2, 3, 5, 6, 5, 4, 3, 3, 4, 5, 7, 8, 7, 6, 5, 5, 6, 7, 9, 10
+  };
+  float pStroke[nCount];
+  float pSegment[nCount];
+  float pCfg20Stroke[nCount];
+  float pCfg20Segment[nCount];
+  float fStrokeCode = 0;     // 笔中枢
+  float fSegmentCode = 100;  // 线段中枢
+
+  Func1(nCount, pStroke, pHigh, pLow, &fStrokeCode);
+  Func9(nCount, pSegment, pHigh, pLow, &fStrokeCode);
+  Func20(nCount, pCfg20Stroke, pHigh, pLow, &fStrokeCode);
+  Func20(nCount, pCfg20Segment, pHigh, pLow, &fSegmentCode);
+
+  // Func20(码0) 应与 Func1(笔) 一致；Func20(码100) 应与 Func9(线段) 一致
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pCfg20Stroke[i], pStroke[i]))
+    {
+      return false;
+    }
+    if (!NearlyEqual(pCfg20Segment[i], pSegment[i]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool TestFunc20HandlesEmptyInput()
+{
+  Func20(0, 0, 0, 0, 0);
+
+  const int nCount = 3;
+  float pHigh[nCount] = {1, 2, 3};
+  float pLow[nCount] = {1, 2, 3};
+  float pOut[nCount] = {9, 9, 9};
+  float fCode = 0;
+
+  Func20(nCount, pOut, 0, pLow, &fCode);  // 缺最高价 → 提前返回，不改写
+
+  return (pOut[0] == 9) && (pOut[1] == 9) && (pOut[2] == 9);
 }
 
 int main()
@@ -3150,6 +3262,26 @@ int main()
   if (!TestFeatureLineSegmentNeedsFourPoints())
   {
     return 95;
+  }
+  if (!TestDecodeConfig())
+  {
+    return 96;
+  }
+  if (!TestStrokeEndConfig())
+  {
+    return 97;
+  }
+  if (!TestConfiguredPointsCenterUnit())
+  {
+    return 98;
+  }
+  if (!TestFunc20DrivesConfig())
+  {
+    return 99;
+  }
+  if (!TestFunc20HandlesEmptyInput())
+  {
+    return 100;
   }
 
   return 0;
