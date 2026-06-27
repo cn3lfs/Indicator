@@ -64,16 +64,23 @@
 
 # 安装方法
 
-目前仅支持通达信软件使用。安装时，首先将CZSC.dll复制到通达信安装目录下的T0002\dlls目录之中，并在通达信公式管理器中将本dll加载到1号dll插件之中。
+目前仅支持通达信软件使用。安装步骤：
+
+1. 将打包好的 `build/CZSC.dll` 复制到通达信安装目录下的 `T0002\dlls` 目录之中；
+2. 在通达信「功能 → 公式系统 → 公式管理器」里把本 dll 加载到 **1 号 dll 插件**（公式中即用 `TDXDLL1(编号,...)` 调用）；
+3. 新建技术指标，粘贴下方示例公式即可。
+
+发布产物统一放在 **`build/`** 目录（构建脚本自动生成 `build/CZSC.dll`）。该 DLL 已**静态链接** MinGW 运行时
+（`libgcc`/`libstdc++`），自包含，无需在通达信机器另装任何运行库——仅依赖系统自带的 `KERNEL32.dll`/`msvcrt.dll`。
 
 # 编译方法
 
-通达信插件需要 32 位 Windows DLL。推荐在 WSL2 中使用 MinGW-w64 交叉编译：
+通达信插件需要 32 位 Windows DLL。推荐在 WSL2 中使用 MinGW-w64 交叉编译，产物输出到 `build/CZSC.dll`：
 
 ```bash
 sudo apt update
 sudo apt install make g++ mingw-w64 gcc-mingw-w64-i686 g++-mingw-w64-i686 binutils-mingw-w64-i686
-make mingw32
+make mingw32        # → build/CZSC.dll（已静态链接，自包含）
 ```
 
 也可以直接运行仓库脚本安装工具链：
@@ -144,15 +151,20 @@ XC:=TDXDLL1(40,C,V,0);   { 注册真实收盘价 C 与成交量 V，输出透传
 # 示例指标公式
 
 通达信公式中用 `TDXDLL1(编号, ...)` 调用本插件函数。线段点信号 `DLL` 是中枢/买卖点类函数的输入，
-故每个指标都先取 `DLL`。两个示例均可直接粘贴为新指标使用，按需裁剪。
+故每个指标都先取 `DLL`。下列示例均可直接粘贴为新指标使用，按需裁剪。
+
+> **建议**：凡用到信号质量(10)、背驰段(14)、背驰-转折(12)、即时背驰(17)、均线/吻(15/16/30 输出 13)
+> 的指标，第一行先写 `XC:=TDXDLL1(40,C,V,0);` 注册真实收盘价与成交量，使 MACD 背驰与均线用真实 C
+> 而非 `(H+L)/2` 代理（不写则自动回落代理，结果仍有效）。
 
 ## 示例一：缠论主图（线段 + 中枢 + 三类买卖点 + 信号质量 + 背驰段）
 
 加为主图叠加指标。
 
 ```text
-DLL:=TDXDLL1(1,H,L,5);              { 笔级别线段点 }
-SEG:=TDXDLL1(9,H,L,5);              { 线段级别转折点 }
+XC:=TDXDLL1(40,C,V,0);             { 注册真实收盘价/成交量，使下方 MACD 质量与背驰用真实 C }
+DLL:=TDXDLL1(1,H,L,5);             { 笔级别线段点 }
+SEG:=TDXDLL1(9,H,L,5);             { 线段级别转折点 }
 HIB:=TDXDLL1(2,DLL,H,L);           { 中枢上沿 ZG }
 LOB:=TDXDLL1(3,DLL,H,L);           { 中枢下沿 ZD }
 SIG:=TDXDLL1(4,DLL,H,L);           { 中枢起止标记 }
@@ -191,6 +203,7 @@ DRAWLINE(BSG=-1,L,BSG=-2,H,0), COLORMAGENTA;
 可单独加为副图，或追加到示例一之后叠加显示。
 
 ```text
+XC:=TDXDLL1(40,C,V,0);             { 注册真实收盘价/成交量，使背驰类判定用真实 C }
 DLL:=TDXDLL1(1,H,L,5);
 EXT:=TDXDLL1(11,DLL,H,L);          { 相邻中枢关系 }
 REV:=TDXDLL1(12,DLL,H,L);          { 一类买卖点背驰-转折强度 }
@@ -229,6 +242,34 @@ DRAWICON(KIS=3,0,3);
 { 放量湿吻=骗线嫌疑，单独高亮警示 }
 DRAWICON(KVL=4,0,11);
 ```
+
+## 示例四：30 号统一入口（推荐写法，一次算成全链路）
+
+30 号把配置与输出合并为一个 `mode = 配置码*1000 + 输出类型*10` 码，内部一次算成从笔到买卖点的全部结果
+（带缓存），各输出共享同一次计算，无需先产端点再逐个喂下游。下例用**默认配置（笔中枢）**，把主图常用项
+全部用 30 号取出：
+
+```text
+XC:=TDXDLL1(40,C,V,0);             { 注册真实 C/V，后续 30 号的质量/背驰用真实收盘价 }
+PT :=TDXDLL1(30,H,L,0);            { 0  端点(笔)：顶 +1 / 底 -1 }
+ZG :=TDXDLL1(30,H,L,10);           { 1  中枢上沿 ZG }
+ZD :=TDXDLL1(30,H,L,20);           { 2  中枢下沿 ZD }
+BSP:=TDXDLL1(30,H,L,40);           { 4  三类买卖点：买 1/2/3、卖 11/12/13 }
+QLT:=TDXDLL1(30,H,L,50);           { 5  信号质量 0/1/2 }
+{ 中枢上下沿 }
+IF(ZG,ZG,DRAWNULL), COLORYELLOW;
+IF(ZD,ZD,DRAWNULL), COLORYELLOW;
+{ 笔连线 }
+DRAWLINE(PT=-1,L,PT=+1,H,0), COLORYELLOW;
+DRAWLINE(PT=+1,H,PT=-1,L,0), COLORYELLOW;
+{ 三类买卖点 + 标准背驰(质量2)高亮 }
+BUY(BSP=1 OR BSP=3,LOW);
+SELLSHORT(BSP=11 OR BSP=13,HIGH);
+DRAWICON(BSP>0 AND QLT=2,LOW,1);
+```
+
+> 想换中枢构件/笔类型/线段法，只改配置码即可：如**线段中枢+特征序列法**的三类买卖点为
+> `TDXDLL1(30,H,L,1100040)`（配置码 `1100`*1000 + 输出 `4`*10）。配置码各位含义见上文「配置」一节。
 
 ## 标记含义说明
 

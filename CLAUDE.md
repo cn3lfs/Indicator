@@ -106,8 +106,13 @@ cd D:/github/czsc-tdx
 与 Func 导出）。新增模块时同步 `Makefile` 的 `OBJECT1`/`TEST_OBJECTS` 与上面的 clang 命令。
 
 - `Main.cpp` 因 `FxIndicator.h` 含 windows.h，clang 仅能 `-fsyntax-only` 检查；真正的 DLL 构建
-  走 WSL2 MinGW（`make mingw32`）。**不要为让 clang 过编译而改 pack/windows 头。**
-- `CZSC.dll` 是构建产物，非发布不要替换/提交。
+  走 WSL2 MinGW（`make mingw32`，本机 `wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make mingw32'`）。
+  **不要为让 clang 过编译而改 pack/windows 头。**
+- **发布产物统一在 `build/`**：`make mingw32` 输出 `build/CZSC.dll`（Makefile `TARGET1=build/CZSC.dll`）。
+  链接加 `-static -static-libgcc -static-libstdc++` 使 DLL 自包含（仅依赖 `KERNEL32`/`msvcrt`），
+  免在通达信机器另装 MinGW 运行时。`build/CZSC.dll` 作为正式包**已纳入 git 跟踪**（覆盖发布即重新构建提交）。
+  打包/校验：`sh scripts/build-mingw32.sh`（check→原生测试→Win 测试构建→打 DLL）；
+  `i686-w64-mingw32-objdump -p build/CZSC.dll | grep "DLL Name"` 应只剩 KERNEL32/msvcrt。
 
 ## 测试约定
 
