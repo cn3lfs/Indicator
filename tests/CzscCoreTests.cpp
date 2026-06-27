@@ -3172,6 +3172,45 @@ static bool TestFunc40Registers()
   return bPass && bRegistered;
 }
 
+static bool TestKissVolumeTrap()
+{
+  // 构造短长均线：间距 d=Short-Long 在 i=12 处由负转正且 |d| 局部极小 → 湿吻
+  const int n = 20;
+  std::vector<float> Short((std::size_t)n, 10.0f);
+  std::vector<float> Long((std::size_t)n);
+  for (int i = 0; i < n; i++)
+  {
+    float d;
+    if (i <= 10)      d = -1.0f;
+    else if (i == 11) d = -0.5f;
+    else if (i == 12) d = 0.1f;
+    else if (i == 13) d = 0.6f;
+    else              d = 1.0f;
+    Long[(std::size_t)i] = 10.0f - d;
+  }
+
+  // 基线：纯价吻在 i=12 为湿吻
+  std::vector<int> base = ClassifyMaKisses(Short, Long);
+  if (base[12] != CZSC_KISS_WET) return false;
+
+  // 无量 → 退化为纯价吻
+  std::vector<int> noVol = ClassifyMaKissesWithVolume(Short, Long, std::vector<float>());
+  if (noVol[12] != CZSC_KISS_WET) return false;
+
+  // 平量 → 湿吻不标嫌疑
+  std::vector<float> flat((std::size_t)n, 100.0f);
+  std::vector<int> normal = ClassifyMaKissesWithVolume(Short, Long, flat);
+  if (normal[12] != CZSC_KISS_WET) return false;
+
+  // 放量（湿吻前几根量远高于量均线）→ 标骗线嫌疑
+  std::vector<float> spike((std::size_t)n, 100.0f);
+  spike[10] = 300.0f; spike[11] = 300.0f; spike[12] = 300.0f;
+  std::vector<int> trap = ClassifyMaKissesWithVolume(Short, Long, spike);
+  if (trap[12] != CZSC_KISS_WET_TRAP) return false;
+
+  return true;
+}
+
 int main()
 {
   if (!TestOutputIsCleared())
@@ -3605,6 +3644,10 @@ int main()
   if (!TestFunc40Registers())
   {
     return 108;
+  }
+  if (!TestKissVolumeTrap())
+  {
+    return 109;
   }
 
   return 0;
