@@ -1,4 +1,5 @@
 {缠论 第二类买点 条件选股}
+{最近10个交易日内出现二买}
 XC:=TDXDLL1(40,C,V,0);
 BSP:=TDXDLL1(5,TDXDLL1(1,H,L,0),H,L);
-BSP=2;
+BARSLAST(BSP=2)<10;

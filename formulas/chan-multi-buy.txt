@@ -1,6 +1,8 @@
 {缠论 多级别买点共振选股}
-{日线二买 + 30分钟二买/三买}
+{10天内日线二买 + 2天内30分钟二买/三买}
 XC:=TDXDLL1(40,C,V,0);
-日二买:=TDXDLL1(5,TDXDLL1(1,H,L,0),H,L)=2;
-小买点:=TDXDLL1(5,TDXDLL1(1,H,L,0),H,L)#MIN30 IN (2,3);
-EXIST(日二买,5) AND EXIST(小买点,16);
+BSP:=TDXDLL1(5,TDXDLL1(1,H,L,0),H,L);
+日二买:=BARSLAST(BSP=2)<10;
+BSP30:=TDXDLL1(5,TDXDLL1(1,H,L,0),H,L)#MIN30;
+小买点:=BARSLAST(BSP30=2 OR BSP30=3)<16;
+日二买 AND 小买点;
