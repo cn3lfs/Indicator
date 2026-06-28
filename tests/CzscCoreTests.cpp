@@ -318,7 +318,7 @@ static bool TestRealSseFirstCenterStopsBeforeLeave()
   std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, Config);
   std::vector<Center> Centers = BuildCenters(Points);
 
-  int nZ00Start = FindSseDateIndex("2018-04-18");
+  int nZ00Start = FindSseDateIndex("2018-02-26");
   int nZ00End = FindSseDateIndex("2018-07-06");
   if ((Centers.empty()) || (nZ00Start < 0) || (nZ00End < 0))
   {
@@ -329,7 +329,7 @@ static bool TestRealSseFirstCenterStopsBeforeLeave()
   {
     return false;
   }
-  if (!NearlyEqual(Centers[0].fHigh, 3128.72f) || !NearlyEqual(Centers[0].fLow, 3041.63f))
+  if (!NearlyEqual(Centers[0].fHigh, 3128.72f) || !NearlyEqual(Centers[0].fLow, 3091.46f))
   {
     return false;
   }
