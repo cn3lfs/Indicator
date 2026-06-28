@@ -485,11 +485,18 @@ static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::
   return true;
 }
 
-// 若新一段与中枢重叠则延伸：ZG/ZD 随重叠收缩、GG/DD 随全幅扩张、终点后移；否则中枢结束
+// 若新一段与中枢重叠则延伸：ZG/ZD 随重叠收缩、GG/DD 随全幅扩张、终点后移；否则中枢结束。
+// 若段的高低同时超出 ZG 和 ZD（穿越整个中枢区间），视为离开而非延伸。
 static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
 {
   if ((pCenter == 0) ||
       !IntervalsOverlap(pCenter->fLow, pCenter->fHigh, Interval.fLow, Interval.fHigh))
+  {
+    return false;
+  }
+
+  // 穿越中枢：段跨过整个 ZG/ZD → 离开而非延伸
+  if ((Interval.fHigh > pCenter->fHigh) && (Interval.fLow < pCenter->fLow))
   {
     return false;
   }
@@ -2311,16 +2318,48 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
     }
     C.nDirection = (Points[i - 1].nType == CZSC_POINT_BOTTOM) ? 1 : -1;
 
-    // 中枢延伸：后续段与 ZG/ZD 重叠则吸收，扩张 GG/DD、收缩 ZG/ZD、后移终点（第20课）
+    // 中枢延伸：后续段与 ZG/ZD 重叠则吸收；若离开段+回试段构成三买卖则立即封死（第20课）
     std::size_t nExtend = i + 3;
     while (nExtend + 1 < Points.size())
     {
       SegmentInterval Interval = MakeSegmentInterval(Points[nExtend], Points[nExtend + 1]);
-      if (!ExtendCenter(&C, Interval))
+
+      // 先检查是否与 ZG/ZD 有重叠 → 正常延伸（穿越会在 ExtendCenter 内被拒绝）
+      if (IntervalsOverlap(C.fLow, C.fHigh, Interval.fLow, Interval.fHigh))
       {
-        break;
+        if (!ExtendCenter(&C, Interval))
+        {
+          break;  // 穿越中枢 → 立即封死
+        }
+        nExtend++;
+        continue;
       }
-      nExtend++;
+
+      // 无重叠 → 检测是否为离开段，前探回试是否构成三买卖
+      int nLeaveDir = 0;
+      if (IsCenterLeaveAttempt(C, Points[nExtend], Points[nExtend + 1], &nLeaveDir))
+      {
+        if (nExtend + 2 < Points.size())
+        {
+          int nRetestMove = GetMoveDirection(Points[nExtend + 1], Points[nExtend + 2]);
+          if ((nRetestMove != 0) && (nRetestMove != nLeaveDir))
+          {
+            if (!RetestBackIntoCenter(C, Points[nExtend + 2], nLeaveDir))
+            {
+              break;  // 离开+回试不回 → 三买卖点，封死中枢
+            }
+            // 离开+回试回中枢 → 中枢延伸：吸收离开段与回试段
+            ExtendCenter(&C, Interval);
+            nExtend++;
+            SegmentInterval RetestInterval = MakeSegmentInterval(Points[nExtend], Points[nExtend + 1]);
+            ExtendCenter(&C, RetestInterval);
+            nExtend++;
+            continue;
+          }
+        }
+      }
+
+      break;  // 无重叠且非延伸型离开 → 中枢结束
     }
 
     if (!Centers.empty())
