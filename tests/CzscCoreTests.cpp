@@ -1586,8 +1586,9 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
-  // 两个上升中枢[10,8]→[4.2,4]构成下跌趋势：三卖在回试点28，一买在趋势末32
-  return NearlyEqual(pOut[28], 13.0f) && NearlyEqual(pOut[32], 1.0f);
+  // 两个上升中枢[10,8]→[4.2,4]构成下跌趋势。中枢0末端 index16 已跌破 ZD=8，
+  // 离开后第一反向段 index16→20 回试不进 → 三卖在20；一买在趋势末32。
+  return NearlyEqual(pOut[20], 13.0f) && NearlyEqual(pOut[32], 1.0f);
 }
 
 static bool TestFunc5WritesCenterThirdBuy()
@@ -2252,7 +2253,7 @@ static bool TestFunc10WritesSignalQuality()
   Func10(nCount, pOut, pIn, pHigh, pLow);
 
   // 一类买点(index32)价差与速度同时走弱 → 标准强信号(2)。
-  // 新中枢划分下第一个中枢的离开/回试在 index28 另成一个第三类卖点(确认级 1)。
+  // 中枢0末端 index16 已跌破 ZD=8，离开后第一反向段 index16→20 回试不进 → 三卖在20(确认级 1)。
   for (int i = 0; i < nCount; i++)
   {
     float fExpected = 0.0f;
@@ -2260,7 +2261,7 @@ static bool TestFunc10WritesSignalQuality()
     {
       fExpected = (float)CZSC_SIGNAL_QUALITY_STRONG;
     }
-    else if (i == 28)
+    else if (i == 20)
     {
       fExpected = (float)CZSC_SIGNAL_QUALITY_CONFIRMED;
     }

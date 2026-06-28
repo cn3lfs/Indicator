@@ -1278,6 +1278,24 @@ std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint>
       }
 
       int nDirection = GetMoveDirection(Start, End);
+
+      // 离开点可能是中枢末端点本身：若 Start 已突破 ZG/ZD，离开已发生，
+      // 当前段即为离开后第一段。若其反向，则是回试（第20课「首次回试」）。
+      if ((Start.nType == CZSC_POINT_BOTTOM) && (Start.fLow < C.fLow))
+      {
+        int nBreakDir = -1;
+        if (nDirection < 0) { continue; }  // 继续同向离开，等反向段
+        Breakouts.push_back(MakeCenterBreakout(Points, C, i, j - 1, j, nBreakDir));
+        break;
+      }
+      if ((Start.nType == CZSC_POINT_TOP) && (Start.fHigh > C.fHigh))
+      {
+        int nBreakDir = 1;
+        if (nDirection > 0) { continue; }  // 继续同向离开，等反向段
+        Breakouts.push_back(MakeCenterBreakout(Points, C, i, j - 1, j, nBreakDir));
+        break;
+      }
+
       bool bLeavesUp = (nDirection > 0) && (End.nType == CZSC_POINT_TOP) && (End.fHigh > C.fHigh);
       bool bLeavesDown = (nDirection < 0) && (End.nType == CZSC_POINT_BOTTOM) && (End.fLow < C.fLow);
       if (!bLeavesUp && !bLeavesDown)
@@ -1521,15 +1539,12 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
     }
   }
 
-  // 去重：一个趋势只有一个一类买卖点——同一趋势内的同向一类只保留价格最极端的（趋势顶/底处的背驰）。
-  // 否则趋势内每个创新高/低背驰都各成一卖/一买，造成泛滥（如一段上涨趋势出现多个一卖）。
+  // 去重：同一中枢区域内只保留价格最极端的一类买卖点（每中枢至多一个一买/一卖）。
+  // 全趋势去重会丢失中间中枢的区域极值（如连续下跌趋势只保留最低点），改用中枢分组。
   std::vector<TradingSignalCandidate> Deduped;
   for (std::size_t a = 0; a < pCandidates->size(); a++)
   {
     const TradingSignalCandidate &Ca = (*pCandidates)[a];
-    int nDir = (Ca.fSignal == SIGNAL_FIRST_BUY) ? -1 : 1;  // 一买←下跌趋势 / 一卖←上涨趋势
-    int nTrendA = -1;
-    FindLastTrendStructure(Structures, Ca.nIndex, nDir, &nTrendA);
     float fA = (Ca.fSignal == SIGNAL_FIRST_BUY) ? Points[Ca.nPoint].fLow : Points[Ca.nPoint].fHigh;
 
     bool bKeep = true;
@@ -1540,17 +1555,15 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
         continue;
       }
       const TradingSignalCandidate &Cb = (*pCandidates)[b];
-      int nTrendB = -1;
-      FindLastTrendStructure(Structures, Cb.nIndex, nDir, &nTrendB);
-      if (nTrendB != nTrendA)
+      if (Cb.nCenter != Ca.nCenter)
       {
-        continue;  // 不同趋势，各保留
+        continue;  // 不同中枢，各保留
       }
       float fB = (Cb.fSignal == SIGNAL_FIRST_BUY) ? Points[Cb.nPoint].fLow : Points[Cb.nPoint].fHigh;
       bool bBmoreExtreme = (Ca.fSignal == SIGNAL_FIRST_BUY) ? (fB < fA) : (fB > fA);
       if (bBmoreExtreme || ((AbsF(fB - fA) < 0.0001f) && (b < a)))
       {
-        bKeep = false;  // 同趋势内 b 更极端（或同值取靠前）→ 丢弃 a
+        bKeep = false;  // 同中枢内 b 更极端（或同值取靠前）→ 丢弃 a
         break;
       }
     }
