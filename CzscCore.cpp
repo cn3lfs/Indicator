@@ -517,6 +517,43 @@ static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
   return true;
 }
 
+static bool IsCenterLeaveAttempt(const Center &C,
+                                 const SegmentPoint &Start,
+                                 const SegmentPoint &End,
+                                 int *pDirection)
+{
+  float fStart = GetPointPrice(Start);
+  float fEnd = GetPointPrice(End);
+  int nDirection = (fEnd > fStart) ? 1 : ((fEnd < fStart) ? -1 : 0);
+  if (pDirection != 0)
+  {
+    *pDirection = nDirection;
+  }
+
+  if ((nDirection > 0) && (End.nType == CZSC_POINT_TOP) && (End.fHigh > C.fHigh))
+  {
+    return true;
+  }
+  if ((nDirection < 0) && (End.nType == CZSC_POINT_BOTTOM) && (End.fLow < C.fLow))
+  {
+    return true;
+  }
+  return false;
+}
+
+static bool RetestBackIntoCenter(const Center &C, const SegmentPoint &Retest, int nDirection)
+{
+  if (nDirection > 0)
+  {
+    return Retest.fLow < C.fHigh;
+  }
+  if (nDirection < 0)
+  {
+    return Retest.fHigh > C.fLow;
+  }
+  return false;
+}
+
 //=============================================================================
 // 动力学：MACD 柱子面积（第24课「C段面积小于A段即背驰」的能量基础）
 //=============================================================================
@@ -1924,6 +1961,44 @@ static bool StrokeSpanEnough(const Fractal &A, const Fractal &B, const CzscConfi
   return (nMergedGap >= 4);
 }
 
+static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
+                                   const std::vector<Fractal> &Fractals,
+                                   const CzscConfig &Config)
+{
+  if ((pEnds == 0) || (Config.nStrokeEnd != CZSC_END_STRICT) || (pEnds->size() < 3))
+  {
+    return;
+  }
+
+  std::vector<Fractal> &Ends = *pEnds;
+  for (std::size_t i = 1; i + 1 < Ends.size(); i++)
+  {
+    const Fractal &Prev = Ends[i - 1];
+    const Fractal &Next = Ends[i + 1];
+    Fractal Best = Ends[i];
+
+    for (std::size_t j = 0; j < Fractals.size(); j++)
+    {
+      const Fractal &F = Fractals[j];
+      if ((F.nType != Ends[i].nType) ||
+          (F.nIndex <= Prev.nIndex) || (F.nIndex >= Next.nIndex))
+      {
+        continue;
+      }
+      if (!StrokeSpanEnough(Prev, F, Config) || !StrokeSpanEnough(F, Next, Config))
+      {
+        continue;
+      }
+      if (IsMoreExtreme(Best, F))
+      {
+        Best = F;
+      }
+    }
+
+    Ends[i] = Best;
+  }
+}
+
 // 由相邻顶底连成笔（受配置驱动）：
 //  笔类型见 StrokeSpanEnough（严格笔=合并K线≥5、新笔=合并K线≥4且原始K线≥5）；
 //  笔结束 STRICT 取最严格极值收笔，SECOND 保留首个同型分型（允许次高/次低点）。
@@ -1959,6 +2034,8 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
     }
     // 异型但跨度不足 → 忽略该分型（不弹出已与前端点构成达标笔的端点，第65课）
   }
+
+  RefineStrictStrokeEnds(&Ends, Fractals, Config);
 
   // 第二阶段：相邻交替端点连成笔
   for (std::size_t i = 1; i < Ends.size(); i++)
@@ -2210,48 +2287,43 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
   return Points;
 }
 
-// 扫描线段点序列构造中枢（第17/20课，按用户定义）：每段走势由极值点 i 开始，第一笔 i->i+1 为进入段，
-// 中枢由其后的第 2/3/4 笔（上升走势=下上下、下降走势=上下上）重叠构成（不含进入段），可向后延伸；
-// 方向由进入段定（i 为底→上升中枢、i 为顶→下降中枢）；下一段走势从本中枢终点起，不与本中枢共用端点。
+// 扫描端点序列构造同级中枢（第17/20课）：连续三段走势有重叠即形成一个候选中枢。
+// 候选与上一个已确认中枢的全幅区间 GG/DD 重叠时，视为中枢扩展/升级背景，不作为新的同级中枢输出；
+// 只有全幅不重叠才确认成下一个同级中枢（上涨/下跌趋势延伸）。
+// 方向由候选前一段走势定：前一点为底则进入段向上，前一点为顶则进入段向下。
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
 {
   std::vector<Center> Centers;
-  if (Points.size() < 5)
+  if (Points.size() < 4)
   {
     return Centers;
   }
 
-  std::size_t i = 0;
-  while (i + 4 < Points.size())
+  std::size_t i = 1;
+  while (i + 3 < Points.size())
   {
-    // 中枢候选 = 进入段(i->i+1)之后的第 2/3/4 笔，即从 i+1 起的三段
     Center C;
-    if (!TryBuildInitialCenter(Points, i + 1, &C))
+    if (!TryBuildInitialCenter(Points, i, &C))
     {
       i++;
       continue;
     }
-    C.nDirection = (Points[i].nType == CZSC_POINT_BOTTOM) ? 1 : -1;  // 进入段向上=上升中枢
+    C.nDirection = (Points[i - 1].nType == CZSC_POINT_BOTTOM) ? 1 : -1;
 
-    std::size_t nInterval = i + 4;
-    while (nInterval + 1 < Points.size())
+    if (!Centers.empty())
     {
-      SegmentInterval Interval = MakeSegmentInterval(Points[nInterval], Points[nInterval + 1]);
-      if (!ExtendCenter(&C, Interval))
+      const Center &Last = Centers.back();
+      int nGap = C.nStart - Last.nEnd;
+      if ((nGap <= 200) &&
+          IntervalsOverlap(Last.fBottom, Last.fTop, C.fBottom, C.fTop))
       {
-        break;
+        i++;
+        continue;
       }
-      nInterval++;
     }
 
     Centers.push_back(C);
-    if (nInterval + 1 >= Points.size())
-    {
-      break;
-    }
-
-    // 下一段走势从本中枢终点起（其离开段即下一段的进入段），不与本中枢共用端点
-    i = (nInterval > i) ? nInterval : (i + 1);
+    i += 4;
   }
 
   return Centers;

@@ -1,5 +1,6 @@
 #include "../CzscCore.h"
 #include "SseIndexDaily.h"
+#include <cstring>
 
 static bool NearlyEqual(float a, float b)
 {
@@ -123,6 +124,18 @@ static bool TestStrokeRequiresFiveBars()
 //=============================================================================
 // 真实数据测试：上证指数(000001.SH)日线，验证笔/线段算法的结构性质（见 SseIndexDaily.h）
 //=============================================================================
+
+static int FindSseDateIndex(const char *pDate)
+{
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (std::strcmp(SSE_DAILY_DATE[i], pDate) == 0)
+    {
+      return i;
+    }
+  }
+  return -1;
+}
 
 // 笔结构良好：顶底异型、方向正确、严格笔合并K线跨度≥4（含顶底≥5根合并K线）、首尾相接且方向交替
 static bool TestRealSseStrokesWellFormed()
@@ -265,6 +278,62 @@ static bool TestRealSseSignalsWellFormed()
   {
     return false;  // 一类去重后不泛滥
   }
+  return true;
+}
+
+static bool TestRealSsePricePointsStayOnStrictStrokeEndpoints()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+  std::vector<SegmentPoint> StrokePoints = BuildSegmentPoints(Strokes);
+  std::vector<SegmentPoint> ConfigPoints = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  if (StrokePoints.size() != ConfigPoints.size())
+  {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < StrokePoints.size(); i++)
+  {
+    if ((StrokePoints[i].nIndex != ConfigPoints[i].nIndex) ||
+        (StrokePoints[i].nType != ConfigPoints[i].nType) ||
+        !NearlyEqual(StrokePoints[i].fHigh, ConfigPoints[i].fHigh) ||
+        !NearlyEqual(StrokePoints[i].fLow, ConfigPoints[i].fLow))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestRealSseFirstCenterStopsBeforeLeave()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  CzscConfig Config = DefaultConfig();
+  std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, Config);
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  int nZ00Start = FindSseDateIndex("2018-04-18");
+  int nZ00End = FindSseDateIndex("2018-06-07");
+  if ((Centers.empty()) || (nZ00Start < 0) || (nZ00End < 0))
+  {
+    return false;
+  }
+
+  if ((Centers[0].nStart != nZ00Start) || (Centers[0].nEnd != nZ00End))
+  {
+    return false;
+  }
+  if (!NearlyEqual(Centers[0].fHigh, 3128.72f) || !NearlyEqual(Centers[0].fLow, 3041.63f))
+  {
+    return false;
+  }
+
   return true;
 }
 
@@ -901,11 +970,13 @@ static bool TestTradingCandidatesGenerateFirstAndSecondBuy()
   pHigh[36] = 6;
   pLow[36] = 6;
   pIn[40] = -1;
-  pHigh[40] = 4.5f;
-  pLow[40] = 4.5f;
+  pHigh[40] = 3.9f;
+  pLow[40] = 3.9f;
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 6, 4));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
   std::vector<TradingSignalCandidate> Candidates =
@@ -1025,7 +1096,9 @@ static bool TestFirstCandidateKeepsTrendDivergence()
   pLow[32] = 3.8f;
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
   std::vector<TradingSignalCandidate> Candidates =
@@ -1120,7 +1193,9 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   pLow[40] = 4.5f;
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(1, 10));
@@ -1190,7 +1265,9 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   pLow[40] = 12.5f;
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(-1, 10));
@@ -1260,7 +1337,9 @@ static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
   pLow[40] = 4.1f;
 
   std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
-  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
   std::vector<TradingSignalCandidate> Candidates =
@@ -1366,7 +1445,7 @@ static bool TestCenterExtendsWithOverlappingSegment()
 
 static bool TestCentersSplitWhenOverlapBreaks()
 {
-  // 第一个中枢在低位带[5,9]成形后，向上离开（20->...）打破重叠 → 中枢结束；
+  // 第一个中枢在低位带[5,9]成形后，向上离开且首次回试不进中枢 → 中枢结束；
   // 下一段走势从其终点(index20)起，在高位带[17,18]另成一枢，故分裂为两个中枢。
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
@@ -1387,13 +1466,13 @@ static bool TestCentersSplitWhenOverlapBreaks()
   {
     return false;
   }
-  // 中枢1：进入段终点(index4)到第 4 笔终点(index20)，ZG=min(10,9,9)=9、ZD=max(4,5,5)=5
-  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 20))
+  // 中枢1：进入段终点(index4)到第 4 笔终点(index16)，20 为离开点而非中枢终点。
+  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 16))
   {
     return false;
   }
-  // 中枢2：从中枢1终点(index24)另起，高位带 ZG=18、ZD=17
-  if ((Centers[1].nStart != 24) || (Centers[1].nEnd != 40))
+  // 中枢2：离开后第一组三笔在高位成枢，ZG=19、ZD=16
+  if ((Centers[1].nStart != 20) || (Centers[1].nEnd != 32))
   {
     return false;
   }
@@ -1401,7 +1480,7 @@ static bool TestCentersSplitWhenOverlapBreaks()
   {
     return false;
   }
-  if (!NearlyEqual(Centers[1].fHigh, 18.0f) || !NearlyEqual(Centers[1].fLow, 17.0f))
+  if (!NearlyEqual(Centers[1].fHigh, 19.0f) || !NearlyEqual(Centers[1].fLow, 16.0f))
   {
     return false;
   }
@@ -1509,11 +1588,11 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
 
   for (int i = 0; i < nCount; i++)
   {
-    if ((i == 32) && !NearlyEqual(pOut[i], 1.0f))
+    if ((i == 28) && !NearlyEqual(pOut[i], 13.0f))
     {
       return false;
     }
-    if ((i != 32) && NearlyEqual(pOut[i], 1.0f))
+    if ((i != 28) && !NearlyEqual(pOut[i], 0.0f))
     {
       return false;
     }
@@ -1556,11 +1635,11 @@ static bool TestFunc5WritesCenterThirdBuy()
   pHigh[16] = 4.5f;
   pLow[16] = 4.5f;
   pIn[20] = 1;
-  pHigh[20] = 8;
-  pLow[20] = 8;
+  pHigh[20] = 5.2f;
+  pLow[20] = 5.2f;
   pIn[24] = -1;
-  pHigh[24] = 7;
-  pLow[24] = 7;
+  pHigh[24] = 4.8f;
+  pLow[24] = 4.8f;
   pIn[28] = 1;
   pHigh[28] = 9;
   pLow[28] = 9;
@@ -1607,11 +1686,11 @@ static bool TestFunc5WritesCenterThirdSell()
   pHigh[16] = 10.5f;
   pLow[16] = 10.5f;
   pIn[20] = -1;
-  pHigh[20] = 7;
-  pLow[20] = 7;
+  pHigh[20] = 9.8f;
+  pLow[20] = 9.8f;
   pIn[24] = 1;
-  pHigh[24] = 8;
-  pLow[24] = 8;
+  pHigh[24] = 10.2f;
+  pLow[24] = 10.2f;
   pIn[28] = -1;
   pHigh[28] = 6;
   pLow[28] = 6;
@@ -1671,8 +1750,8 @@ static bool TestFunc5WritesSecondBuyAfterFirstBuy()
   pHigh[36] = 6;
   pLow[36] = 6;
   pIn[40] = -1;
-  pHigh[40] = 4.5f;
-  pLow[40] = 4.5f;
+  pHigh[40] = 3.9f;
+  pLow[40] = 3.9f;
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
@@ -1726,8 +1805,8 @@ static bool TestFunc5WritesSecondSellAfterFirstSell()
   pHigh[36] = 11;
   pLow[36] = 11;
   pIn[40] = 1;
-  pHigh[40] = 12.5f;
-  pLow[40] = 12.5f;
+  pHigh[40] = 13.1f;
+  pLow[40] = 13.1f;
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
@@ -2275,7 +2354,8 @@ static bool TestCenterAccumulatesGGDD()
 static bool TestCenterExtendUpdatesGGDD()
 {
   // 进入段(0->4)不算中枢；中枢三笔(4->8、8->12、12->16)初成，GG=9；
-  // 其后两段(16->20、20->24)仍与中枢重叠故延伸：末段创新高 11 把 GG 从 9 扩张到 11，ZD 收缩到 7。
+  // 16->20 留在中枢内，20->24 向上离开，24->28 首次回试进中枢，故原中枢延伸；
+  // 离开段创新高 11 把 GG 从 9 扩张到 11，ZD 收缩到 7。
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 8));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
@@ -2284,6 +2364,7 @@ static bool TestCenterExtendUpdatesGGDD()
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 8));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 7));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 28, 7));
 
   std::vector<Center> Centers = BuildCenters(Points);
   if (Centers.size() != 1)
@@ -2292,7 +2373,7 @@ static bool TestCenterExtendUpdatesGGDD()
   }
 
   // 延伸把 GG 从初始 9 扩张到 11、ZD 从 6 收缩到 7；ZG=8（min 8,9,8），DD=5（min 5,6,6）
-  return (Centers[0].nEnd == 24) &&
+  return (Centers[0].nEnd == 28) &&
          NearlyEqual(Centers[0].fHigh, 8.0f) && NearlyEqual(Centers[0].fLow, 7.0f) &&
          NearlyEqual(Centers[0].fTop, 11.0f) && NearlyEqual(Centers[0].fBottom, 5.0f);
 }
@@ -2381,8 +2462,8 @@ static bool TestFunc11WritesCenterRelation()
     pOut[i] = -1;
   }
 
-  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)：中枢1全幅[4,20]、中枢2全幅[15,19]，
-  // 全幅区间重叠 → 中枢关系判为扩展，在后中枢起点(index24)标记 2。
+  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)：中枢1全幅[4,10]、中枢2全幅[15,19]，
+  // 全幅区间脱离 → 中枢关系判为上涨延续，在后中枢起点(index24)标记 1。
   pIn[0] = -1;
   pHigh[0] = pLow[0] = 1;
   pIn[4] = 1;
@@ -2410,7 +2491,7 @@ static bool TestFunc11WritesCenterRelation()
 
   for (int i = 0; i < nCount; i++)
   {
-    float fExpected = (i == 24) ? 2.0f : 0.0f;  // 后中枢起点(index24)标记扩展
+    float fExpected = (i == 24) ? 1.0f : 0.0f;  // 后中枢起点(index24)标记上涨延续
     if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
@@ -3548,6 +3629,14 @@ int main()
   if (!TestRealSseSignalsWellFormed())
   {
     return 118;
+  }
+  if (!TestRealSsePricePointsStayOnStrictStrokeEndpoints())
+  {
+    return 119;
+  }
+  if (!TestRealSseFirstCenterStopsBeforeLeave())
+  {
+    return 120;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {
