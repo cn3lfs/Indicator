@@ -2039,12 +2039,9 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
     return Strokes;
   }
 
-  // 第一阶段：构建顶底交替的笔端点序列。同向保留极值，但不能跳过
-  // 可成严格笔的反向分型（链式替换防护，第65课）。
+  // 第一阶段：构建顶底交替的笔端点序列
   std::vector<Fractal> Ends;
-  std::vector<std::size_t> Origins;  // Origins[k] = Ends[k] 首次被确认时的 Fractals 下标
   Ends.push_back(Fractals[0]);
-  Origins.push_back(0);
 
   for (std::size_t i = 1; i < Fractals.size(); i++)
   {
@@ -2052,31 +2049,15 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
     const Fractal &Last = Ends.back();
     if (F.nType == Last.nType)
     {
+      // 同型：严格取极值则用更极端者延伸端点（中继顶/底）；允许次高/次低则保留首个
       if ((Config.nStrokeEnd == CZSC_END_STRICT) && IsMoreExtreme(Last, F))
       {
-        // 从该端点最初被确认的位置到 F 之间若有可成笔的反向分型则不替换
-        const Fractal &Origin = Fractals[Origins.back()];
-        bool bHasValidOpposite = false;
-        for (std::size_t k = 0; (k < Fractals.size()) && !bHasValidOpposite; k++)
-        {
-          const Fractal &X = Fractals[k];
-          if ((X.nType != Last.nType) &&
-              (X.nIndex > Origin.nIndex) && (X.nIndex < F.nIndex) &&
-              StrokeSpanEnough(Origin, X, Config) && StrokeSpanEnough(X, F, Config))
-          {
-            bHasValidOpposite = true;
-          }
-        }
-        if (!bHasValidOpposite)
-        {
-          Ends.back() = F;
-        }
+        Ends.back() = F;
       }
     }
     else if (StrokeSpanEnough(Last, F, Config))
     {
-      Ends.push_back(F);    // 异型且跨度达标 → 新笔端点
-      Origins.push_back(i); // 记录该端点首次被确认时的分型下标
+      Ends.push_back(F);  // 异型且跨度达标 → 新笔端点
     }
     // 异型但跨度不足 → 忽略该分型（不弹出已与前端点构成达标笔的端点，第65课）
   }
