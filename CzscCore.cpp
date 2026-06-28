@@ -1990,6 +1990,9 @@ static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
     return;
   }
 
+  // 笔的最小合并K线跨度：严格笔≥4，新笔≥3
+  int nMinSpan = (Config.nStrokeType == CZSC_STROKE_NEW) ? 3 : 4;
+
   std::vector<Fractal> &Ends = *pEnds;
   for (std::size_t i = 1; i + 1 < Ends.size(); i++)
   {
@@ -1997,11 +2000,15 @@ static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
     const Fractal &Next = Ends[i + 1];
     Fractal Best = Ends[i];
 
+    // 候选只允许在 Prev 附近有限窗口内（≤ 2×最小跨度），防止跳过已验证的相反端点
+    int nMaxMerged = Prev.nMergedIndex + 2 * nMinSpan;
+
     for (std::size_t j = 0; j < Fractals.size(); j++)
     {
       const Fractal &F = Fractals[j];
       if ((F.nType != Ends[i].nType) ||
-          (F.nIndex <= Prev.nIndex) || (F.nIndex >= Next.nIndex))
+          (F.nIndex <= Prev.nIndex) || (F.nIndex >= Next.nIndex) ||
+          (F.nMergedIndex > nMaxMerged))
       {
         continue;
       }
