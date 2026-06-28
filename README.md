@@ -168,41 +168,38 @@ XC:=TDXDLL1(40,C,V,0);   { 注册真实收盘价 C 与成交量 V，输出透传
 > 的指标，第一行先写 `XC:=TDXDLL1(40,C,V,0);` 注册真实收盘价与成交量，使 MACD 背驰与均线用真实 C
 > 而非 `(H+L)/2` 代理（不写则自动回落代理，结果仍有效）。
 
-## 示例一：缠论主图（线段 + 中枢 + 三类买卖点 + 信号质量 + 背驰段）
+## 示例一：缠论主图（笔 + 线段 + 三类买卖点 + 信号质量）
 
 加为主图叠加指标。
 
 ```text
-XC:=TDXDLL1(40,C,V,0);             { 注册真实收盘价/成交量，使下方 MACD 质量与背驰用真实 C }
-DLL:=TDXDLL1(1,H,L,5);             { 笔级别线段点 }
-SEG:=TDXDLL1(9,H,L,5);             { 线段级别转折点 }
-HIB:=TDXDLL1(2,DLL,H,L);           { 中枢上沿 ZG }
-LOB:=TDXDLL1(3,DLL,H,L);           { 中枢下沿 ZD }
-SIG:=TDXDLL1(4,DLL,H,L);           { 中枢起止标记 }
-BSP:=TDXDLL1(5,DLL,H,L);           { 三类买卖点 }
+XC:=TDXDLL1(40,C,V,0);             { 注册真实收盘价/成交量 }
+DLL:=TDXDLL1(1,H,L,5);             { 笔端点：顶 +1 / 底 -1 }
+SEG:=TDXDLL1(19,H,L,5);            { 线段端点：特征序列法(第64/67课) }
+BSP:=TDXDLL1(5,DLL,H,L);           { 三类买卖点：买 1/2/3、卖 11/12/13 }
 QLT:=TDXDLL1(10,DLL,H,L);          { 信号质量 0/1/2 }
-SLP:=TDXDLL1(8,DLL,H,L);           { 线段斜率 }
-BSG:=TDXDLL1(14,DLL,H,L);          { 背驰段端点 }
-{ 中枢上下沿与起止竖线 }
-IF(HIB,HIB,DRAWNULL), COLORYELLOW;
-IF(LOB,LOB,DRAWNULL), COLORYELLOW;
-STICKLINE(SIG,LOB,HIB,0,0), COLORYELLOW;
-{ 笔(黄)与线段(红)连线 }
-DRAWLINE(DLL=-1,L,DLL=+1,H,0), COLORYELLOW;
-DRAWLINE(DLL=+1,H,DLL=-1,L,0), COLORYELLOW;
-DRAWLINE(SEG=-1,L,SEG=+1,H,0), COLORRED;
-DRAWLINE(SEG=+1,H,SEG=-1,L,0), COLORRED;
-{ 笔端点的斜率数字 }
-DRAWNUMBER(DLL=+1,H,SLP), COLORYELLOW, DRAWABOVE;
-DRAWNUMBER(DLL=-1,L,SLP), COLORYELLOW;
-{ 三类买卖点：买 1/2/3 笑脸，卖 11/12/13 哭脸，标准背驰红箭头高亮 }
-DRAWICON(BSP=1 OR BSP=2 OR BSP=3,LOW,1);
-DRAWICON(BSP=11 OR BSP=12 OR BSP=13,HIGH,2);
-{ 质量2（标准背驰）重点加亮 }
-DRAWICON(BSP>0 AND QLT=2,LOW,1);
-{ 背驰段连线(洋红)，作为区间套入场观察区间 }
-DRAWLINE(BSG=1,H,BSG=2,L,0), COLORMAGENTA;
-DRAWLINE(BSG=-1,L,BSG=-2,H,0), COLORMAGENTA;
+
+{ ===== 笔（黄细线） ===== }
+DRAWLINE(DLL=-1,L,DLL=+1,H,0),COLORYELLOW,LINETHICK1;
+DRAWLINE(DLL=+1,H,DLL=-1,L,0),COLORYELLOW,LINETHICK1;
+
+{ ===== 线段（红粗线，特征序列法） ===== }
+DRAWLINE(SEG=-1,L,SEG=+1,H,0),COLORRED,LINETHICK2;
+DRAWLINE(SEG=+1,H,SEG=-1,L,0),COLORRED,LINETHICK2;
+
+{ ===== 三类买点（白字，K线下方） ===== }
+DRAWTEXT(BSP=1,LOW,'一买'),COLORWHITE;
+DRAWTEXT(BSP=2,LOW,'二买'),COLORWHITE;
+DRAWTEXT(BSP=3,LOW,'三买'),COLORWHITE;
+
+{ ===== 三类卖点（绿字，K线上方） ===== }
+DRAWTEXT(BSP=11,HIGH,'一卖'),COLORGREEN;
+DRAWTEXT(BSP=12,HIGH,'二卖'),COLORGREEN;
+DRAWTEXT(BSP=13,HIGH,'三卖'),COLORGREEN;
+
+{ ===== 标准背驰(质量2)最强买卖点额外打点 ===== }
+DRAWICON(BSP>=1 AND BSP<=3 AND QLT=2,LOW,1);
+DRAWICON(BSP>=11 AND BSP<=13 AND QLT=2,HIGH,2);
 ```
 
 ## 示例二：进阶研判标记（中枢关系 / 背驰-转折 / 三买后续）
@@ -257,23 +254,28 @@ DRAWICON(KVL=4,0,11);
 全部用 30 号取出：
 
 ```text
-XC:=TDXDLL1(40,C,V,0);             { 注册真实 C/V，后续 30 号的质量/背驰用真实收盘价 }
+XC:=TDXDLL1(40,C,V,0);             { 注册真实 C/V }
 PT :=TDXDLL1(30,H,L,0);            { 0  端点(笔)：顶 +1 / 底 -1 }
-ZG :=TDXDLL1(30,H,L,10);           { 1  中枢上沿 ZG }
-ZD :=TDXDLL1(30,H,L,20);           { 2  中枢下沿 ZD }
 BSP:=TDXDLL1(30,H,L,40);           { 4  三类买卖点：买 1/2/3、卖 11/12/13 }
 QLT:=TDXDLL1(30,H,L,50);           { 5  信号质量 0/1/2 }
-{ 中枢上下沿 }
-IF(ZG,ZG,DRAWNULL), COLORYELLOW;
-IF(ZD,ZD,DRAWNULL), COLORYELLOW;
-{ 笔连线 }
-DRAWLINE(PT=-1,L,PT=+1,H,0), COLORYELLOW;
-DRAWLINE(PT=+1,H,PT=-1,L,0), COLORYELLOW;
-{ 三类买卖点：买(1,2,3) 卖(11,12,13) }
-DRAWICON(BSP=1 OR BSP=2 OR BSP=3,LOW,1);
-DRAWICON(BSP=11 OR BSP=12 OR BSP=13,HIGH,2);
-{ 质量2（标准背驰）重点加亮 }
-DRAWICON(BSP>0 AND QLT=2,LOW,1);
+
+{ ===== 笔（黄线） ===== }
+DRAWLINE(PT=-1,L,PT=+1,H,0),COLORYELLOW;
+DRAWLINE(PT=+1,H,PT=-1,L,0),COLORYELLOW;
+
+{ ===== 三类买点（白字） ===== }
+DRAWTEXT(BSP=1,LOW,'一买'),COLORWHITE;
+DRAWTEXT(BSP=2,LOW,'二买'),COLORWHITE;
+DRAWTEXT(BSP=3,LOW,'三买'),COLORWHITE;
+
+{ ===== 三类卖点（绿字） ===== }
+DRAWTEXT(BSP=11,HIGH,'一卖'),COLORGREEN;
+DRAWTEXT(BSP=12,HIGH,'二卖'),COLORGREEN;
+DRAWTEXT(BSP=13,HIGH,'三卖'),COLORGREEN;
+
+{ ===== 标准背驰 重点打点 ===== }
+DRAWICON(BSP>=1 AND BSP<=3 AND QLT=2,LOW,1);
+DRAWICON(BSP>=11 AND BSP<=13 AND QLT=2,HIGH,2);
 ```
 
 > 想换中枢构件/笔类型/线段法，只改配置码即可：如**线段中枢+特征序列法**的三类买卖点为
