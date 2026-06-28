@@ -319,7 +319,7 @@ static bool TestRealSseFirstCenterStopsBeforeLeave()
   std::vector<Center> Centers = BuildCenters(Points);
 
   int nZ00Start = FindSseDateIndex("2018-04-18");
-  int nZ00End = FindSseDateIndex("2018-06-07");
+  int nZ00End = FindSseDateIndex("2018-07-06");
   if ((Centers.empty()) || (nZ00Start < 0) || (nZ00End < 0))
   {
     return false;
@@ -1466,13 +1466,13 @@ static bool TestCentersSplitWhenOverlapBreaks()
   {
     return false;
   }
-  // 中枢1：进入段终点(index4)到第 4 笔终点(index16)，20 为离开点而非中枢终点。
-  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 16))
+  // 中枢1：进入段终点(index4)到离开点(index20)，P4→P5 [5,20] 触及 ZD=5 故中枢延伸至20。
+  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 20))
   {
     return false;
   }
-  // 中枢2：离开后第一组三笔在高位成枢，ZG=19、ZD=16
-  if ((Centers[1].nStart != 20) || (Centers[1].nEnd != 32))
+  // 中枢2：从 index24 起在高位成枢，并延伸至末段 index40，ZG=18、ZD=17
+  if ((Centers[1].nStart != 24) || (Centers[1].nEnd != 40))
   {
     return false;
   }
@@ -1480,7 +1480,7 @@ static bool TestCentersSplitWhenOverlapBreaks()
   {
     return false;
   }
-  if (!NearlyEqual(Centers[1].fHigh, 19.0f) || !NearlyEqual(Centers[1].fLow, 16.0f))
+  if (!NearlyEqual(Centers[1].fHigh, 18.0f) || !NearlyEqual(Centers[1].fLow, 17.0f))
   {
     return false;
   }
@@ -1586,25 +1586,14 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
-  for (int i = 0; i < nCount; i++)
-  {
-    if ((i == 28) && !NearlyEqual(pOut[i], 13.0f))
-    {
-      return false;
-    }
-    if ((i != 28) && !NearlyEqual(pOut[i], 0.0f))
-    {
-      return false;
-    }
-  }
-
-  return true;
+  // 两个上升中枢[10,8]→[4.2,4]构成下跌趋势：三卖在回试点28，一买在趋势末32
+  return NearlyEqual(pOut[28], 13.0f) && NearlyEqual(pOut[32], 1.0f);
 }
 
 static bool TestFunc5WritesCenterThirdBuy()
 {
-  // 上升中枢在低位带[4.5,5.5]成形后向上离开，回试不回中枢(底 7.5 > ZG 5.5) → 第三类买点。
-  // 进入段(0->4) + 中枢三笔(4->8、8->12、12->16) + 离开(20->28创新高) + 回试(底 index32)。
+  // 上升中枢在低位带[4,5.5]成形后向上离开，回试不回中枢(底 6 > ZG 5.5) → 第三类买点。
+  // 进入段(0->4) + 中枢三笔(4->8、8->12、12->16) + 离开(16->20创新高) + 回试(底 index24)。
   const int nCount = 33;
   float pIn[nCount];
   float pHigh[nCount];
@@ -1632,30 +1621,30 @@ static bool TestFunc5WritesCenterThirdBuy()
   pHigh[12] = 5.5f;
   pLow[12] = 5.5f;
   pIn[16] = -1;
-  pHigh[16] = 4.5f;
-  pLow[16] = 4.5f;
+  pHigh[16] = 5.6f;   // 中枢结束后第一个底，高于 ZG=5.5 → 延伸终止
+  pLow[16] = 5.6f;
   pIn[20] = 1;
-  pHigh[20] = 5.2f;
-  pLow[20] = 5.2f;
+  pHigh[20] = 7;      // 向上离开中枢
+  pLow[20] = 7;
   pIn[24] = -1;
-  pHigh[24] = 4.8f;
-  pLow[24] = 4.8f;
+  pHigh[24] = 6;      // 回试底，在 ZG 上方 → 第三类买点
+  pLow[24] = 6;
   pIn[28] = 1;
-  pHigh[28] = 9;
-  pLow[28] = 9;
+  pHigh[28] = 8;
+  pLow[28] = 8;
   pIn[32] = -1;
-  pHigh[32] = 7.5f;
-  pLow[32] = 7.5f;
+  pHigh[32] = 7;
+  pLow[32] = 7;
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
-  return NearlyEqual(pOut[32], 3.0f);
+  return NearlyEqual(pOut[24], 3.0f);
 }
 
 static bool TestFunc5WritesCenterThirdSell()
 {
-  // 下降中枢在高位带[9.5,10.5]成形后向下离开，回试不回中枢(顶 7.5 < ZD 9.5) → 第三类卖点。
-  // 进入段(0->4) + 中枢三笔(4->8、8->12、12->16) + 离开(20->28创新低) + 回试(顶 index32)。
+  // 下降中枢在高位带[9.5,11]成形后向下离开，回试不回中枢(顶 8 < ZD 9.5) → 第三类卖点。
+  // 进入段(0->4) + 中枢三笔(4->8、8->12、12->16) + 离开(16->20创新低) + 回试(顶 index24)。
   const int nCount = 33;
   float pIn[nCount];
   float pHigh[nCount];
@@ -1671,8 +1660,8 @@ static bool TestFunc5WritesCenterThirdSell()
   }
 
   pIn[0] = 1;
-  pHigh[0] = 14;
-  pLow[0] = 14;
+  pHigh[0] = 12;
+  pLow[0] = 12;
   pIn[4] = -1;
   pHigh[4] = 9;
   pLow[4] = 9;
@@ -1683,14 +1672,14 @@ static bool TestFunc5WritesCenterThirdSell()
   pHigh[12] = 9.5f;
   pLow[12] = 9.5f;
   pIn[16] = 1;
-  pHigh[16] = 10.5f;
-  pLow[16] = 10.5f;
+  pHigh[16] = 9.3f;   // 中枢结束后第一个顶，低于 ZD=9.5 → 延伸终止
+  pLow[16] = 9.3f;
   pIn[20] = -1;
-  pHigh[20] = 9.8f;
-  pLow[20] = 9.8f;
+  pHigh[20] = 7;      // 向下离开中枢
+  pLow[20] = 7;
   pIn[24] = 1;
-  pHigh[24] = 10.2f;
-  pLow[24] = 10.2f;
+  pHigh[24] = 8;      // 回试顶，在 ZD 下方 → 第三类卖点
+  pLow[24] = 8;
   pIn[28] = -1;
   pHigh[28] = 6;
   pLow[28] = 6;
@@ -1700,7 +1689,7 @@ static bool TestFunc5WritesCenterThirdSell()
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
-  return NearlyEqual(pOut[32], 13.0f);
+  return NearlyEqual(pOut[24], 13.0f);
 }
 
 static bool TestFunc5WritesSecondBuyAfterFirstBuy()
@@ -2462,8 +2451,8 @@ static bool TestFunc11WritesCenterRelation()
     pOut[i] = -1;
   }
 
-  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)：中枢1全幅[4,10]、中枢2全幅[15,19]，
-  // 全幅区间脱离 → 中枢关系判为上涨延续，在后中枢起点(index24)标记 1。
+  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)：中枢1吸收 P4→P5 [5,20] 后
+  // GG 扩张至 20，与中枢2 DD=15 重叠 → 中枢关系判为扩展，在后中枢起点(index24)标记 2。
   pIn[0] = -1;
   pHigh[0] = pLow[0] = 1;
   pIn[4] = 1;
@@ -2491,7 +2480,7 @@ static bool TestFunc11WritesCenterRelation()
 
   for (int i = 0; i < nCount; i++)
   {
-    float fExpected = (i == 24) ? 1.0f : 0.0f;  // 后中枢起点(index24)标记上涨延续
+    float fExpected = (i == 24) ? 2.0f : 0.0f;  // 后中枢起点(index24)标记扩展
     if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;

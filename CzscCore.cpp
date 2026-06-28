@@ -2288,9 +2288,10 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
 }
 
 // 扫描端点序列构造同级中枢（第17/20课）：连续三段走势有重叠即形成一个候选中枢。
-// 候选与上一个已确认中枢的全幅区间 GG/DD 重叠时，视为中枢扩展/升级背景，不作为新的同级中枢输出；
-// 只有全幅不重叠才确认成下一个同级中枢（上涨/下跌趋势延伸）。
-// 方向由候选前一段走势定：前一点为底则进入段向上，前一点为顶则进入段向下。
+// 中枢成形后以 ExtendCenter 吸收后续与 ZG/ZD 重叠的段来延伸（第20课中枢延伸）。
+// 延伸完毕后，若候选与上一个已确认中枢的 ZG/ZD 区间重叠则视为扩展/升级，不作为
+// 新的同级中枢输出；只有 ZG/ZD 不重叠才确认成下一个同级中枢（上涨/下跌趋势延伸）。
+// 方向由进入段定：前一点为底则进入段向上，前一点为顶则进入段向下。
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
 {
   std::vector<Center> Centers;
@@ -2310,20 +2311,32 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
     }
     C.nDirection = (Points[i - 1].nType == CZSC_POINT_BOTTOM) ? 1 : -1;
 
+    // 中枢延伸：后续段与 ZG/ZD 重叠则吸收，扩张 GG/DD、收缩 ZG/ZD、后移终点（第20课）
+    std::size_t nExtend = i + 3;
+    while (nExtend + 1 < Points.size())
+    {
+      SegmentInterval Interval = MakeSegmentInterval(Points[nExtend], Points[nExtend + 1]);
+      if (!ExtendCenter(&C, Interval))
+      {
+        break;
+      }
+      nExtend++;
+    }
+
     if (!Centers.empty())
     {
       const Center &Last = Centers.back();
       int nGap = C.nStart - Last.nEnd;
       if ((nGap <= 200) &&
-          IntervalsOverlap(Last.fBottom, Last.fTop, C.fBottom, C.fTop))
+          IntervalsOverlap(Last.fLow, Last.fHigh, C.fLow, C.fHigh))
       {
-        i++;
+        i = nExtend + 1;
         continue;
       }
     }
 
     Centers.push_back(C);
-    i += 4;
+    i = nExtend + 1;
   }
 
   return Centers;
