@@ -521,6 +521,8 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nCenter = -1;
   C.nBreakout = -1;
   C.nSource = 0;
+  C.nTrend = -1;
+  C.nMovementType = CZSC_MOVEMENT_CONSOLIDATION;
   C.nQuality = CZSC_SIGNAL_QUALITY_WATCH;
   C.nCenterPosition = CZSC_CENTER_POSITION_UNKNOWN;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
@@ -1212,7 +1214,60 @@ static bool TestFirstCandidateKeepsTrendDivergence()
          pFirst->Divergence.bNewExtreme &&
          pFirst->Divergence.bDivergence &&
          (pFirst->nQuality == CZSC_SIGNAL_QUALITY_STRONG) &&
+         (pFirst->nCenter == 1) &&
+         (pFirst->nTrend == 0) &&
+         (pFirst->nMovementType == CZSC_MOVEMENT_DOWN) &&
          (pFirst->nCenterPosition == CZSC_CENTER_POSITION_BELOW);
+}
+
+static bool TestFirstCandidateSkipsAfterLaterCenter()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = pLow[36] = 4.0f;
+  pIn[40] = -1;
+  pHigh[40] = pLow[40] = 3.7f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  Centers.push_back(MakeTestCenter(36, 44, 4.1f, 3.5f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  return !HasSignalCandidate(Candidates, 40, 1.0f);
 }
 
 static bool TestThirdCandidateKeepsBreakoutDivergence()
@@ -3862,6 +3917,10 @@ int main()
   if (!TestFirstCandidateKeepsTrendDivergence())
   {
     return 30;
+  }
+  if (!TestFirstCandidateSkipsAfterLaterCenter())
+  {
+    return 125;
   }
   if (!TestThirdCandidateKeepsBreakoutDivergence())
   {

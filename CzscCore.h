@@ -239,6 +239,8 @@ struct TradingSignalCandidate
   int   nCenter;            // 所属中枢下标
   int   nBreakout;          // 对应中枢突破下标（无则 -1）
   int   nSource;            // 来源：第一/二/三类
+  int   nTrend;             // 所属走势结构下标（无则 -1）
+  int   nMovementType;      // 所属走势类型，见 CzscMovementType
   int   nQuality;           // 见 CzscSignalQuality
   int   nCenterPosition;    // 见 CzscCenterPosition
   int   nReversal;          // 见 CzscReversalStrength（第29课，仅一类）

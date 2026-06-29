@@ -86,6 +86,14 @@ static const char *CenterRelationName(int nRelation)
   return "未知";
 }
 
+static const char *MovementName(int nMovement)
+{
+  if (nMovement == CZSC_MOVEMENT_UP) return "上涨";
+  if (nMovement == CZSC_MOVEMENT_DOWN) return "下跌";
+  if (nMovement == CZSC_MOVEMENT_CONSOLIDATION) return "盘整";
+  return "未知";
+}
+
 static void PrintPoints(FILE *pFile, const char *pTitle, const char *pPrefix,
                         const std::vector<SegmentPoint> &Points)
 {
@@ -150,11 +158,13 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
   {
     const TradingSignalCandidate &C = Candidates[i];
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  中枢%d  点%d  突破%d  位置%s  背驰%s  后续%s%s\n",
+                 "  %s  %s  质量%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s%s\n",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
                  C.nCenter,
+                 C.nTrend,
+                 MovementName(C.nMovementType),
                  C.nPoint,
                  C.nBreakout,
                  CenterPositionName(C.nCenterPosition),
