@@ -41,6 +41,7 @@
 **选股公式**（选股用）：
 - 点 **条件选股公式** → **新建**
 - 分别导入 `chan-first-buy.txt`（一买）、`chan-second-buy.txt`（二买）、`chan-third-buy.txt`（三买）
+- 需要第37课 A-B-C 结构确认的一买时，另导入 `chan-first-buy-abc.txt`
 - 每次粘贴后点确定
 
 ## 第四步：使用
