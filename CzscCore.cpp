@@ -894,17 +894,6 @@ static int GetMoveDirection(const SegmentPoint &Start, const SegmentPoint &End)
   return 0;
 }
 
-// 后中枢是否整体在前中枢之上 / 之下（ZG/ZD 不重叠），用于走势类型判定
-static bool IsCenterAbove(const Center &Left, const Center &Right)
-{
-  return Right.fLow > Left.fHigh;
-}
-
-static bool IsCenterBelow(const Center &Left, const Center &Right)
-{
-  return Right.fHigh < Left.fLow;
-}
-
 // 走势中枢中心定理二（第20课）：用全幅极值 GG/DD 判定前后两个同级别中枢的关系。
 // 后DD > 前GG → 上涨延续；后GG < 前DD → 下跌延续；其余（全幅重叠）→ 形成高级别中枢（扩展）。
 int ClassifyCenterRelation(const Center &Prev, const Center &Next)
@@ -960,7 +949,20 @@ static TrendStructure MakeTrendStructure(const std::vector<Center> &Centers,
   return T;
 }
 
-// 把中枢序列归并为走势类型：连续同向（依次抬高/降低）的中枢合并为一段趋势，
+static int CenterRelationToMovement(int nRelation)
+{
+  if (nRelation == CZSC_CENTER_RELATION_UP)
+  {
+    return CZSC_MOVEMENT_UP;
+  }
+  if (nRelation == CZSC_CENTER_RELATION_DOWN)
+  {
+    return CZSC_MOVEMENT_DOWN;
+  }
+  return CZSC_MOVEMENT_CONSOLIDATION;
+}
+
+// 把中枢序列归并为走势类型：连续同向（同级中枢全幅不重叠）的中枢合并为一段趋势，
 // 单个或不同向的归为盘整（第17/18课：趋势含两个以上依次同向中枢）
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers)
 {
@@ -974,15 +976,7 @@ std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Cent
       break;
     }
 
-    int nType = CZSC_MOVEMENT_CONSOLIDATION;
-    if (IsCenterAbove(Centers[i], Centers[i + 1]))
-    {
-      nType = CZSC_MOVEMENT_UP;
-    }
-    else if (IsCenterBelow(Centers[i], Centers[i + 1]))
-    {
-      nType = CZSC_MOVEMENT_DOWN;
-    }
+    int nType = CenterRelationToMovement(ClassifyCenterRelation(Centers[i], Centers[i + 1]));
 
     if (nType == CZSC_MOVEMENT_CONSOLIDATION)
     {
@@ -994,12 +988,8 @@ std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Cent
     std::size_t nLast = i + 1;
     while (nLast + 1 < Centers.size())
     {
-      if ((nType == CZSC_MOVEMENT_UP) && IsCenterAbove(Centers[nLast], Centers[nLast + 1]))
-      {
-        nLast++;
-        continue;
-      }
-      if ((nType == CZSC_MOVEMENT_DOWN) && IsCenterBelow(Centers[nLast], Centers[nLast + 1]))
+      int nNextType = CenterRelationToMovement(ClassifyCenterRelation(Centers[nLast], Centers[nLast + 1]));
+      if (nNextType == nType)
       {
         nLast++;
         continue;

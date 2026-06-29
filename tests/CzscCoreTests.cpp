@@ -830,6 +830,22 @@ static bool TestTrendStructuresSkipOverlappingTrend()
          (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
 }
 
+static bool TestTrendStructuresUseFullCenterExtent()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 10, 4, 12, 2));
+  Centers.push_back(MakeTestCenterFull(16, 28, 16, 11, 18, 8));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 2)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
+}
+
 static bool TestCenterBreakoutsDetectThirdBuy()
 {
   std::vector<SegmentPoint> Points;
@@ -1038,8 +1054,8 @@ static bool TestTradingCandidatesGenerateFirstAndSecondBuy()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1166,8 +1182,8 @@ static bool TestFirstCandidateKeepsTrendDivergence()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1329,11 +1345,11 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   pHigh[12] = 7;
   pLow[12] = 7;
   pIn[16] = 1;
-  pHigh[16] = 14;
-  pLow[16] = 14;
+  pHigh[16] = 12;
+  pLow[16] = 12;
   pIn[20] = -1;
-  pHigh[20] = 10;
-  pLow[20] = 10;
+  pHigh[20] = 12.1f;
+  pLow[20] = 12.1f;
   pIn[24] = 1;
   pHigh[24] = 13;
   pLow[24] = 13;
@@ -1655,8 +1671,8 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1672,9 +1688,9 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
-  // 两个上升中枢[10,8]→[4.2,4]构成下跌趋势。中枢0末端 index16 已跌破 ZD=8，
-  // 离开后第一反向段 index16→20 回试不进 → 三卖在20；一买在趋势末32。
-  return NearlyEqual(pOut[20], 13.0f) && NearlyEqual(pOut[32], 1.0f);
+  // 两个中枢全幅不重叠(GG/DD: [12,7.5]→[7,3.8])构成下跌趋势；
+  // 中枢0离开后的首次回试不回中枢 → 三卖在28；一买在趋势末32。
+  return NearlyEqual(pOut[28], 13.0f) && NearlyEqual(pOut[32], 1.0f);
 }
 
 static bool TestFunc5WritesCenterThirdBuy()
@@ -1808,8 +1824,8 @@ static bool TestFunc5WritesSecondBuyAfterFirstBuy()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1863,11 +1879,11 @@ static bool TestFunc5WritesSecondSellAfterFirstSell()
   pHigh[12] = 7;
   pLow[12] = 7;
   pIn[16] = 1;
-  pHigh[16] = 14;
-  pLow[16] = 14;
+  pHigh[16] = 12;
+  pLow[16] = 12;
   pIn[20] = -1;
-  pHigh[20] = 10;
-  pLow[20] = 10;
+  pHigh[20] = 12.1f;
+  pLow[20] = 12.1f;
   pIn[24] = 1;
   pHigh[24] = 13;
   pLow[24] = 13;
@@ -1918,11 +1934,11 @@ static bool TestFunc5WritesTrendDivergenceFirstSell()
   pHigh[12] = 7;
   pLow[12] = 7;
   pIn[16] = 1;
-  pHigh[16] = 14;
-  pLow[16] = 14;
+  pHigh[16] = 12;
+  pLow[16] = 12;
   pIn[20] = -1;
-  pHigh[20] = 10;
-  pLow[20] = 10;
+  pHigh[20] = 12.1f;
+  pLow[20] = 12.1f;
   pIn[24] = 1;
   pHigh[24] = 13;
   pLow[24] = 13;
@@ -1979,8 +1995,8 @@ static bool TestFunc5SkipsStrongNewLow()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1988,8 +2004,8 @@ static bool TestFunc5SkipsStrongNewLow()
   pHigh[24] = 4;
   pLow[24] = 4;
   pIn[28] = 1;
-  pHigh[28] = 8;
-  pLow[28] = 8;
+  pHigh[28] = 7;
+  pLow[28] = 7;
   pIn[32] = -1;
   pHigh[32] = 3.5f;
   pLow[32] = 3.5f;
@@ -2249,8 +2265,8 @@ static bool TestFunc10MatchesFunc5SignalBars()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -2321,8 +2337,8 @@ static bool TestFunc10WritesSignalQuality()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -2339,7 +2355,7 @@ static bool TestFunc10WritesSignalQuality()
   Func10(nCount, pOut, pIn, pHigh, pLow);
 
   // 一类买点(index32)价差与速度同时走弱 → 标准强信号(2)。
-  // 中枢0末端 index16 已跌破 ZD=8，离开后第一反向段 index16→20 回试不进 → 三卖在20(确认级 1)。
+  // 中枢0离开后的首次回试不回中枢 → 三卖在28(确认级 1)。
   for (int i = 0; i < nCount; i++)
   {
     float fExpected = 0.0f;
@@ -2347,7 +2363,7 @@ static bool TestFunc10WritesSignalQuality()
     {
       fExpected = (float)CZSC_SIGNAL_QUALITY_STRONG;
     }
-    else if (i == 20)
+    else if (i == 28)
     {
       fExpected = (float)CZSC_SIGNAL_QUALITY_CONFIRMED;
     }
@@ -2679,7 +2695,7 @@ static bool TestFunc12WritesReversalCode()
   pIn[12] = 1;
   pHigh[12] = pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = pLow[16] = 3;
+  pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = pLow[20] = 7;
   pIn[24] = -1;
@@ -2858,7 +2874,7 @@ static bool TestFunc14MarksDivergenceSegment()
   pIn[12] = 1;
   pHigh[12] = pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = pLow[16] = 3;
+  pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = pLow[20] = 7;
   pIn[24] = -1;
@@ -3327,7 +3343,7 @@ static bool TestAnalyzerFromSignalAggregates()
   pIn[4] = 1; pHigh[4] = pLow[4] = 12;
   pIn[8] = -1; pHigh[8] = pLow[8] = 8;
   pIn[12] = 1; pHigh[12] = pLow[12] = 10;
-  pIn[16] = -1; pHigh[16] = pLow[16] = 3;
+  pIn[16] = -1; pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1; pHigh[20] = pLow[20] = 7;
   pIn[24] = -1; pHigh[24] = pLow[24] = 4;
   pIn[28] = 1; pHigh[28] = pLow[28] = 4.2f;
@@ -3368,7 +3384,7 @@ static bool TestSignalCacheHitAndInvalidate()
   pIn[4] = 1; pHigh[4] = pLow[4] = 12;
   pIn[8] = -1; pHigh[8] = pLow[8] = 8;
   pIn[12] = 1; pHigh[12] = pLow[12] = 10;
-  pIn[16] = -1; pHigh[16] = pLow[16] = 3;
+  pIn[16] = -1; pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1; pHigh[20] = pLow[20] = 7;
   pIn[24] = -1; pHigh[24] = pLow[24] = 4;
   pIn[28] = 1; pHigh[28] = pLow[28] = 4.2f;
@@ -3786,6 +3802,10 @@ int main()
   if (!TestTrendStructuresSkipOverlappingTrend())
   {
     return 16;
+  }
+  if (!TestTrendStructuresUseFullCenterExtent())
+  {
+    return 124;
   }
   if (!TestCenterBreakoutsDetectThirdBuy())
   {
