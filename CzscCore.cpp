@@ -1543,6 +1543,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
   C.nSmallTurn = 0;
+  C.nAbcStructure = 0;
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
   return C;
@@ -1651,6 +1652,46 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
     }
   }
   *pCandidates = Deduped;
+}
+
+static void AnnotateAbcDivergenceStructure(std::vector<TradingSignalCandidate> *pFirstCandidates,
+                                           const std::vector<CenterBreakout> &Breakouts)
+{
+  if (pFirstCandidates == 0)
+  {
+    return;
+  }
+
+  for (std::size_t i = 0; i < pFirstCandidates->size(); i++)
+  {
+    TradingSignalCandidate &C = (*pFirstCandidates)[i];
+    if ((C.nSource != SIGNAL_SOURCE_FIRST) ||
+        ((C.fSignal != SIGNAL_FIRST_BUY) && (C.fSignal != SIGNAL_FIRST_SELL)))
+    {
+      continue;
+    }
+
+    for (std::size_t j = 0; j < Breakouts.size(); j++)
+    {
+      const CenterBreakout &B = Breakouts[j];
+      if (!B.bFirstRetest || !B.bThirdSignal ||
+          (B.nCenter != C.nCenter) ||
+          (B.nRetestPoint < 0) || (B.nRetestPoint >= C.nPoint))
+      {
+        continue;
+      }
+      if ((C.fSignal == SIGNAL_FIRST_BUY) && (B.nDirection < 0))
+      {
+        C.nAbcStructure = 1;
+        break;
+      }
+      if ((C.fSignal == SIGNAL_FIRST_SELL) && (B.nDirection > 0))
+      {
+        C.nAbcStructure = -1;
+        break;
+      }
+    }
+  }
 }
 
 // 第二类买卖点的盘整背驰（第27课）：比较进入一类买卖点的那一段(A段)与转折后回抽到
@@ -1837,6 +1878,7 @@ std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vect
   std::vector<TradingSignalCandidate> FirstCandidates;
 
   AppendFirstSignalCandidates(&FirstCandidates, Points, Centers, Structures);
+  AnnotateAbcDivergenceStructure(&FirstCandidates, Breakouts);
   AppendSecondSignalCandidates(&Candidates, Points, Centers, Breakouts, FirstCandidates);
   AppendThirdSignalCandidates(&Candidates, Points, Centers, Structures, Breakouts);
   AnnotateSmallTurnConditions(&Candidates, FirstCandidates);
@@ -2029,6 +2071,40 @@ void ApplyTradingSignalSmallTurn(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       pOut[C.nIndex] = (float)C.nSmallTurn;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 第37课a+A+b+B+c：一类背驰的c段至少包含对最后中枢B的三买/三卖。
+// 输出 1=一买前具备三卖结构，-1=一卖前具备三买结构，0=无。
+void ApplyTradingSignalAbcStructure(int nCount,
+                                    float *pOut,
+                                    const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)C.nAbcStructure;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -3574,6 +3650,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       }
       break;
     case 14: ApplyTradingSignalSmallTurn(nCount, pOut, An.Candidates); break; // 小转大必要条件
+    case 15: ApplyTradingSignalAbcStructure(nCount, pOut, An.Candidates); break; // A-B-C背驰结构
     default: ClearOutput(nCount, pOut); break;
   }
 }

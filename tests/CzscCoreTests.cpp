@@ -528,6 +528,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
   C.nSmallTurn = 0;
+  C.nAbcStructure = 0;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
   C.Divergence.bNewExtreme = false;
@@ -1219,6 +1220,108 @@ static bool TestFirstCandidateKeepsTrendDivergence()
          (pFirst->nTrend == 0) &&
          (pFirst->nMovementType == CZSC_MOVEMENT_DOWN) &&
          (pFirst->nCenterPosition == CZSC_CENTER_POSITION_BELOW);
+}
+
+static bool TestFirstCandidateMarksAbcStructure()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(-1, 7));
+  Breakouts.back().nCenter = 1;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+
+  return (pFirst != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pFirst->nAbcStructure == 1);
+}
+
+static bool TestFirstSellCandidateMarksAbcStructure()
+{
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 7));
+  Breakouts.back().nCenter = 1;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 11.0f);
+
+  return (pFirst != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pFirst->nAbcStructure == -1);
 }
 
 static bool TestFirstCandidateSkipsAfterLaterCenter()
@@ -2909,6 +3012,31 @@ static bool TestApplyTradingSmallTurnMapsCodes()
          NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingAbcStructureMapsCodes()
+{
+  const int nCount = 6;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.nAbcStructure = 1;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  Sell.nAbcStructure = -1;
+  TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(None);
+
+  ApplyTradingSignalAbcStructure(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestFunc13HandlesEmptyInput()
 {
   Func13(0, 0, 0, 0, 0);
@@ -4021,6 +4149,14 @@ int main()
   {
     return 30;
   }
+  if (!TestFirstCandidateMarksAbcStructure())
+  {
+    return 129;
+  }
+  if (!TestFirstSellCandidateMarksAbcStructure())
+  {
+    return 130;
+  }
   if (!TestFirstCandidateSkipsAfterLaterCenter())
   {
     return 125;
@@ -4232,6 +4368,10 @@ int main()
   if (!TestApplyTradingSmallTurnMapsCodes())
   {
     return 128;
+  }
+  if (!TestApplyTradingAbcStructureMapsCodes())
+  {
+    return 131;
   }
   if (!TestFunc13HandlesEmptyInput())
   {

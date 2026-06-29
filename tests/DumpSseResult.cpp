@@ -158,7 +158,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
   {
     const TradingSignalCandidate &C = Candidates[i];
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d%s\n",
+                 "  %s  %s  质量%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d%s\n",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -171,6 +171,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  ReversalName(C.nReversal),
                  AftermathName(C.nAfterEffect),
                  C.nSmallTurn,
+                 C.nAbcStructure,
                  C.bOverlapped ? "  二三重合" : "");
   }
 }

@@ -246,6 +246,7 @@ struct TradingSignalCandidate
   int   nReversal;          // 见 CzscReversalStrength（第29课，仅一类）
   int   nAfterEffect;       // 见 CzscCenterAftermath（第21课，仅三类）
   int   nSmallTurn;         // 第44课小转大必要条件：三买=1、三卖=-1、无=0
+  int   nAbcStructure;      // 第37课a+A+b+B+c结构：一买=1、一卖=-1、无=0
   bool  bOverlapped;        // 二三类买卖点是否重合
   DivergenceResult Divergence;
 };
@@ -356,6 +357,9 @@ void ApplyTradingSignalAftermath(int nCount,
 void ApplyTradingSignalSmallTurn(int nCount,
                                  float *pOut,
                                  const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalAbcStructure(int nCount,
+                                    float *pOut,
+                                    const std::vector<TradingSignalCandidate> &Candidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
@@ -371,6 +375,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // 配置码：个位=笔类型(0严格/1新)，十位=笔结束(0严格/1次高)，百位=中枢构件(0笔/1线段)，千位=线段法(0启发/1特征)
 // 30 号 mode 码(第4参 pTime[0]) = 配置码*1000 + 输出类型*10；输出类型见 exports 里 Func30 的 switch
 // Func30 输出 14 为第44课小转大必要条件标记（1=三买，-1=三卖），不占用旧函数编号。
+// Func30 输出 15 为第37课a+A+b+B+c结构标记（1=一买，-1=一卖），不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
