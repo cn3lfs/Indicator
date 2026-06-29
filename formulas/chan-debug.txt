@@ -7,6 +7,7 @@ REL:=TDXDLL1(30,H,L,60);           { 中枢关系：1上涨/-1下跌/0扩展 }
 REV:=TDXDLL1(30,H,L,70);           { 一类背驰转折：-1扩展/0盘整/1反趋势 }
 AFT:=TDXDLL1(30,H,L,80);           { 三买三卖后续：1扩张/2新生 }
 BSG:=TDXDLL1(30,H,L,90);           { 一类背驰段：买1/2 卖-1/-2 }
+STB:=TDXDLL1(30,H,L,140);          { 小转大必要条件：三买1/三卖-1 }
 
 DRAWICON(PNT=1,H,2);
 DRAWICON(PNT=-1,L,1);
@@ -19,3 +20,4 @@ DRAWTEXT(BSP=13,H,'3S'),COLORGREEN;
 DRAWTEXT(QLT=2 AND BSP<>0,L,'Q2'),COLORYELLOW;
 DRAWTEXT(REV<>0,H,'REV'),COLORMAGENTA;
 DRAWTEXT(AFT<>0,L,'AFT'),COLORCYAN;
+DRAWTEXT(STB<>0,L,'STB'),COLORYELLOW;

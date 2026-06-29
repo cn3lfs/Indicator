@@ -527,6 +527,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nCenterPosition = CZSC_CENTER_POSITION_UNKNOWN;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
+  C.nSmallTurn = 0;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
   C.Divergence.bNewExtreme = false;
@@ -1401,14 +1402,18 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(1, 10));
+  Breakouts.back().nCenter = 1;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
   const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 2.0f);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 3.0f);
   ApplyTradingSignalCandidates(nCount, pOut, Candidates);
 
   return (pSecond != 0) &&
+         (pThird != 0) &&
          pSecond->bOverlapped &&
+         (pThird->nSmallTurn == 1) &&
          (pSecond->nBreakout == 0) &&
          (pSecond->Divergence.nDirection == 1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
@@ -1473,14 +1478,18 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(-1, 10));
+  Breakouts.back().nCenter = 1;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
   const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 12.0f);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 13.0f);
   ApplyTradingSignalCandidates(nCount, pOut, Candidates);
 
   return (pSecond != 0) &&
+         (pThird != 0) &&
          pSecond->bOverlapped &&
+         (pThird->nSmallTurn == -1) &&
          (pSecond->nBreakout == 0) &&
          (pSecond->Divergence.nDirection == -1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
@@ -2879,6 +2888,31 @@ static bool TestApplyTradingAftermathMapsCodes()
          NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingSmallTurnMapsCodes()
+{
+  const int nCount = 6;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 3.0f, 20);
+  Buy.nSmallTurn = 1;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
+  Sell.nSmallTurn = -1;
+  TradingSignalCandidate None = MakeTestCandidate(5, 3.0f, 20);
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(None);
+
+  ApplyTradingSignalSmallTurn(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestFunc13HandlesEmptyInput()
 {
   Func13(0, 0, 0, 0, 0);
@@ -4198,6 +4232,10 @@ int main()
   if (!TestApplyTradingAftermathMapsCodes())
   {
     return 80;
+  }
+  if (!TestApplyTradingSmallTurnMapsCodes())
+  {
+    return 128;
   }
   if (!TestFunc13HandlesEmptyInput())
   {

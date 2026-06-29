@@ -1541,6 +1541,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nCenterPosition = nCenterPosition;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
+  C.nSmallTurn = 0;
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
   return C;
@@ -1789,6 +1790,43 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
   }
 }
 
+static void AnnotateSmallTurnConditions(std::vector<TradingSignalCandidate> *pCandidates,
+                                        const std::vector<TradingSignalCandidate> &FirstCandidates)
+{
+  if (pCandidates == 0)
+  {
+    return;
+  }
+
+  for (std::size_t i = 0; i < pCandidates->size(); i++)
+  {
+    TradingSignalCandidate &C = (*pCandidates)[i];
+    if ((C.fSignal != SIGNAL_THIRD_BUY) && (C.fSignal != SIGNAL_THIRD_SELL))
+    {
+      continue;
+    }
+
+    for (std::size_t j = 0; j < FirstCandidates.size(); j++)
+    {
+      const TradingSignalCandidate &First = FirstCandidates[j];
+      if ((First.nCenter != C.nCenter) || (First.nPoint >= C.nPoint))
+      {
+        continue;
+      }
+      if ((First.fSignal == SIGNAL_FIRST_BUY) && (C.fSignal == SIGNAL_THIRD_BUY))
+      {
+        C.nSmallTurn = 1;
+        break;
+      }
+      if ((First.fSignal == SIGNAL_FIRST_SELL) && (C.fSignal == SIGNAL_THIRD_SELL))
+      {
+        C.nSmallTurn = -1;
+        break;
+      }
+    }
+  }
+}
+
 std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vector<SegmentPoint> &Points,
                                                                   const std::vector<Center> &Centers,
                                                                   const std::vector<TrendStructure> &Structures,
@@ -1800,6 +1838,7 @@ std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vect
   AppendFirstSignalCandidates(&FirstCandidates, Points, Centers, Structures);
   AppendSecondSignalCandidates(&Candidates, Points, Centers, Breakouts, FirstCandidates);
   AppendThirdSignalCandidates(&Candidates, Points, Centers, Structures, Breakouts);
+  AnnotateSmallTurnConditions(&Candidates, FirstCandidates);
   Candidates.insert(Candidates.end(), FirstCandidates.begin(), FirstCandidates.end());
 
   return Candidates;
@@ -1955,6 +1994,40 @@ void ApplyTradingSignalAftermath(int nCount,
         fCode = 2;
       }
       pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 第44课小转大必要条件：小级别底/顶背驰后，最后中枢出现三买/三卖才可能引发大级别转折。
+// 输出 1=底背驰后的三买必要条件成立，-1=顶背驰后的三卖必要条件成立，0=无。
+void ApplyTradingSignalSmallTurn(int nCount,
+                                 float *pOut,
+                                 const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)C.nSmallTurn;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -3499,6 +3572,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
         }
       }
       break;
+    case 14: ApplyTradingSignalSmallTurn(nCount, pOut, An.Candidates); break; // 小转大必要条件
     default: ClearOutput(nCount, pOut); break;
   }
 }
