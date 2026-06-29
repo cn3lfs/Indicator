@@ -57,6 +57,35 @@ static bool TestMergedBarsHandleInclusion()
   return true;
 }
 
+static bool TestMergedBarsTrackExtremeIndexes()
+{
+  {
+    const int nCount = 3;
+    float pHigh[nCount] = {10, 12, 11};
+    float pLow[nCount] = {5, 7, 8};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 2)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 12) || !NearlyEqual(Bars[1].fLow, 8)) return false;
+    if ((Bars[1].nHighIndex != 1) || (Bars[1].nLowIndex != 2)) return false;
+  }
+
+  {
+    const int nCount = 3;
+    float pHigh[nCount] = {12, 10, 11};
+    float pLow[nCount] = {8, 6, 5};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 2)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 10) || !NearlyEqual(Bars[1].fLow, 5)) return false;
+    if ((Bars[1].nHighIndex != 1) || (Bars[1].nLowIndex != 2)) return false;
+  }
+
+  return true;
+}
+
 static bool TestFractalsAndStrokes()
 {
   const int nCount = 7;
@@ -3102,6 +3131,23 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
   return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
 }
 
+static bool TestFeatureLineSegmentRequiresFirstThreeOverlap()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 2, 1));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 4, 3));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 8, 7));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 10, 9));     // 前三笔无公共重叠
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 14, 13));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 16, 15));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 20, 19));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 22, 21));
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+  return Line.empty();
+}
+
 // 上升线段被 lower low + lower high 破坏：逆向(向下)笔底创新低(12<18)、其后反弹顶不创新高(22<30)
 // → 上升线段在该逆向笔的顶(idx20)结束（对称于下降线段）。
 static bool TestFeatureSegmentExtendsPastRelay()
@@ -3653,6 +3699,10 @@ int main()
   {
     return 2;
   }
+  if (!TestMergedBarsTrackExtremeIndexes())
+  {
+    return 122;
+  }
   if (!TestFractalsAndStrokes())
   {
     return 3;
@@ -4052,6 +4102,10 @@ int main()
   if (!TestFeatureLineSegmentNeedsFourPoints())
   {
     return 95;
+  }
+  if (!TestFeatureLineSegmentRequiresFirstThreeOverlap())
+  {
+    return 123;
   }
   if (!TestDecodeConfig())
   {

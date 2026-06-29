@@ -2220,6 +2220,28 @@ static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t
   return -1;  // 未出现反向线段结构 → 线段当下未完成
 }
 
+static bool FirstThreeStrokesOverlap(const std::vector<SegmentPoint> &P, std::size_t nStart)
+{
+  if (nStart + 3 >= P.size())
+  {
+    return false;
+  }
+
+  SegmentInterval A = MakeSegmentInterval(P[nStart], P[nStart + 1]);
+  SegmentInterval B = MakeSegmentInterval(P[nStart + 1], P[nStart + 2]);
+  SegmentInterval C = MakeSegmentInterval(P[nStart + 2], P[nStart + 3]);
+
+  float fLow = A.fLow;
+  if (B.fLow > fLow) fLow = B.fLow;
+  if (C.fLow > fLow) fLow = C.fLow;
+
+  float fHigh = A.fHigh;
+  if (B.fHigh < fHigh) fHigh = B.fHigh;
+  if (C.fHigh < fHigh) fHigh = C.fHigh;
+
+  return fLow <= fHigh;
+}
+
 // 特征序列法划分线段（第67课），与 BuildLineSegmentPoints 的启发式并存
 std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stroke> &Strokes)
 {
@@ -2230,10 +2252,23 @@ std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stro
     return Points;
   }
 
-  Points.push_back(StrokePoints[0]);
   std::size_t nStart = 0;
+  while ((nStart + 3 < StrokePoints.size()) && !FirstThreeStrokesOverlap(StrokePoints, nStart))
+  {
+    nStart++;
+  }
+  if (nStart + 3 >= StrokePoints.size())
+  {
+    return Points;
+  }
+
+  Points.push_back(StrokePoints[nStart]);
   while (nStart + 3 < StrokePoints.size())
   {
+    if (!FirstThreeStrokesOverlap(StrokePoints, nStart))
+    {
+      break;
+    }
     int nDir = (StrokePoints[nStart].nType == CZSC_POINT_BOTTOM) ? 1 : -1;
     int nEnd = FindFeatureSegmentEnd(StrokePoints, nStart, nDir);
     if ((nEnd < 0) || ((std::size_t)nEnd <= nStart))
