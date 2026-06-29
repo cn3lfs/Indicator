@@ -2110,6 +2110,44 @@ void ApplyTradingSignalAbcStructure(int nCount,
   }
 }
 
+// 与常规买卖点输出相同，但一类买卖点必须满足第37课A-B-C结构标记。
+// 二、三类买卖点不按此条件过滤，保持第三类“首次离开+首次回试”的独立判定。
+void ApplyTradingSignalStrictAbcCandidates(int nCount,
+                                           float *pOut,
+                                           const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if ((C.nSource == SIGNAL_SOURCE_FIRST) && (C.nAbcStructure == 0))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = C.fSignal;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 // 形态学第一步：对原始K线做包含处理，合并出无包含关系的合并K线序列（第62/65课）
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
 {
@@ -3651,6 +3689,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       break;
     case 14: ApplyTradingSignalSmallTurn(nCount, pOut, An.Candidates); break; // 小转大必要条件
     case 15: ApplyTradingSignalAbcStructure(nCount, pOut, An.Candidates); break; // A-B-C背驰结构
+    case 16: ApplyTradingSignalStrictAbcCandidates(nCount, pOut, An.Candidates); break; // ABC严格买卖点
     default: ClearOutput(nCount, pOut); break;
   }
 }

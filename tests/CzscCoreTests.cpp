@@ -3037,6 +3037,36 @@ static bool TestApplyTradingAbcStructureMapsCodes()
          NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingStrictAbcFiltersFirstSignals()
+{
+  const int nCount = 6;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate MissingAbc = MakeTestCandidate(1, 1.0f, 30);
+  MissingAbc.nSource = 1;
+  MissingAbc.nAbcStructure = 0;
+  TradingSignalCandidate ConfirmedAbc = MakeTestCandidate(2, 11.0f, 30);
+  ConfirmedAbc.nSource = 1;
+  ConfirmedAbc.nAbcStructure = -1;
+  TradingSignalCandidate Third = MakeTestCandidate(3, 3.0f, 20);
+  Third.nSource = 3;
+  Candidates.push_back(MissingAbc);
+  Candidates.push_back(ConfirmedAbc);
+  Candidates.push_back(Third);
+
+  ApplyTradingSignalStrictAbcCandidates(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 0.0f) &&
+         NearlyEqual(pOut[2], 11.0f) &&
+         NearlyEqual(pOut[3], 3.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestFunc13HandlesEmptyInput()
 {
   Func13(0, 0, 0, 0, 0);
@@ -4372,6 +4402,10 @@ int main()
   if (!TestApplyTradingAbcStructureMapsCodes())
   {
     return 131;
+  }
+  if (!TestApplyTradingStrictAbcFiltersFirstSignals())
+  {
+    return 132;
   }
   if (!TestFunc13HandlesEmptyInput())
   {

@@ -360,6 +360,9 @@ void ApplyTradingSignalSmallTurn(int nCount,
 void ApplyTradingSignalAbcStructure(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalStrictAbcCandidates(int nCount,
+                                           float *pOut,
+                                           const std::vector<TradingSignalCandidate> &Candidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
@@ -376,6 +379,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // 30 号 mode 码(第4参 pTime[0]) = 配置码*1000 + 输出类型*10；输出类型见 exports 里 Func30 的 switch
 // Func30 输出 14 为第44课小转大必要条件标记（1=三买，-1=三卖），不占用旧函数编号。
 // Func30 输出 15 为第37课a+A+b+B+c结构标记（1=一买，-1=一卖），不占用旧函数编号。
+// Func30 输出 16 为ABC严格买卖点（过滤无ABC结构的一类买卖点），不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
