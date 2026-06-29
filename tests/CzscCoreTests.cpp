@@ -337,6 +337,63 @@ static bool TestRealSseFirstCenterStopsBeforeLeave()
   return true;
 }
 
+static bool CheckSseCenter(const Center &C,
+                           int nDirection,
+                           const char *pStart,
+                           const char *pEnd,
+                           float fHigh,
+                           float fLow)
+{
+  int nStart = FindSseDateIndex(pStart);
+  int nEnd = FindSseDateIndex(pEnd);
+  if ((nStart < 0) || (nEnd < 0))
+  {
+    return false;
+  }
+  return (C.nDirection == nDirection) &&
+         (C.nStart == nStart) &&
+         (C.nEnd == nEnd) &&
+         ((C.fHigh - fHigh < 0.011f) && (fHigh - C.fHigh < 0.011f)) &&
+         ((C.fLow - fLow < 0.011f) && (fLow - C.fLow < 0.011f));
+}
+
+static bool ContainsSseCenter(const std::vector<Center> &Centers,
+                              int nDirection,
+                              const char *pStart,
+                              const char *pEnd,
+                              float fHigh,
+                              float fLow)
+{
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    if (CheckSseCenter(Centers[i], nDirection, pStart, pEnd, fHigh, fLow))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool TestRealSseGoldenCentersPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() < 6)
+  {
+    return false;
+  }
+
+  return ContainsSseCenter(Centers, 1, "2018-02-26", "2018-07-06", 3128.72f, 3091.46f) &&
+         ContainsSseCenter(Centers, 1, "2018-07-12", "2018-11-12", 2676.48f, 2653.11f) &&
+         ContainsSseCenter(Centers, 1, "2018-11-19", "2019-01-04", 2645.84f, 2555.32f) &&
+         ContainsSseCenter(Centers, 1, "2019-03-07", "2019-04-08", 3125.02f, 2987.77f) &&
+         ContainsSseCenter(Centers, -1, "2019-05-10", "2019-06-06", 2922.91f, 2838.38f) &&
+         ContainsSseCenter(Centers, -1, "2020-03-19", "2020-07-09", 2833.02f, 2802.47f);
+}
+
 static bool TestFunc1WritesCompatibleSignal()
 {
   const int nCount = 7;
@@ -3627,6 +3684,10 @@ int main()
   if (!TestRealSseFirstCenterStopsBeforeLeave())
   {
     return 120;
+  }
+  if (!TestRealSseGoldenCentersPresent())
+  {
+    return 121;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {

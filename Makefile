@@ -42,15 +42,18 @@ TARGET1=$(BUILD_DIR)/CZSC.dll
 TEST_OBJECTS=CzscCore.o CzscAnalyzer.o tests/CzscCoreTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
 TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
+SSE_DUMP_OBJECTS=CzscCore.o CzscAnalyzer.o tests/DumpSseResult.o
+SSE_DUMP_TARGET=tests/dump_sse$(EXEEXT)
+SSE_DUMP_TARGETS=tests/dump_sse tests/dump_sse.exe
 LEGACY_OBJECTS=CCentroid.o
 LEGACY_DEPENDS=CCentroid.dep
 OBJECTS=$(OBJECT1)
 TARGETS=$(TARGET1)
-DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep)
+DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep)
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
-        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build run clean debug
+        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build sse-result run clean debug
 
 all : $(TARGETS)
 
@@ -97,6 +100,10 @@ test: $(TEST_TARGET)
 
 test-build: $(TEST_TARGET)
 
+sse-result: clean $(SSE_DUMP_TARGET)
+	@echo [SE] tests/czsc_sse_result.txt
+	@$(SSE_DUMP_TARGET) tests/czsc_sse_result.txt
+
 mingw32-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build
 
@@ -107,13 +114,17 @@ $(TEST_TARGET) : $(TEST_OBJECTS)
 	@echo [LD] $@
 	@$(CXX) -o $@ $^ $(LDFLAGS)
 
+$(SSE_DUMP_TARGET) : $(SSE_DUMP_OBJECTS)
+	@echo [LD] $@
+	@$(CXX) -o $@ $^ $(LDFLAGS)
+
 run: all
 	@echo [EX] $(TARGETS)
 	@$(TARGETS)
 
 clean:
-	@echo [RM] $(OBJECTS) $(TEST_OBJECTS) $(LEGACY_OBJECTS)
-	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(OBJECTS) $(TEST_OBJECTS) $(LEGACY_OBJECTS) $(TEST_TARGETS)
+	@echo [RM] $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS)
+	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS) $(TEST_TARGETS) $(SSE_DUMP_TARGETS)
 
 # Standard Procedures
 %.dep : %.s

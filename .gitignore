@@ -1,6 +1,9 @@
 *.dep
 *.o
 tests/CzscCoreTests
+tests/dump_sse
 tests/*.exe
 todos.json
 *.log
+.vscode/settings.json
+czsc-tdx.rar

@@ -2382,18 +2382,6 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
       break;  // 无重叠且非延伸型离开 → 中枢结束
     }
 
-    if (!Centers.empty())
-    {
-      const Center &Last = Centers.back();
-      int nGap = C.nStart - Last.nEnd;
-      if ((nGap <= 200) &&
-          IntervalsOverlap(Last.fLow, Last.fHigh, C.fLow, C.fHigh))
-      {
-        i = nExtend + 1;
-        continue;
-      }
-    }
-
     Centers.push_back(C);
     i = nExtend + 1;
   }
