@@ -1062,6 +1062,34 @@ static bool FindPreviousSameDirectionMove(const std::vector<SegmentPoint> &Point
   return false;
 }
 
+static bool FindPreviousSameDirectionMoveBeforeIndex(const std::vector<SegmentPoint> &Points,
+                                                     std::size_t nPoint,
+                                                     int nDirection,
+                                                     int nBeforeIndex,
+                                                     std::size_t *pMove)
+{
+  if ((pMove == 0) || (nPoint < 2))
+  {
+    return false;
+  }
+
+  for (std::size_t i = nPoint - 2; ; i--)
+  {
+    if ((Points[i + 1].nIndex < nBeforeIndex) &&
+        (GetMoveDirection(Points[i], Points[i + 1]) == nDirection))
+    {
+      *pMove = i;
+      return true;
+    }
+    if (i == 0)
+    {
+      break;
+    }
+  }
+
+  return false;
+}
+
 static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
                                       const std::vector<Center> &Centers,
                                       const std::vector<TrendStructure> &Structures,
@@ -1102,7 +1130,9 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
   }
 
   std::size_t nPrevMove = 0;
-  if (!FindPreviousSameDirectionMove(Points, nPoint, -1, &nPrevMove))
+  if (!FindPreviousSameDirectionMoveBeforeIndex(Points, nPoint, -1,
+                                               Centers[nLastCenter].nStart,
+                                               &nPrevMove))
   {
     return false;
   }
@@ -1166,7 +1196,9 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
   }
 
   std::size_t nPrevMove = 0;
-  if (!FindPreviousSameDirectionMove(Points, nPoint, 1, &nPrevMove))
+  if (!FindPreviousSameDirectionMoveBeforeIndex(Points, nPoint, 1,
+                                               Centers[nLastCenter].nStart,
+                                               &nPrevMove))
   {
     return false;
   }

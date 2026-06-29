@@ -1270,6 +1270,51 @@ static bool TestFirstCandidateSkipsAfterLaterCenter()
   return !HasSignalCandidate(Candidates, 40, 1.0f);
 }
 
+static bool TestFirstCandidateUsesPreLastCenterMove()
+{
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 8;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;  // A段，弱于后续 C 段
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;     // 最后中枢内部下行段，不能作为 A 段
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.6f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  return !HasSignalCandidate(Candidates, 32, 1.0f);
+}
+
 static bool TestThirdCandidateKeepsBreakoutDivergence()
 {
   std::vector<SegmentPoint> Points;
@@ -1328,8 +1373,8 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1472,8 +1517,8 @@ static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -3921,6 +3966,10 @@ int main()
   if (!TestFirstCandidateSkipsAfterLaterCenter())
   {
     return 125;
+  }
+  if (!TestFirstCandidateUsesPreLastCenterMove())
+  {
+    return 126;
   }
   if (!TestThirdCandidateKeepsBreakoutDivergence())
   {
