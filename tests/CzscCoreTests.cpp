@@ -3575,6 +3575,34 @@ static bool TestFunc30MatchesLegacyPipeline()
   return true;
 }
 
+static bool TestFunc30FeatureSegmentModeMatchesFunc19()
+{
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> Legacy((std::size_t)SSE_DAILY_COUNT);
+  std::vector<float> Unified((std::size_t)SSE_DAILY_COUNT);
+  float fUnused = 0;
+  float fMode = 1100000;
+
+  Func19(SSE_DAILY_COUNT, &Legacy[0], &High[0], &Low[0], &fUnused);
+  Func30(SSE_DAILY_COUNT, &Unified[0], &High[0], &Low[0], &fMode);
+
+  int nNonZero = 0;
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (!NearlyEqual(Legacy[(std::size_t)i], Unified[(std::size_t)i]))
+    {
+      return false;
+    }
+    if (!NearlyEqual(Unified[(std::size_t)i], 0.0f))
+    {
+      nNonZero++;
+    }
+  }
+
+  return nNonZero > 2;
+}
+
 static bool TestFunc30HandlesEmptyInput()
 {
   Func30(0, 0, 0, 0, 0);
@@ -4266,6 +4294,10 @@ int main()
   if (!TestFunc30MatchesLegacyPipeline())
   {
     return 103;
+  }
+  if (!TestFunc30FeatureSegmentModeMatchesFunc19())
+  {
+    return 127;
   }
   if (!TestFunc30HandlesEmptyInput())
   {
