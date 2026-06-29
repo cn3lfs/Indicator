@@ -848,7 +848,8 @@ DivergenceResult MeasureDivergence(const SegmentPoint &PrevStart,
   {
     Result.bNewExtreme = CurrentEnd.fLow < PrevEnd.fLow;
   }
-  Result.bDivergence = Result.bNewExtreme && (Result.bWeakSpace || Result.bWeakSpeed);
+  Result.bDivergence = Result.bNewExtreme &&
+                       ((Result.bWeakSpace && Result.bWeakSpeed) || Result.bWeakMacd);
   return Result;
 }
 

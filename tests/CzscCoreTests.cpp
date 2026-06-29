@@ -2501,20 +2501,16 @@ static bool TestFirstCandidateMacdUpgradesQuality()
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
 
-  // 末段（点4→点5）价差更大但速度更慢：几何上仅速度走弱，质量只能到 CONFIRMED。
+  // 末段（点4→点5）价差更大但速度更慢：仅速度走弱，不构成严格趋势背驰。
   std::vector<TradingSignalCandidate> Plain =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
   const TradingSignalCandidate *pPlain = FindSignalCandidate(Plain, 30, 1.0f);
-  if ((pPlain == 0) ||
-      pPlain->Divergence.bWeakSpace ||
-      !pPlain->Divergence.bWeakSpeed ||
-      pPlain->Divergence.bWeakMacd ||
-      (pPlain->nQuality != CZSC_SIGNAL_QUALITY_CONFIRMED))
+  if (pPlain != 0)
   {
     return false;
   }
 
-  // 注入末段 MACD 面积小于前段：第24课标准背驰，质量升级为 STRONG。
+  // 注入末段 MACD 面积小于前段：第24课标准背驰，才生成强一类信号。
   Points[2].fEnergy = 100;
   Points[3].fEnergy = 70;
   Points[4].fEnergy = 50;
@@ -2932,7 +2928,7 @@ static bool TestSecondBuyConsolidationDivergence()
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 20));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 14));
-  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 22));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 12));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 15));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 30, 8));    // 一买
@@ -2940,7 +2936,7 @@ static bool TestSecondBuyConsolidationDivergence()
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 9));    // 二买，回抽段(11→9)弱于前段(15→8)
 
   std::vector<Center> Centers;
-  Centers.push_back(MakeTestCenter(0, 12, 18, 13));
+  Centers.push_back(MakeTestCenter(0, 12, 22, 13));
   Centers.push_back(MakeTestCenter(16, 24, 12, 9));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
@@ -2960,7 +2956,7 @@ static bool TestSecondBuyStrongPullbackConfirmed()
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 20));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 14));
-  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 22));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 12));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 15));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 30, 8));    // 一买
@@ -2968,7 +2964,7 @@ static bool TestSecondBuyStrongPullbackConfirmed()
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 8.5f)); // 二买，回抽段(17→8.5)强于前段 → 非背驰
 
   std::vector<Center> Centers;
-  Centers.push_back(MakeTestCenter(0, 12, 18, 13));
+  Centers.push_back(MakeTestCenter(0, 12, 22, 13));
   Centers.push_back(MakeTestCenter(16, 24, 12, 9));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
@@ -3172,7 +3168,7 @@ static bool TestInstantDivergenceWarnsWeakNewLow()
   // 末段从 @12 缓慢下行创新低（慢 → 力度走弱）
   for (int i = 12; i < nCount; i++)
   {
-    float fValue = 18.0f - (float)(i - 12) * 0.7f;
+    float fValue = 18.0f - (float)(i - 12) * 0.58f;
     pHigh[i] = fValue + 0.5f;
     pLow[i] = fValue;
   }
