@@ -78,6 +78,14 @@ static const char *AftermathName(int nAfterEffect)
   return "-";
 }
 
+static const char *CenterRelationName(int nRelation)
+{
+  if (nRelation == CZSC_CENTER_RELATION_UP) return "上涨";
+  if (nRelation == CZSC_CENTER_RELATION_DOWN) return "下跌";
+  if (nRelation == CZSC_CENTER_RELATION_EXTENSION) return "扩展";
+  return "未知";
+}
+
 static void PrintPoints(FILE *pFile, const char *pTitle, const char *pPrefix,
                         const std::vector<SegmentPoint> &Points)
 {
@@ -110,6 +118,27 @@ static void PrintCenters(FILE *pFile, const char *pTitle, const char *pPrefix,
                  C.fLow,
                  C.fTop,
                  C.fBottom);
+  }
+}
+
+static void PrintCenterRelations(FILE *pFile, const char *pTitle, const char *pPrefix,
+                                 const std::vector<Center> &Centers)
+{
+  std::fprintf(pFile, "\n========== %s(%u) ==========\n", pTitle,
+               (Centers.size() > 0) ? (unsigned)(Centers.size() - 1) : 0u);
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    int nRelation = ClassifyCenterRelation(Centers[i - 1], Centers[i]);
+    std::fprintf(pFile, "%s%02u->%s%02u  %s  前GG%.0f DD%.0f  后GG%.0f DD%.0f\n",
+                 pPrefix,
+                 (unsigned)(i - 1),
+                 pPrefix,
+                 (unsigned)i,
+                 CenterRelationName(nRelation),
+                 Centers[i - 1].fTop,
+                 Centers[i - 1].fBottom,
+                 Centers[i].fTop,
+                 Centers[i].fBottom);
   }
 }
 
@@ -180,6 +209,8 @@ int main(int argc, char **argv)
   PrintPoints(pFile, "线段端点", "L", SegmentAn.Points);
   PrintCenters(pFile, "笔中枢", "BZ", StrokeAn.Centers);
   PrintCenters(pFile, "线段中枢", "SZ", SegmentAn.Centers);
+  PrintCenterRelations(pFile, "笔中枢关系", "BZ", StrokeAn.Centers);
+  PrintCenterRelations(pFile, "线段中枢关系", "SZ", SegmentAn.Centers);
   PrintCandidates(pFile, "买卖点(笔中枢)", StrokeAn.Candidates);
   PrintCandidates(pFile, "买卖点(线段中枢)", SegmentAn.Candidates);
   PrintPoints(pFile, "笔端点", "B", StrokeAn.Points);
