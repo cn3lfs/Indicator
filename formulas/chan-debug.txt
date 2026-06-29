@@ -9,6 +9,7 @@ AFT:=TDXDLL1(30,H,L,80);           { 三买三卖后续：1扩张/2新生 }
 BSG:=TDXDLL1(30,H,L,90);           { 一类背驰段：买1/2 卖-1/-2 }
 STB:=TDXDLL1(30,H,L,140);          { 小转大必要条件：三买1/三卖-1 }
 ABC:=TDXDLL1(30,H,L,150);          { A-B-C背驰结构：一买1/一卖-1 }
+NST:=TDXDLL1(30,H,L,170);          { 区间套背驰段：买1/2 卖-1/-2 }
 
 DRAWICON(PNT=1,H,2);
 DRAWICON(PNT=-1,L,1);
@@ -23,3 +24,5 @@ DRAWTEXT(REV<>0,H,'REV'),COLORMAGENTA;
 DRAWTEXT(AFT<>0,L,'AFT'),COLORCYAN;
 DRAWTEXT(STB<>0,L,'STB'),COLORYELLOW;
 DRAWTEXT(ABC<>0,H,'ABC'),COLORRED;
+DRAWLINE(NST=1,L,NST=2,L,0),COLORBLUE;
+DRAWLINE(NST=-1,H,NST=-2,H,0),COLORBLUE;

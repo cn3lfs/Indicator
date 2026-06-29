@@ -3067,6 +3067,84 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestNestedDivergenceMarksLowerSegmentInsideHigher()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 52, 8));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 58, 6));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 1.0f, 30);
+  High.nSource = 1;
+  High.nPoint = 1;
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Inside = MakeTestCandidate(32, 1.0f, 30);
+  Inside.nSource = 1;
+  Inside.nPoint = 1;
+  TradingSignalCandidate Outside = MakeTestCandidate(58, 1.0f, 30);
+  Outside.nSource = 1;
+  Outside.nPoint = 3;
+  LowCandidates.push_back(Inside);
+  LowCandidates.push_back(Outside);
+
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+
+  return NearlyEqual(pOut[20], 1.0f) &&
+         NearlyEqual(pOut[32], 2.0f) &&
+         NearlyEqual(pOut[52], 0.0f) &&
+         NearlyEqual(pOut[58], 0.0f);
+}
+
+static bool TestNestedDivergenceMarksSellDirection()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 10, 4));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 50, 12));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 18, 6));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 40, 10));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 11.0f, 30);
+  High.nSource = 1;
+  High.nPoint = 1;
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(40, 11.0f, 30);
+  Low.nSource = 1;
+  Low.nPoint = 1;
+  LowCandidates.push_back(Low);
+
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+
+  return NearlyEqual(pOut[18], -1.0f) &&
+         NearlyEqual(pOut[40], -2.0f);
+}
+
 static bool TestFunc13HandlesEmptyInput()
 {
   Func13(0, 0, 0, 0, 0);
@@ -4406,6 +4484,14 @@ int main()
   if (!TestApplyTradingStrictAbcFiltersFirstSignals())
   {
     return 132;
+  }
+  if (!TestNestedDivergenceMarksLowerSegmentInsideHigher())
+  {
+    return 133;
+  }
+  if (!TestNestedDivergenceMarksSellDirection())
+  {
+    return 134;
   }
   if (!TestFunc13HandlesEmptyInput())
   {

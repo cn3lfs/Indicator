@@ -3357,6 +3357,90 @@ static void WriteDivergenceSegmentSignal(int nCount,
   }
 }
 
+static bool GetDivergenceSegmentBars(const std::vector<SegmentPoint> &Points,
+                                     const TradingSignalCandidate &C,
+                                     int *pStart,
+                                     int *pEnd)
+{
+  if ((pStart == 0) || (pEnd == 0) ||
+      (C.nSource != SIGNAL_SOURCE_FIRST) ||
+      (C.nPoint < 1) || ((std::size_t)C.nPoint >= Points.size()))
+  {
+    return false;
+  }
+
+  *pStart = Points[(std::size_t)(C.nPoint - 1)].nIndex;
+  *pEnd = C.nIndex;
+  if (*pStart > *pEnd)
+  {
+    int nTmp = *pStart;
+    *pStart = *pEnd;
+    *pEnd = nTmp;
+  }
+  return true;
+}
+
+// 第27/61课区间套：在高级别背驰段中继续找低级别一类背驰段。输出编码沿用背驰段：
+// 买 起点1/终点2，卖 起点-1/终点-2。该函数只做几何包含标记，不改变买卖点判定。
+void WriteNestedDivergenceSignal(int nCount,
+                                 float *pOut,
+                                 const std::vector<SegmentPoint> &HighPoints,
+                                 const std::vector<TradingSignalCandidate> &HighCandidates,
+                                 const std::vector<SegmentPoint> &LowPoints,
+                                 const std::vector<TradingSignalCandidate> &LowCandidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 0; i < HighCandidates.size(); i++)
+  {
+    const TradingSignalCandidate &High = HighCandidates[i];
+    int nHighStart = 0;
+    int nHighEnd = 0;
+    if (!GetDivergenceSegmentBars(HighPoints, High, &nHighStart, &nHighEnd))
+    {
+      continue;
+    }
+
+    for (std::size_t j = 0; j < LowCandidates.size(); j++)
+    {
+      const TradingSignalCandidate &Low = LowCandidates[j];
+      if (Low.fSignal != High.fSignal)
+      {
+        continue;
+      }
+
+      int nLowStart = 0;
+      int nLowEnd = 0;
+      if (!GetDivergenceSegmentBars(LowPoints, Low, &nLowStart, &nLowEnd))
+      {
+        continue;
+      }
+      if ((nLowStart < nHighStart) || (nLowEnd > nHighEnd))
+      {
+        continue;
+      }
+      if ((nLowStart == nHighStart) && (nLowEnd == nHighEnd))
+      {
+        continue;
+      }
+
+      int nSign = (Low.fSignal == SIGNAL_FIRST_BUY) ? 1 : -1;
+      if ((nLowStart >= 0) && (nLowStart < nCount))
+      {
+        pOut[nLowStart] = (float)(nSign * 1);
+      }
+      if ((nLowEnd >= 0) && (nLowEnd < nCount))
+      {
+        pOut[nLowEnd] = (float)(nSign * 2);
+      }
+    }
+  }
+}
+
 //=============================================================================
 // 输出函数14号：一类买卖点背驰段（买 起点1/终点2，卖 起点-1/终点-2，第27课）
 //=============================================================================
@@ -3690,6 +3774,18 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 14: ApplyTradingSignalSmallTurn(nCount, pOut, An.Candidates); break; // 小转大必要条件
     case 15: ApplyTradingSignalAbcStructure(nCount, pOut, An.Candidates); break; // A-B-C背驰结构
     case 16: ApplyTradingSignalStrictAbcCandidates(nCount, pOut, An.Candidates); break; // ABC严格买卖点
+    case 17:                                                                 // 区间套背驰段：线段级背驰段内的笔级一类背驰段
+    {
+      CzscConfig HighConfig = DefaultConfig();
+      HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+      HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+      const CzscAnalyzer &HighAn = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, HighConfig);
+      const CzscAnalyzer &LowAn = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, DefaultConfig());
+      WriteNestedDivergenceSignal(nCount, pOut,
+                                  HighAn.Points, HighAn.Candidates,
+                                  LowAn.Points, LowAn.Candidates);
+      break;
+    }
     default: ClearOutput(nCount, pOut); break;
   }
 }
