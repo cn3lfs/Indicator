@@ -1569,6 +1569,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
   C.nSmallTurn = 0;
   C.nAbcStructure = 0;
+  C.nMacdZeroPullback = 0;
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
   return C;
@@ -1715,6 +1716,81 @@ static void AnnotateAbcDivergenceStructure(std::vector<TradingSignalCandidate> *
         C.nAbcStructure = -1;
         break;
       }
+    }
+  }
+}
+
+static bool CenterHasMacdZeroPullback(const std::vector<SegmentPoint> &Points,
+                                      const Center &C,
+                                      const DivergenceResult &D)
+{
+  float fBase = D.Previous.fDifHeight;
+  if (D.Previous.fDeaHeight > fBase)
+  {
+    fBase = D.Previous.fDeaHeight;
+  }
+  if (D.Current.fDifHeight > fBase)
+  {
+    fBase = D.Current.fDifHeight;
+  }
+  if (D.Current.fDeaHeight > fBase)
+  {
+    fBase = D.Current.fDeaHeight;
+  }
+  if (fBase <= 0)
+  {
+    return false;
+  }
+
+  float fThreshold = fBase * 0.25f;
+  if (fThreshold < 0.0001f)
+  {
+    fThreshold = 0.0001f;
+  }
+
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    const SegmentPoint &P = Points[i];
+    if ((P.nIndex < C.nStart) || (P.nIndex > C.nEnd))
+    {
+      continue;
+    }
+    if ((AbsF(P.fDif) <= fThreshold) && (AbsF(P.fDea) <= fThreshold))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void AnnotateMacdZeroPullback(std::vector<TradingSignalCandidate> *pFirstCandidates,
+                                     const std::vector<SegmentPoint> &Points,
+                                     const std::vector<Center> &Centers)
+{
+  if (pFirstCandidates == 0)
+  {
+    return;
+  }
+
+  for (std::size_t i = 0; i < pFirstCandidates->size(); i++)
+  {
+    TradingSignalCandidate &C = (*pFirstCandidates)[i];
+    if ((C.nSource != SIGNAL_SOURCE_FIRST) ||
+        (C.nCenter < 0) || ((std::size_t)C.nCenter >= Centers.size()))
+    {
+      continue;
+    }
+    if (!CenterHasMacdZeroPullback(Points, Centers[(std::size_t)C.nCenter], C.Divergence))
+    {
+      continue;
+    }
+    if (C.fSignal == SIGNAL_FIRST_BUY)
+    {
+      C.nMacdZeroPullback = 1;
+    }
+    else if (C.fSignal == SIGNAL_FIRST_SELL)
+    {
+      C.nMacdZeroPullback = -1;
     }
   }
 }
@@ -1904,6 +1980,7 @@ std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vect
 
   AppendFirstSignalCandidates(&FirstCandidates, Points, Centers, Structures);
   AnnotateAbcDivergenceStructure(&FirstCandidates, Breakouts);
+  AnnotateMacdZeroPullback(&FirstCandidates, Points, Centers);
   AppendSecondSignalCandidates(&Candidates, Points, Centers, Breakouts, FirstCandidates);
   AppendThirdSignalCandidates(&Candidates, Points, Centers, Structures, Breakouts);
   AnnotateSmallTurnConditions(&Candidates, FirstCandidates);
@@ -2217,6 +2294,40 @@ void ApplyTradingSignalMacdLineWeakness(int nCount,
         fCode = (C.fSignal >= SIGNAL_FIRST_SELL) ? -1.0f : 1.0f;
       }
       pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 第24/25课 MACD 辅助：B中枢一般会把黄白线回拉到0轴附近。
+// 输出 1=一买对应B中枢回拉0轴，-1=一卖对应B中枢回拉0轴，0=无。
+void ApplyTradingSignalMacdZeroPullback(int nCount,
+                                        float *pOut,
+                                        const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)C.nMacdZeroPullback;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -3863,6 +3974,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       break;
     }
     case 18: ApplyTradingSignalMacdLineWeakness(nCount, pOut, An.Candidates); break; // MACD黄白线高度走弱
+    case 19: ApplyTradingSignalMacdZeroPullback(nCount, pOut, An.Candidates); break; // B中枢MACD黄白线回拉0轴
     default: ClearOutput(nCount, pOut); break;
   }
 }

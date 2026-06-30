@@ -249,6 +249,7 @@ struct TradingSignalCandidate
   int   nAfterEffect;       // 见 CzscCenterAftermath（第21课，仅三类）
   int   nSmallTurn;         // 第44课小转大必要条件：三买=1、三卖=-1、无=0
   int   nAbcStructure;      // 第37课a+A+b+B+c结构：一买=1、一卖=-1、无=0
+  int   nMacdZeroPullback;  // 第24/25课B中枢黄白线回拉0轴：一买=1、一卖=-1、无=0
   bool  bOverlapped;        // 二三类买卖点是否重合
   DivergenceResult Divergence;
 };
@@ -368,6 +369,9 @@ void ApplyTradingSignalStrictAbcCandidates(int nCount,
 void ApplyTradingSignalMacdLineWeakness(int nCount,
                                         float *pOut,
                                         const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalMacdZeroPullback(int nCount,
+                                        float *pOut,
+                                        const std::vector<TradingSignalCandidate> &Candidates);
 void WriteNestedDivergenceSignal(int nCount,
                                  float *pOut,
                                  const std::vector<SegmentPoint> &HighPoints,
@@ -393,6 +397,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 16 为ABC严格买卖点（过滤无ABC结构的一类买卖点），不占用旧函数编号。
 // Func30 输出 17 为区间套背驰段（高级别背驰段内的低级别一类背驰段），不占用旧函数编号。
 // Func30 输出 18 为MACD黄白线高度走弱标记（买=1、卖=-1），不占用旧函数编号。
+// Func30 输出 19 为B中枢MACD黄白线回拉0轴标记（买=1、卖=-1），不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
