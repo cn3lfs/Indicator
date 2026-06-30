@@ -480,6 +480,8 @@ static SegmentPoint MakeTestPoint(int nType, int nIndex, float fPrice)
   Point.fHigh = fPrice;
   Point.fLow = fPrice;
   Point.fEnergy = 0;
+  Point.fDif = 0;
+  Point.fDea = 0;
   return Point;
 }
 
@@ -2341,6 +2343,32 @@ static bool TestAssignSegmentEnergySetsCumulativeArea()
          (Points[2].fEnergy > 0);
 }
 
+static bool TestAssignSegmentEnergySetsMacdLines()
+{
+  const int nCount = 60;
+  float pHigh[nCount];
+  float pLow[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pHigh[i] = 10.5f + (float)i;
+    pLow[i] = 9.5f + (float)i;
+  }
+
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 30, 40));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 59, 69));
+
+  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
+
+  return NearlyEqual(Points[0].fDif, 0.0f) &&
+         NearlyEqual(Points[0].fDea, 0.0f) &&
+         (Points[1].fDif > 0.0f) &&
+         (Points[1].fDea > 0.0f) &&
+         (Points[2].fDif > Points[1].fDif) &&
+         (Points[2].fDea > Points[1].fDea);
+}
+
 static bool TestStrengthMetricsUseMacdEnergy()
 {
   SegmentPoint Start = MakeTestEnergyPoint(CZSC_POINT_TOP, 2, 10, 100);
@@ -2351,6 +2379,22 @@ static bool TestStrengthMetricsUseMacdEnergy()
   return NearlyEqual(Strength.fMacdArea, 30.0f) &&
          NearlyEqual(Strength.fSpace, 6.0f) &&
          NearlyEqual(Strength.fSpeed, 1.2f);
+}
+
+static bool TestStrengthMetricsUseMacdLineHeight()
+{
+  SegmentPoint Start = MakeTestEnergyPoint(CZSC_POINT_TOP, 2, 10, 100);
+  SegmentPoint End = MakeTestEnergyPoint(CZSC_POINT_BOTTOM, 7, 4, 70);
+  Start.fDif = 1.5f;
+  Start.fDea = -0.5f;
+  End.fDif = -2.0f;
+  End.fDea = 1.0f;
+
+  StrengthMetrics Strength = MeasureStrength(Start, End);
+
+  return NearlyEqual(Strength.fDifHeight, 3.5f) &&
+         NearlyEqual(Strength.fDeaHeight, 1.5f) &&
+         NearlyEqual(Strength.fMacdArea, 30.0f);
 }
 
 static bool TestDivergenceDetectsMacdWeakening()
@@ -3064,6 +3108,43 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
   return NearlyEqual(pOut[1], 0.0f) &&
          NearlyEqual(pOut[2], 11.0f) &&
          NearlyEqual(pOut[3], 3.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingMacdLineWeaknessMapsCodes()
+{
+  const int nCount = 6;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.Previous.fDifHeight = 5;
+  Buy.Divergence.Previous.fDeaHeight = 4;
+  Buy.Divergence.Current.fDifHeight = 3;
+  Buy.Divergence.Current.fDeaHeight = 2;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  Sell.Divergence.Previous.fDifHeight = 6;
+  Sell.Divergence.Previous.fDeaHeight = 5;
+  Sell.Divergence.Current.fDifHeight = 4;
+  Sell.Divergence.Current.fDeaHeight = 5;
+  TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
+  None.Divergence.Previous.fDifHeight = 2;
+  None.Divergence.Previous.fDeaHeight = 2;
+  None.Divergence.Current.fDifHeight = 3;
+  None.Divergence.Current.fDeaHeight = 1;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(None);
+
+  ApplyTradingSignalMacdLineWeakness(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) &&
+         NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
@@ -4357,9 +4438,17 @@ int main()
   {
     return 51;
   }
+  if (!TestAssignSegmentEnergySetsMacdLines())
+  {
+    return 135;
+  }
   if (!TestStrengthMetricsUseMacdEnergy())
   {
     return 52;
+  }
+  if (!TestStrengthMetricsUseMacdLineHeight())
+  {
+    return 136;
   }
   if (!TestDivergenceDetectsMacdWeakening())
   {
@@ -4484,6 +4573,10 @@ int main()
   if (!TestApplyTradingStrictAbcFiltersFirstSignals())
   {
     return 132;
+  }
+  if (!TestApplyTradingMacdLineWeaknessMapsCodes())
+  {
+    return 137;
   }
   if (!TestNestedDivergenceMarksLowerSegmentInsideHigher())
   {

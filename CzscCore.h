@@ -168,6 +168,8 @@ struct SegmentPoint
   float fHigh;
   float fLow;
   float fEnergy;
+  float fDif;
+  float fDea;
 };
 
 struct Center
@@ -363,6 +365,9 @@ void ApplyTradingSignalAbcStructure(int nCount,
 void ApplyTradingSignalStrictAbcCandidates(int nCount,
                                            float *pOut,
                                            const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalMacdLineWeakness(int nCount,
+                                        float *pOut,
+                                        const std::vector<TradingSignalCandidate> &Candidates);
 void WriteNestedDivergenceSignal(int nCount,
                                  float *pOut,
                                  const std::vector<SegmentPoint> &HighPoints,
@@ -387,6 +392,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 15 为第37课a+A+b+B+c结构标记（1=一买，-1=一卖），不占用旧函数编号。
 // Func30 输出 16 为ABC严格买卖点（过滤无ABC结构的一类买卖点），不占用旧函数编号。
 // Func30 输出 17 为区间套背驰段（高级别背驰段内的低级别一类背驰段），不占用旧函数编号。
+// Func30 输出 18 为MACD黄白线高度走弱标记（买=1、卖=-1），不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

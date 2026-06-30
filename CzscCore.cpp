@@ -341,6 +341,8 @@ static SegmentPoint MakeSegmentPoint(const Fractal &F)
   Point.fHigh = F.fHigh;
   Point.fLow = F.fLow;
   Point.fEnergy = 0;
+  Point.fDif = 0;
+  Point.fDea = 0;
   return Point;
 }
 
@@ -385,6 +387,8 @@ static SegmentPoint MakeSignalPoint(int nIndex, int nType, float fHigh, float fL
   Point.fHigh = fHigh;
   Point.fLow = fLow;
   Point.fEnergy = 0;
+  Point.fDif = 0;
+  Point.fDea = 0;
   return Point;
 }
 
@@ -584,33 +588,44 @@ static std::vector<float> ComputeEma(int nCount, const float *pPrice, int nPerio
   return Ema;
 }
 
-// 标准 MACD 柱：DIF = EMA12 - EMA26，DEA = EMA(DIF,9)，柱 = (DIF - DEA) * 2
-std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice)
+struct MacdComponents
 {
+  std::vector<float> Dif;
+  std::vector<float> Dea;
   std::vector<float> Histogram;
+};
+
+static MacdComponents ComputeMacdComponents(int nCount, const float *pPrice)
+{
+  MacdComponents M;
   if ((nCount <= 0) || (pPrice == 0))
   {
-    return Histogram;
+    return M;
   }
 
   std::vector<float> Fast = ComputeEma(nCount, pPrice, 12);
   std::vector<float> Slow = ComputeEma(nCount, pPrice, 26);
 
-  std::vector<float> Dif;
-  Dif.resize((std::size_t)nCount);
+  M.Dif.resize((std::size_t)nCount);
   for (int i = 0; i < nCount; i++)
   {
-    Dif[(std::size_t)i] = Fast[(std::size_t)i] - Slow[(std::size_t)i];
+    M.Dif[(std::size_t)i] = Fast[(std::size_t)i] - Slow[(std::size_t)i];
   }
 
-  std::vector<float> Dea = ComputeEma(nCount, &Dif[0], 9);
+  M.Dea = ComputeEma(nCount, &M.Dif[0], 9);
 
-  Histogram.resize((std::size_t)nCount);
+  M.Histogram.resize((std::size_t)nCount);
   for (int i = 0; i < nCount; i++)
   {
-    Histogram[(std::size_t)i] = (Dif[(std::size_t)i] - Dea[(std::size_t)i]) * 2.0f;
+    M.Histogram[(std::size_t)i] = (M.Dif[(std::size_t)i] - M.Dea[(std::size_t)i]) * 2.0f;
   }
-  return Histogram;
+  return M;
+}
+
+// 标准 MACD 柱：DIF = EMA12 - EMA26，DEA = EMA(DIF,9)，柱 = (DIF - DEA) * 2
+std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice)
+{
+  return ComputeMacdComponents(nCount, pPrice).Histogram;
 }
 
 // 给每个线段点赋累积 MACD 柱面积，使任一走势段的能量 = 终点能量 - 起点能量。
@@ -633,8 +648,8 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
                                    : (High[(std::size_t)i] + Low[(std::size_t)i]) * 0.5f;
   }
 
-  std::vector<float> Histogram = ComputeMacdHistogram(nCount, &Price[0]);
-  if (Histogram.empty())
+  MacdComponents Macd = ComputeMacdComponents(nCount, &Price[0]);
+  if (Macd.Histogram.empty())
   {
     return;
   }
@@ -644,7 +659,7 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
   float fAccumulator = 0;
   for (int i = 0; i < nCount; i++)
   {
-    fAccumulator += Histogram[(std::size_t)i];
+    fAccumulator += Macd.Histogram[(std::size_t)i];
     Cumulative[(std::size_t)i] = fAccumulator;
   }
 
@@ -654,6 +669,8 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
     if ((nIndex >= 0) && (nIndex < nCount))
     {
       Points[i].fEnergy = Cumulative[(std::size_t)nIndex];
+      Points[i].fDif = Macd.Dif[(std::size_t)nIndex];
+      Points[i].fDea = Macd.Dea[(std::size_t)nIndex];
     }
   }
 }
@@ -804,8 +821,16 @@ StrengthMetrics MeasureStrength(const SegmentPoint &Start, const SegmentPoint &E
     Strength.fSpace = -Strength.fSpace;
   }
   Strength.fSpeed = GetMovePower(Start, End);
-  Strength.fDifHeight = 0;
-  Strength.fDeaHeight = 0;
+  Strength.fDifHeight = End.fDif - Start.fDif;
+  if (Strength.fDifHeight < 0)
+  {
+    Strength.fDifHeight = -Strength.fDifHeight;
+  }
+  Strength.fDeaHeight = End.fDea - Start.fDea;
+  if (Strength.fDeaHeight < 0)
+  {
+    Strength.fDeaHeight = -Strength.fDeaHeight;
+  }
 
   // 走势段的 MACD 能量 = 区间累积柱面积之差的绝对值（上涨看红柱、下跌看绿柱）。
   Strength.fMacdArea = End.fEnergy - Start.fEnergy;
@@ -2143,6 +2168,55 @@ void ApplyTradingSignalStrictAbcCandidates(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       pOut[C.nIndex] = C.fSignal;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+static bool IsMacdLineWeak(const DivergenceResult &D)
+{
+  return (D.Previous.fDifHeight > 0) &&
+         (D.Previous.fDeaHeight > 0) &&
+         (D.Current.fDifHeight > 0) &&
+         (D.Current.fDeaHeight > 0) &&
+         (D.Current.fDifHeight < D.Previous.fDifHeight) &&
+         (D.Current.fDeaHeight <= D.Previous.fDeaHeight);
+}
+
+// 第25课 MACD 黄白线辅助：候选信号对应的C段黄白线高度弱于A段时标记。
+// 输出 1=买点黄白线走弱，-1=卖点黄白线走弱，0=无。
+void ApplyTradingSignalMacdLineWeakness(int nCount,
+                                        float *pOut,
+                                        const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0;
+      if (IsMacdLineWeak(C.Divergence))
+      {
+        fCode = (C.fSignal >= SIGNAL_FIRST_SELL) ? -1.0f : 1.0f;
+      }
+      pOut[C.nIndex] = fCode;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -3551,6 +3625,8 @@ int DetectInstantDivergence(const std::vector<SegmentPoint> &Points,
   SegmentPoint Now;
   Now.nIndex = nCount - 1;
   Now.fEnergy = 0;
+  Now.fDif = 0;
+  Now.fDea = 0;
   if (nDir < 0)
   {
     float fLowest = pLow[nLast];
@@ -3786,6 +3862,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
                                   LowAn.Points, LowAn.Candidates);
       break;
     }
+    case 18: ApplyTradingSignalMacdLineWeakness(nCount, pOut, An.Candidates); break; // MACD黄白线高度走弱
     default: ClearOutput(nCount, pOut); break;
   }
 }
