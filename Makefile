@@ -53,7 +53,7 @@ DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep)
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
-        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build sse-result run clean debug
+        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result run clean debug
 
 all : $(TARGETS)
 
@@ -94,11 +94,15 @@ debug: all
 	@echo [DB] $(TARGETS)
 	@gdb -w $(TARGETS)
 
-test: $(TEST_TARGET)
+test: $(TEST_TARGET) formula-test
 	@echo [TE] $(TEST_TARGET)
 	@$(TEST_TARGET)
 
 test-build: $(TEST_TARGET)
+
+formula-test:
+	@echo [TF] formulas
+	@python3 tests/check_formulas.py
 
 sse-result: clean $(SSE_DUMP_TARGET)
 	@echo [SE] tests/czsc_sse_result.txt
