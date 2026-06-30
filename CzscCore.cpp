@@ -2390,7 +2390,7 @@ void ApplyTradingSignalStandardDivergence(int nCount,
   }
 }
 
-static int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
+int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
 {
   int nFlags = 0;
   if (C.nQuality == CZSC_SIGNAL_QUALITY_STRONG)

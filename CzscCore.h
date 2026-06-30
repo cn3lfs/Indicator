@@ -359,6 +359,7 @@ int DetectInstantDivergence(const std::vector<SegmentPoint> &Points,
                             int nCount,
                             const float *pHigh,
                             const float *pLow);
+int BuildTradingSignalContextFlags(const TradingSignalCandidate &C);
 
 // 把候选/中枢结果按优先级写入通达信输出数组（信号、质量、背驰-转折、三买后续、中枢关系）
 void ApplyTradingSignalCandidates(int nCount,
