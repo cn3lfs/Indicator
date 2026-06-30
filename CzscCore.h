@@ -76,6 +76,22 @@ enum CzscCenterAftermath
   CZSC_CENTER_AFTERMATH_NEWBORN  = 2,  // 中枢新生：形成同向新中枢（趋势）
 };
 
+enum CzscSignalContextFlag
+{
+  CZSC_SIGNAL_CTX_STRONG_QUALITY    = 1,
+  CZSC_SIGNAL_CTX_ABC_STRUCTURE     = 2,
+  CZSC_SIGNAL_CTX_MACD_ZERO_PULL    = 4,
+  CZSC_SIGNAL_CTX_MACD_LINE_WEAK    = 8,
+  CZSC_SIGNAL_CTX_SMALL_TURN        = 16,
+  CZSC_SIGNAL_CTX_STANDARD_DIV      = 32,
+  CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN = 64,
+  CZSC_SIGNAL_CTX_AFTERMATH_EXTEND  = 128,
+  CZSC_SIGNAL_CTX_REVERSAL_TREND    = 256,
+  CZSC_SIGNAL_CTX_REVERSAL_CONS     = 512,
+  CZSC_SIGNAL_CTX_REVERSAL_EXTEND   = 1024,
+  CZSC_SIGNAL_CTX_OVERLAPPED        = 2048,
+};
+
 // 均线吻分类（第11课）：短长均线靠近/相交处的反抗强度，递增
 enum CzscKissType
 {
@@ -375,6 +391,9 @@ void ApplyTradingSignalMacdZeroPullback(int nCount,
 void ApplyTradingSignalStandardDivergence(int nCount,
                                           float *pOut,
                                           const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalContextFlags(int nCount,
+                                    float *pOut,
+                                    const std::vector<TradingSignalCandidate> &Candidates);
 void WriteNestedDivergenceSignal(int nCount,
                                  float *pOut,
                                  const std::vector<SegmentPoint> &HighPoints,
@@ -402,6 +421,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 18 为MACD黄白线高度走弱标记（买=1、卖=-1），不占用旧函数编号。
 // Func30 输出 19 为B中枢MACD黄白线回拉0轴标记（买=1、卖=-1），不占用旧函数编号。
 // Func30 输出 20 为标准趋势背驰确认标记（买=1、卖=-1），不占用旧函数编号。
+// Func30 输出 21 为胜出买卖点候选上下文位图，位值见 CzscSignalContextFlag。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

@@ -3279,6 +3279,78 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingContextFlagsMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  MakeStandardDivergence(&Buy, 1);
+  Buy.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Buy.nSmallTurn = 1;
+  Buy.nReversal = CZSC_REVERSAL_TREND;
+  Buy.bOverlapped = true;
+  TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
+  Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
+  Newborn.nReversal = CZSC_REVERSAL_CONSOLIDATION;
+  TradingSignalCandidate Extended = MakeTestCandidate(5, 13.0f, 20);
+  Extended.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
+  Extended.nReversal = CZSC_REVERSAL_EXTENSION;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Newborn);
+  Candidates.push_back(Extended);
+
+  ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
+
+  float fBuyExpected = (float)(CZSC_SIGNAL_CTX_STRONG_QUALITY |
+                               CZSC_SIGNAL_CTX_ABC_STRUCTURE |
+                               CZSC_SIGNAL_CTX_MACD_ZERO_PULL |
+                               CZSC_SIGNAL_CTX_MACD_LINE_WEAK |
+                               CZSC_SIGNAL_CTX_SMALL_TURN |
+                               CZSC_SIGNAL_CTX_STANDARD_DIV |
+                               CZSC_SIGNAL_CTX_REVERSAL_TREND |
+                               CZSC_SIGNAL_CTX_OVERLAPPED);
+  float fNewbornExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN |
+                                   CZSC_SIGNAL_CTX_REVERSAL_CONS);
+  float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
+                                    CZSC_SIGNAL_CTX_REVERSAL_EXTEND);
+
+  return NearlyEqual(pOut[1], fBuyExpected) &&
+         NearlyEqual(pOut[3], fNewbornExpected) &&
+         NearlyEqual(pOut[5], fExtendedExpected) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingContextFlagsUsesWinningPriority()
+{
+  const int nCount = 4;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 1.0f, 10);
+  MakeStandardDivergence(&Low, 1);
+  Low.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Low.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.bOverlapped = true;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+
+  ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], (float)CZSC_SIGNAL_CTX_OVERLAPPED) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestNestedDivergenceMarksLowerSegmentInsideHigher()
 {
   const int nCount = 61;
@@ -4720,6 +4792,14 @@ int main()
   if (!TestApplyTradingStandardDivergenceMapsCodes())
   {
     return 140;
+  }
+  if (!TestApplyTradingContextFlagsMapsCodes())
+  {
+    return 141;
+  }
+  if (!TestApplyTradingContextFlagsUsesWinningPriority())
+  {
+    return 142;
   }
   if (!TestNestedDivergenceMarksLowerSegmentInsideHigher())
   {

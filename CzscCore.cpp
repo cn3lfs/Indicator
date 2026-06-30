@@ -2390,6 +2390,94 @@ void ApplyTradingSignalStandardDivergence(int nCount,
   }
 }
 
+static int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
+{
+  int nFlags = 0;
+  if (C.nQuality == CZSC_SIGNAL_QUALITY_STRONG)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_STRONG_QUALITY;
+  }
+  if (C.nAbcStructure != 0)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_ABC_STRUCTURE;
+  }
+  if (C.nMacdZeroPullback != 0)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_MACD_ZERO_PULL;
+  }
+  if (IsMacdLineWeak(C.Divergence))
+  {
+    nFlags |= CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
+  }
+  if (C.nSmallTurn != 0)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_SMALL_TURN;
+  }
+  if (IsStandardMacdDivergence(C))
+  {
+    nFlags |= CZSC_SIGNAL_CTX_STANDARD_DIV;
+  }
+  if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN;
+  }
+  else if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_AFTERMATH_EXTEND;
+  }
+  if (C.nReversal == CZSC_REVERSAL_TREND)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_REVERSAL_TREND;
+  }
+  else if (C.nReversal == CZSC_REVERSAL_CONSOLIDATION)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_REVERSAL_CONS;
+  }
+  else if (C.nReversal == CZSC_REVERSAL_EXTENSION)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_REVERSAL_EXTEND;
+  }
+  if (C.bOverlapped)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_OVERLAPPED;
+  }
+  return nFlags;
+}
+
+// 胜出买卖点候选上下文位图：把质量、ABC、MACD、小转大、转折/后续等离散诊断压成一列，
+// 方便通达信公式用一个 DLL 输出做组合筛选；同柱仍按候选优先级取胜。
+void ApplyTradingSignalContextFlags(int nCount,
+                                    float *pOut,
+                                    const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)BuildTradingSignalContextFlags(C);
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 // 形态学第一步：对原始K线做包含处理，合并出无包含关系的合并K线序列（第62/65课）
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
 {
@@ -4033,6 +4121,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 18: ApplyTradingSignalMacdLineWeakness(nCount, pOut, An.Candidates); break; // MACD黄白线高度走弱
     case 19: ApplyTradingSignalMacdZeroPullback(nCount, pOut, An.Candidates); break; // B中枢MACD黄白线回拉0轴
     case 20: ApplyTradingSignalStandardDivergence(nCount, pOut, An.Candidates); break; // 标准趋势背驰确认
+    case 21: ApplyTradingSignalContextFlags(nCount, pOut, An.Candidates); break; // 胜出候选上下文位图
     default: ClearOutput(nCount, pOut); break;
   }
 }
