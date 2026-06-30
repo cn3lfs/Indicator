@@ -4153,6 +4153,68 @@ static bool TestFunc30FeatureSegmentModeMatchesFunc19()
   return nNonZero > 2;
 }
 
+static bool TestFunc30DiagnosticOutputsMatchProjections()
+{
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> Expected((std::size_t)SSE_DAILY_COUNT);
+  std::vector<float> Unified((std::size_t)SSE_DAILY_COUNT);
+
+  CzscAnalyzer An;
+  BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
+
+  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21};
+  for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
+  {
+    int nOutput = Outputs[i];
+    switch (nOutput)
+    {
+      case 14: ApplyTradingSignalSmallTurn(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 15: ApplyTradingSignalAbcStructure(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 16: ApplyTradingSignalStrictAbcCandidates(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 18: ApplyTradingSignalMacdLineWeakness(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 19: ApplyTradingSignalMacdZeroPullback(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 20: ApplyTradingSignalStandardDivergence(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 21: ApplyTradingSignalContextFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      default: return false;
+    }
+
+    float fMode = (float)(nOutput * 10);
+    Func30(SSE_DAILY_COUNT, &Unified[0], &High[0], &Low[0], &fMode);
+
+    for (int n = 0; n < SSE_DAILY_COUNT; n++)
+    {
+      if (!NearlyEqual(Unified[(std::size_t)n], Expected[(std::size_t)n]))
+      {
+        return false;
+      }
+    }
+  }
+
+  CzscConfig HighConfig = DefaultConfig();
+  HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer HighAn;
+  BuildAnalyzerFromPrice(HighAn, SSE_DAILY_COUNT, &High[0], &Low[0], HighConfig);
+  CzscAnalyzer LowAn;
+  BuildAnalyzerFromPrice(LowAn, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
+
+  WriteNestedDivergenceSignal(SSE_DAILY_COUNT, &Expected[0],
+                              HighAn.Points, HighAn.Candidates,
+                              LowAn.Points, LowAn.Candidates);
+  float fNestedMode = 170;
+  Func30(SSE_DAILY_COUNT, &Unified[0], &High[0], &Low[0], &fNestedMode);
+  for (int n = 0; n < SSE_DAILY_COUNT; n++)
+  {
+    if (!NearlyEqual(Unified[(std::size_t)n], Expected[(std::size_t)n]))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFunc30HandlesEmptyInput()
 {
   Func30(0, 0, 0, 0, 0);
@@ -4908,6 +4970,10 @@ int main()
   if (!TestFunc30FeatureSegmentModeMatchesFunc19())
   {
     return 127;
+  }
+  if (!TestFunc30DiagnosticOutputsMatchProjections())
+  {
+    return 143;
   }
   if (!TestFunc30HandlesEmptyInput())
   {
