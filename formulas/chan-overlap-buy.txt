@@ -1,0 +1,7 @@
+{缠论 二三重合买点 条件选股}
+{最近10个交易日内出现第二/第三类买点重合}
+XC:=TDXDLL1(40,C,V,0);
+BSP:=TDXDLL1(30,H,L,40);
+CTX:=TDXDLL1(30,H,L,210);
+OVL:=MOD(INTPART(CTX/2048),2)=1;
+BARSLAST((BSP=2 OR BSP=3) AND OVL)<10;
