@@ -3231,6 +3231,54 @@ static bool TestApplyTradingMacdZeroPullbackMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
+{
+  pC->nSource = 1;
+  pC->nAbcStructure = nSign;
+  pC->nMacdZeroPullback = nSign;
+  pC->Divergence.bNewExtreme = true;
+  pC->Divergence.bWeakMacd = true;
+  pC->Divergence.Previous.fDifHeight = 6;
+  pC->Divergence.Previous.fDeaHeight = 5;
+  pC->Divergence.Current.fDifHeight = 4;
+  pC->Divergence.Current.fDeaHeight = 3;
+}
+
+static bool TestApplyTradingStandardDivergenceMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  MakeStandardDivergence(&Buy, 1);
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  MakeStandardDivergence(&Sell, -1);
+  TradingSignalCandidate MissingAbc = MakeTestCandidate(5, 1.0f, 30);
+  MakeStandardDivergence(&MissingAbc, 1);
+  MissingAbc.nAbcStructure = 0;
+  TradingSignalCandidate MissingMacdArea = MakeTestCandidate(7, 1.0f, 30);
+  MakeStandardDivergence(&MissingMacdArea, 1);
+  MissingMacdArea.Divergence.bWeakMacd = false;
+
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(MissingAbc);
+  Candidates.push_back(MissingMacdArea);
+
+  ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) &&
+         NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestNestedDivergenceMarksLowerSegmentInsideHigher()
 {
   const int nCount = 61;
@@ -4668,6 +4716,10 @@ int main()
   if (!TestApplyTradingMacdZeroPullbackMapsCodes())
   {
     return 139;
+  }
+  if (!TestApplyTradingStandardDivergenceMapsCodes())
+  {
+    return 140;
   }
   if (!TestNestedDivergenceMarksLowerSegmentInsideHigher())
   {

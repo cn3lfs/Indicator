@@ -372,6 +372,9 @@ void ApplyTradingSignalMacdLineWeakness(int nCount,
 void ApplyTradingSignalMacdZeroPullback(int nCount,
                                         float *pOut,
                                         const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalStandardDivergence(int nCount,
+                                          float *pOut,
+                                          const std::vector<TradingSignalCandidate> &Candidates);
 void WriteNestedDivergenceSignal(int nCount,
                                  float *pOut,
                                  const std::vector<SegmentPoint> &HighPoints,
@@ -398,6 +401,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 17 为区间套背驰段（高级别背驰段内的低级别一类背驰段），不占用旧函数编号。
 // Func30 输出 18 为MACD黄白线高度走弱标记（买=1、卖=-1），不占用旧函数编号。
 // Func30 输出 19 为B中枢MACD黄白线回拉0轴标记（买=1、卖=-1），不占用旧函数编号。
+// Func30 输出 20 为标准趋势背驰确认标记（买=1、卖=-1），不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

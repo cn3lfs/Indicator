@@ -2333,6 +2333,63 @@ void ApplyTradingSignalMacdZeroPullback(int nCount,
   }
 }
 
+static bool IsStandardMacdDivergence(const TradingSignalCandidate &C)
+{
+  if (C.nSource != SIGNAL_SOURCE_FIRST)
+  {
+    return false;
+  }
+  if ((C.nAbcStructure == 0) || (C.nMacdZeroPullback == 0))
+  {
+    return false;
+  }
+  if (!C.Divergence.bNewExtreme || !C.Divergence.bWeakMacd)
+  {
+    return false;
+  }
+  return IsMacdLineWeak(C.Divergence);
+}
+
+// 第24/25/37课标准趋势背驰组合诊断：
+// 一类趋势背驰 + C段创新极值 + 柱面积走弱 + 黄白线高度走弱 + B中枢回零 + ABC结构。
+// 输出 1=标准一买背驰，-1=标准一卖背驰，0=未满足完整组合。
+void ApplyTradingSignalStandardDivergence(int nCount,
+                                          float *pOut,
+                                          const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0;
+      if (IsStandardMacdDivergence(C))
+      {
+        fCode = (C.fSignal == SIGNAL_FIRST_BUY) ? 1.0f : -1.0f;
+      }
+      pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 // 形态学第一步：对原始K线做包含处理，合并出无包含关系的合并K线序列（第62/65课）
 std::vector<MergedBar> BuildMergedBars(int nCount, float *pHigh, float *pLow)
 {
@@ -3975,6 +4032,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     }
     case 18: ApplyTradingSignalMacdLineWeakness(nCount, pOut, An.Candidates); break; // MACD黄白线高度走弱
     case 19: ApplyTradingSignalMacdZeroPullback(nCount, pOut, An.Candidates); break; // B中枢MACD黄白线回拉0轴
+    case 20: ApplyTradingSignalStandardDivergence(nCount, pOut, An.Candidates); break; // 标准趋势背驰确认
     default: ClearOutput(nCount, pOut); break;
   }
 }
