@@ -11,6 +11,8 @@ FORMULA_REF = re.compile(r"(?:formulas[\\/])?(chan-[A-Za-z0-9_-]+\.txt)")
 def main() -> int:
   missing = []
   empty = []
+  undocumented = []
+  guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
   for doc in DOCS:
     text = doc.read_text(encoding="utf-8")
     for name in sorted(set(FORMULA_REF.findall(text))):
@@ -20,11 +22,17 @@ def main() -> int:
       elif path.stat().st_size == 0:
         empty.append(str(path.relative_to(ROOT)))
 
-  if missing or empty:
+  for path in sorted((ROOT / "formulas").glob("chan-*.txt")):
+    if path.name not in guide_text:
+      undocumented.append(path.name)
+
+  if missing or empty or undocumented:
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
       print(f"empty formula: {item}", file=sys.stderr)
+    for item in undocumented:
+      print(f"undocumented formula: formulas/README.md -> {item}", file=sys.stderr)
     return 1
   return 0
 

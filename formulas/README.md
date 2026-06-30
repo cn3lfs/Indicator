@@ -45,6 +45,7 @@
 - 需要第24/25/37课标准趋势背驰确认的一买时，另导入 `chan-first-buy-standard.txt`
 - 需要用 `CTX` 位图组合强质量、ABC、MACD 回零、黄白线走弱、标准趋势背驰时，另导入 `chan-first-buy-context.txt`
 - 需要第21/61课二三类重合买点时，另导入 `chan-overlap-buy.txt`
+- 需要日线二买叠加 30 分钟二/三买共振时，另导入 `chan-multi-buy.txt`
 - 每次粘贴后点确定
 
 ## 第四步：使用
