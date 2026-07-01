@@ -3,7 +3,7 @@ XC:=TDXDLL1(40,C,V,0);             { 注册真实收盘价/成交量 }
 DLL:=TDXDLL1(30,H,L,0);            { 笔端点：顶 +1 / 底 -1 }
 SEG:=TDXDLL1(30,H,L,1100000);      { 线段端点：配置1100=线段中枢+特征序列法 }
 BSP:=TDXDLL1(30,H,L,40);           { 三类买卖点：买 1/2/3、卖 11/12/13 }
-QLT:=TDXDLL1(30,H,L,50);           { 信号质量 0/1/2 }
+QLT:=TDXDLL1(30,H,L,50);           { 信号质量 0观察/1确认/2强质量 }
 
 { ===== 笔（黄细线） ===== }
 DRAWLINE(DLL=-1,L,DLL=+1,H,0),COLORYELLOW,LINETHICK1;
@@ -23,6 +23,6 @@ DRAWTEXT(BSP=11,HIGH,'一卖'),COLORGREEN;
 DRAWTEXT(BSP=12,HIGH,'二卖'),COLORGREEN;
 DRAWTEXT(BSP=13,HIGH,'三卖'),COLORGREEN;
 
-{ ===== 标准背驰(质量2)最强买卖点额外打点 ===== }
+{ ===== 强质量买卖点额外打点；完整标准趋势背驰看 STD 输出20 ===== }
 DRAWICON(BSP>=1 AND BSP<=3 AND QLT=2,LOW,1);
 DRAWICON(BSP>=11 AND BSP<=13 AND QLT=2,HIGH,2);
