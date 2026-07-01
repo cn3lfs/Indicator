@@ -128,6 +128,13 @@ static int ScopedFirstSignalValue(float fSignal, int nValue)
   return IsFirstSignal(fSignal) ? nValue : 0;
 }
 
+static int ScopedReversalPointId(float fSignal, int nReversal, int nPoint)
+{
+  return IsFirstSignal(fSignal) &&
+         (nReversal != CZSC_REVERSAL_UNKNOWN) &&
+         (nPoint >= 0) ? nPoint + 2 : 0;
+}
+
 static const char *CenterRelationName(int nRelation)
 {
   if (nRelation == CZSC_CENTER_RELATION_UP) return "上涨";
@@ -419,9 +426,10 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
   {
     const TradingSignalCandidate &C = Candidates[i];
     int nCtx = BuildTradingSignalContextFlags(C);
+    int nDgs = BuildTradingSignalDivergenceSemantic(C);
     int nLifecycle = CandidateCenterLifecycle(Centers, C.nCenter);
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  生命周期%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d ABK%d ABL%d ABR%d STL%d STR%d STF%d SFP%d SMP%d APS%d APE%d CPS%d CPE%d PID%d TID%d  ctx%d",
+                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  生命周期%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d ABK%d ABL%d ABR%d STL%d STR%d STF%d SFP%d SMP%d APS%d APE%d CPS%d CPE%d PID%d TID%d DGS%d RVP%d  ctx%d",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -456,6 +464,8 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  OneBasedId(C.Divergence.nCurrentEndPoint),
                  OneBasedId(C.nPoint),
                  OneBasedId(C.nTrend),
+                 nDgs,
+                 ScopedReversalPointId(C.fSignal, C.nReversal, C.nPoint),
                  nCtx);
     PrintStrengthPair(pFile, C.Divergence);
     PrintStrengthRatios(pFile, C.Divergence);

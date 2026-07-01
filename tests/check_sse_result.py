@@ -19,7 +19,8 @@ DEBUG_IDS = re.compile(
   r"SFP(?P<sfp>[0-9]+) SMP(?P<smp>[0-9]+) "
   r"APS(?P<aps>[0-9]+) APE(?P<ape>[0-9]+) "
   r"CPS(?P<cps>[0-9]+) CPE(?P<cpe>[0-9]+) "
-  r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)"
+  r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+) "
+  r"DGS(?P<dgs>[0-9]+) RVP(?P<rvp>[0-9]+)"
 )
 BKO_CONTEXT = re.compile(
   r"bko\[离P(?P<leave>[0-9]+)/(?P<leave_date>[0-9]{4}-[0-9]{2}-[0-9]{2}) "
@@ -32,6 +33,13 @@ POINT_LINE = re.compile(
   r"(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})\s+"
   r"(?P<kind>顶|底)\s+"
   r"(?P<price>-?[0-9]+(?:\.[0-9]+)?)$"
+)
+NESTED_LINE = re.compile(
+  r"^  (?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})  "
+  r"级别(?P<level>[0-9]+)  源H(?P<source>[0-9]+)  "
+  r"低P(?P<start>[0-9]+)/(?P<start_date>[0-9]{4}-[0-9]{2}-[0-9]{2})"
+  r"->P(?P<end>[0-9]+)/(?P<end_date>[0-9]{4}-[0-9]{2}-[0-9]{2})  "
+  r"方向(?P<direction>-?[0-9]+)  小转大(?P<small>[0-9]+)$"
 )
 
 
@@ -129,6 +137,9 @@ def validate_candidate_context(text: str):
     n_cps = int(debug_ids.group("cps"))
     n_cpe = int(debug_ids.group("cpe"))
     n_pid = int(debug_ids.group("pid"))
+    n_dgs = int(debug_ids.group("dgs"))
+    n_rvp = int(debug_ids.group("rvp"))
+    is_first_signal = ("  一买  " in line) or ("  一卖  " in line)
     is_second_signal = ("  二买  " in line) or ("  二卖  " in line)
     is_third_signal = ("  三买  " in line) or ("  三卖  " in line)
     if n_abc == 0 and n_abk != 0:
@@ -150,6 +161,16 @@ def validate_candidate_context(text: str):
     if any(item != 0 for item in (n_aps, n_ape, n_cps, n_cpe)):
       if not (0 < n_aps < n_ape < n_cps < n_cpe):
         errors.append(f"line {n_line}: divergence endpoints require ordered positive APS/APE/CPS/CPE")
+    if n_dgs not in (0, 1, 2, 3):
+      errors.append(f"line {n_line}: invalid DGS{n_dgs}")
+    if n_dgs == 1 and (not is_first_signal or "创新" not in line or "成立" not in line):
+      errors.append(f"line {n_line}: trend divergence DGS1 requires first signal and confirmed new extreme")
+    if n_dgs == 2 and (is_first_signal or "成立" not in line):
+      errors.append(f"line {n_line}: consolidation divergence DGS2 requires non-first confirmed divergence")
+    if n_dgs == 3 and (not is_third_signal or n_small_turn == 0):
+      errors.append(f"line {n_line}: small-turn DGS3 requires third signal and small turn context")
+    if n_rvp != 0 and (not is_first_signal or n_rvp != n_pid + 1):
+      errors.append(f"line {n_line}: RVP{n_rvp} requires first signal and next point after PID{n_pid}")
     if "bko[-]" in line:
       if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp", "stl", "str", "stf")):
         errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP/STL/STR/STF debug ids")
@@ -192,6 +213,52 @@ def validate_candidate_context(text: str):
   return errors
 
 
+def validate_nested_context(text: str):
+  errors = []
+  in_nested = False
+  declared = None
+  parsed = 0
+  for n_line, line in enumerate(text.splitlines(), start=1):
+    header = SECTION_HEADER.match(line)
+    if header is not None:
+      if in_nested and declared != parsed:
+        errors.append(f"nested context section declared {declared} rows but parsed {parsed}")
+      in_nested = header.group("title") == "区间套背驰上下文"
+      declared = int(header.group("count")) if in_nested else None
+      parsed = 0
+      continue
+    if not in_nested:
+      continue
+    if not line.strip():
+      continue
+    nested = NESTED_LINE.match(line)
+    if nested is None:
+      errors.append(f"line {n_line}: malformed nested divergence context")
+      continue
+    parsed += 1
+    n_level = int(nested.group("level"))
+    n_source = int(nested.group("source"))
+    n_start = int(nested.group("start"))
+    n_end = int(nested.group("end"))
+    n_direction = int(nested.group("direction"))
+    n_small = int(nested.group("small"))
+    if n_level not in (1, 2):
+      errors.append(f"line {n_line}: nested level must be 1 or 2")
+    if n_source <= 0:
+      errors.append(f"line {n_line}: nested source must be positive")
+    if not (0 < n_start < n_end):
+      errors.append(f"line {n_line}: nested low endpoints must be ordered")
+    if n_direction not in (-1, 1):
+      errors.append(f"line {n_line}: nested direction must be -1 or 1")
+    if n_small not in (0, 1):
+      errors.append(f"line {n_line}: nested small-turn flag must be 0 or 1")
+    if n_small == 1 and n_level != 2:
+      errors.append(f"line {n_line}: nested small-turn confirmation requires level 2")
+  if in_nested and declared != parsed:
+    errors.append(f"nested context section declared {declared} rows but parsed {parsed}")
+  return errors
+
+
 def main() -> int:
   if len(sys.argv) != 3:
     print("usage: check_sse_result.py <dump_executable> <golden_file>", file=sys.stderr)
@@ -215,6 +282,7 @@ def main() -> int:
     actual_text = "".join(actual)
     context_errors = validate_point_structure(actual_text)
     context_errors.extend(validate_candidate_context(actual_text))
+    context_errors.extend(validate_nested_context(actual_text))
     if context_errors:
       print(f"{actual_file} has invalid SSE structure.", file=sys.stderr)
       for item in context_errors:
