@@ -48,6 +48,14 @@ EXPECTED_FORMULA_SNIPPETS = {
     "BRK:=MOD(INTPART(CTX/4096),2)=1;",
     "BARSLAST(BSP=3 AND POS=1 AND BRK)<10;",
   ],
+  "chan-third-buy-expanded.txt": [
+    "AFT:=TDXDLL1(30,H,L,80);",
+    "BARSLAST(BSP=3 AND AFT=1)<10;",
+  ],
+  "chan-third-buy-newborn.txt": [
+    "AFT:=TDXDLL1(30,H,L,80);",
+    "BARSLAST(BSP=3 AND AFT=2)<10;",
+  ],
 }
 
 
@@ -223,6 +231,14 @@ def self_test() -> int:
       "CTX:=TDXDLL1(30,H,L,210);\n"
       "OVL:=MOD(INTPART(CTX/2048),2)=1;\n"
       "BARSLAST((BSP=2 OR BSP=3) AND OVL)<10;\n"
+    ),
+    "chan-third-buy-expanded.txt": (
+      "AFT:=TDXDLL1(30,H,L,80);\n"
+      "BARSLAST(BSP=3 AND AFT=1)<10;\n"
+    ),
+    "chan-third-buy-newborn.txt": (
+      "AFT:=TDXDLL1(30,H,L,80);\n"
+      "BARSLAST(BSP=3 AND AFT=2)<10;\n"
     ),
     "chan-third-buy-original.txt": "POS:=TDXDLL1(30,H,L,220);\n",
   })
