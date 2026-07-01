@@ -136,6 +136,7 @@ def main() -> int:
   invalid_modes = []
   stale_comments = []
   aux_order_errors = []
+  formula_snippet_errors = []
   func30_errors = []
   func30_outputs, func30_errors = read_func30_outputs()
   readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -174,6 +175,21 @@ def main() -> int:
     elif first_func40.start() > first_func30.start():
       aux_order_errors.append(f"{path.relative_to(ROOT)}: TDXDLL1(40,C,V,0) must appear before Func30")
 
+  expected_formula_snippets = {
+    "chan-third-buy-original.txt": [
+      "POS:=TDXDLL1(30,H,L,220);",
+      "CTX:=TDXDLL1(30,H,L,210);",
+      "BRK:=MOD(INTPART(CTX/4096),2)=1;",
+      "BARSLAST(BSP=3 AND POS=1 AND BRK)<10;",
+    ],
+  }
+  for name, snippets in expected_formula_snippets.items():
+    path = ROOT / "formulas" / name
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    for snippet in snippets:
+      if snippet not in text:
+        formula_snippet_errors.append(f"{name}: missing snippet {snippet}")
+
   debug_text = (ROOT / "formulas" / "chan-debug.txt").read_text(encoding="utf-8")
   expected_debug_comments = [
     "中枢关系：1上涨/-1下跌/2扩展",
@@ -203,7 +219,7 @@ def main() -> int:
       stale_comments.append(f"chan-debug.txt missing debug line: {line}")
 
   if (missing or empty or undocumented or invalid_modes or stale_comments or
-      aux_order_errors or func30_errors or func30_doc_errors):
+      aux_order_errors or formula_snippet_errors or func30_errors or func30_doc_errors):
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -216,6 +232,8 @@ def main() -> int:
       print(f"stale formula comment: {item}", file=sys.stderr)
     for item in aux_order_errors:
       print(f"aux order error: {item}", file=sys.stderr)
+    for item in formula_snippet_errors:
+      print(f"formula snippet error: {item}", file=sys.stderr)
     for item in func30_errors:
       print(f"Func30 parser error: {item}", file=sys.stderr)
     for item in func30_doc_errors:
