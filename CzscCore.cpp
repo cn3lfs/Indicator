@@ -1957,6 +1957,7 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
     const CenterBreakout &B = Breakouts[i];
     if (!B.bFirstRetest || !B.bThirdSignal ||
         (B.nDirection == 0) ||
+        (B.nCenter < 0) || ((std::size_t)B.nCenter >= Centers.size()) ||
         (B.nRetestPoint < 0) || ((std::size_t)B.nRetestPoint >= Points.size()))
     {
       continue;

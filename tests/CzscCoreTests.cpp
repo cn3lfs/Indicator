@@ -2566,6 +2566,38 @@ static bool TestThirdCandidateRequiresBreakoutDirection()
          !HasSignalCandidate(Candidates, 24, 13.0f);
 }
 
+static bool TestThirdCandidateRequiresValidCenter()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 10.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 6));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  std::vector<CenterBreakout> MissingCenter;
+  MissingCenter.push_back(MakeTestBreakout(1, 6));
+  std::vector<TradingSignalCandidate> MissingCandidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, MissingCenter);
+  if (HasSignalCandidate(MissingCandidates, 24, 3.0f))
+  {
+    return false;
+  }
+
+  std::vector<CenterBreakout> OutOfRangeCenter;
+  OutOfRangeCenter.push_back(MakeTestBreakout(1, 6));
+  OutOfRangeCenter.back().nCenter = 1;
+  std::vector<TradingSignalCandidate> OutOfRangeCandidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, OutOfRangeCenter);
+  return !HasSignalCandidate(OutOfRangeCandidates, 24, 3.0f);
+}
+
 static bool TestThirdCandidateUsesOnlyCompletedTrendStructure()
 {
   std::vector<SegmentPoint> Points;
@@ -6774,6 +6806,10 @@ int main()
   if (!TestThirdCandidateRequiresBreakoutDirection())
   {
     return 181;
+  }
+  if (!TestThirdCandidateRequiresValidCenter())
+  {
+    return 182;
   }
   if (!TestThirdCandidateUsesOnlyCompletedTrendStructure())
   {
