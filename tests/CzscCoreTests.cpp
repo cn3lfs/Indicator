@@ -7032,6 +7032,49 @@ static bool TestFeatureSegmentGapRequiresReversalFractal()
   return Line.size() == 1;  // 未出现反向底分型，不确认线段结束
 }
 
+static bool TestFeatureSegmentGapConfirmationStartsNextSegment()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // 有缺口顶分型，旧线段终点
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));  // 新向下线段第一笔
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // 第三笔破第一笔结束位置，新线段成立
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 26, 24));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 25, 23));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 27, 25));
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return (Line.size() >= 3) &&
+         (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12) &&
+         (Line[2].nType == CZSC_POINT_BOTTOM) && (Line[2].nIndex == 24);
+}
+
+static bool TestFeatureSegmentGapWithoutReverseFractalKeepsOldSegment()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // X2 与 X1 有缺口
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // X3 使原序列顶分型成立
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 27, 24));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 23, 21));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 29, 25));     // 反向序列没有底分型确认
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return Line.size() == 1;
+}
+
 static bool TestDecodeConfig()
 {
   CzscConfig c0 = DecodeConfig(0);
@@ -8710,6 +8753,14 @@ int main()
   if (!TestFeatureSegmentGapRequiresReversalFractal())
   {
     return 189;
+  }
+  if (!TestFeatureSegmentGapConfirmationStartsNextSegment())
+  {
+    return 201;
+  }
+  if (!TestFeatureSegmentGapWithoutReverseFractalKeepsOldSegment())
+  {
+    return 202;
   }
   if (!TestApplyTradingReversalRequiresFirstSignal())
   {
