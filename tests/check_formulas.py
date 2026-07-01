@@ -16,6 +16,11 @@ CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
 FORMULA_ALIASES = [
   ("chan-main.txt", "chan-all-buys.txt"),
 ]
+README_REQUIRED_SNIPPETS = [
+  "formulas/README.md",
+  "formulas/chan-main.txt",
+  "formulas/chan-debug.txt",
+]
 
 EXPECTED_FORMULA_SNIPPETS = {
   "chan-main.txt": [
@@ -206,6 +211,14 @@ def validate_readme_func30_docs(readme_text: str, outputs):
   return errors
 
 
+def validate_readme_entry_docs(readme_text: str):
+  errors = []
+  for snippet in README_REQUIRED_SNIPPETS:
+    if snippet not in readme_text:
+      errors.append(f"README.md missing formula pack entry: {snippet}")
+  return errors
+
+
 def validate_formula_snippets(formula_texts):
   errors = []
   for name, snippets in EXPECTED_FORMULA_SNIPPETS.items():
@@ -286,6 +299,14 @@ def self_test() -> int:
   ]
   if doc_errors != expected_doc_errors:
     print(f"self-test failed: README output docs {doc_errors!r}", file=sys.stderr)
+    return 1
+  entry_errors = validate_readme_entry_docs("formulas/README.md formulas/chan-main.txt formulas/chan-debug.txt")
+  if entry_errors:
+    print(f"self-test failed: README entry docs {entry_errors!r}", file=sys.stderr)
+    return 1
+  entry_errors = validate_readme_entry_docs("formulas/README.md formulas/chan-main.txt")
+  if entry_errors != ["README.md missing formula pack entry: formulas/chan-debug.txt"]:
+    print(f"self-test failed: README entry missing {entry_errors!r}", file=sys.stderr)
     return 1
 
   snippet_errors = validate_formula_snippets({
@@ -440,6 +461,7 @@ def main() -> int:
   tdx_func_errors = []
   readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
   func30_doc_errors = validate_readme_func30_docs(readme_text, func30_outputs)
+  readme_entry_errors = validate_readme_entry_docs(readme_text)
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
@@ -519,7 +541,7 @@ def main() -> int:
 
   if (missing or empty or undocumented or invalid_modes or stale_comments or
       aux_order_errors or formula_snippet_errors or formula_alias_errors or func30_errors or
-      func30_doc_errors or registered_func_errors or tdx_func_errors):
+      func30_doc_errors or readme_entry_errors or registered_func_errors or tdx_func_errors):
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -540,6 +562,8 @@ def main() -> int:
       print(f"Func30 parser error: {item}", file=sys.stderr)
     for item in func30_doc_errors:
       print(f"Func30 documentation error: {item}", file=sys.stderr)
+    for item in readme_entry_errors:
+      print(f"README entry error: {item}", file=sys.stderr)
     for item in registered_func_errors:
       print(f"TDX registry parser error: {item}", file=sys.stderr)
     for item in tdx_func_errors:
