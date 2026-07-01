@@ -318,6 +318,32 @@ static bool TestRealSseSignalsWellFormed()
   return true;
 }
 
+static bool TestRealSseDiagnosticCounts()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  return (Strokes.size() == 157) &&
+         (StrokeAn.Points.size() == 158) &&
+         (SegmentAn.Points.size() == 31) &&
+         (StrokeAn.Centers.size() == 30) &&
+         (SegmentAn.Centers.size() == 5) &&
+         (StrokeAn.Candidates.size() == 11) &&
+         (SegmentAn.Candidates.size() == 2);
+}
+
 static bool TestRealSsePricePointsStayOnStrictStrokeEndpoints()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
@@ -4899,6 +4925,10 @@ int main()
   if (!TestRealSseSignalsWellFormed())
   {
     return 118;
+  }
+  if (!TestRealSseDiagnosticCounts())
+  {
+    return 155;
   }
   if (!TestRealSsePricePointsStayOnStrictStrokeEndpoints())
   {
