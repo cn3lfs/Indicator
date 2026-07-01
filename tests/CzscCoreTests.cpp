@@ -7577,6 +7577,41 @@ static bool TestSignalCacheHitAndInvalidate()
   return candA3 == candA1;
 }
 
+static bool TestPriceAnalyzerCacheInvalidatesOnConfig()
+{
+  float *pHigh = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pLow = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscConfig Default = DefaultConfig();
+  const CzscAnalyzer &DefaultA1 = GetOrBuildPriceAnalyzer(SSE_DAILY_COUNT, pHigh, pLow, Default);
+  std::size_t nDefaultPoints = DefaultA1.Points.size();
+  int nDefaultUnit = DefaultA1.Config.nCenterUnit;
+  int nDefaultSegment = DefaultA1.Config.nSegmentMethod;
+
+  CzscConfig Feature = DefaultConfig();
+  Feature.nCenterUnit = CZSC_UNIT_SEGMENT;
+  Feature.nSegmentMethod = CZSC_SEG_FEATURE;
+  const CzscAnalyzer &FeatureA = GetOrBuildPriceAnalyzer(SSE_DAILY_COUNT, pHigh, pLow, Feature);
+  CzscAnalyzer ManualFeature;
+  BuildAnalyzerFromPrice(ManualFeature, SSE_DAILY_COUNT, pHigh, pLow, Feature);
+  if ((FeatureA.Config.nCenterUnit != CZSC_UNIT_SEGMENT) ||
+      (FeatureA.Config.nSegmentMethod != CZSC_SEG_FEATURE) ||
+      (FeatureA.Points.size() != ManualFeature.Points.size()))
+  {
+    return false;
+  }
+
+  const CzscAnalyzer &DefaultA2 = GetOrBuildPriceAnalyzer(SSE_DAILY_COUNT, pHigh, pLow, Default);
+  CzscAnalyzer ManualDefault;
+  BuildAnalyzerFromPrice(ManualDefault, SSE_DAILY_COUNT, pHigh, pLow, Default);
+  return (nDefaultUnit == CZSC_UNIT_STROKE) &&
+         (nDefaultSegment == CZSC_SEG_HEURISTIC) &&
+         (DefaultA2.Config.nCenterUnit == CZSC_UNIT_STROKE) &&
+         (DefaultA2.Config.nSegmentMethod == CZSC_SEG_HEURISTIC) &&
+         (DefaultA2.Points.size() == nDefaultPoints) &&
+         (DefaultA2.Points.size() == ManualDefault.Points.size());
+}
+
 static bool TestFunc30MatchesLegacyPipeline()
 {
   const int nCount = 21;
@@ -8998,6 +9033,10 @@ int main()
   if (!TestSignalCacheHitAndInvalidate())
   {
     return 102;
+  }
+  if (!TestPriceAnalyzerCacheInvalidatesOnConfig())
+  {
+    return 210;
   }
   if (!TestFunc30MatchesLegacyPipeline())
   {
