@@ -4167,6 +4167,34 @@ static bool TestFunc12WritesReversalCode()
   return bFirstCoded && NearlyEqual(pOut[40], 0.0f) && NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingReversalRequiresFirstSignal()
+{
+  const int nCount = 4;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(1, 1.0f, 10);
+  First.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate Third = MakeTestCandidate(2, 3.0f, 20);
+  Third.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate SecondSell = MakeTestCandidate(3, 12.0f, 20);
+  SecondSell.nReversal = CZSC_REVERSAL_EXTENSION;
+  Candidates.push_back(First);
+  Candidates.push_back(Third);
+  Candidates.push_back(SecondSell);
+
+  ApplyTradingSignalReversal(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 3.0f) &&
+         NearlyEqual(pOut[2], 0.0f) &&
+         NearlyEqual(pOut[3], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestCenterAftermathExtended()
 {
   std::vector<Center> Centers;
@@ -4704,10 +4732,8 @@ static bool TestApplyTradingContextFlagsMapsCodes()
                                CZSC_SIGNAL_CTX_OVERLAPPED |
                                CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fNewbornExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN |
-                                   CZSC_SIGNAL_CTX_REVERSAL_CONS |
                                    CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
-  float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
-                                    CZSC_SIGNAL_CTX_REVERSAL_EXTEND);
+  float fExtendedExpected = (float)CZSC_SIGNAL_CTX_AFTERMATH_EXTEND;
   float fWrongDirectionExpected = (float)CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
 
   return NearlyEqual(pOut[1], fBuyExpected) &&
@@ -6603,6 +6629,10 @@ int main()
   if (!TestFeatureSegmentGapConfirmedByReversal())
   {
     return 114;
+  }
+  if (!TestApplyTradingReversalRequiresFirstSignal())
+  {
+    return 168;
   }
 
   return 0;

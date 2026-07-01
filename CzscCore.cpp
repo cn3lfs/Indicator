@@ -41,6 +41,11 @@ static const int SIGNAL_SOURCE_FIRST = 1;
 static const int SIGNAL_SOURCE_SECOND = 2;
 static const int SIGNAL_SOURCE_THIRD = 3;
 
+static bool IsFirstSignal(float fSignal)
+{
+  return (fSignal == SIGNAL_FIRST_BUY) || (fSignal == SIGNAL_FIRST_SELL);
+}
+
 static bool IsThirdSignal(float fSignal)
 {
   return (fSignal == SIGNAL_THIRD_BUY) || (fSignal == SIGNAL_THIRD_SELL);
@@ -2115,15 +2120,16 @@ void ApplyTradingSignalReversal(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       float fCode = 0;
-      if (C.nReversal == CZSC_REVERSAL_EXTENSION)
+      bool bFirstSignal = IsFirstSignal(C.fSignal);
+      if (bFirstSignal && (C.nReversal == CZSC_REVERSAL_EXTENSION))
       {
         fCode = 1;
       }
-      else if (C.nReversal == CZSC_REVERSAL_CONSOLIDATION)
+      else if (bFirstSignal && (C.nReversal == CZSC_REVERSAL_CONSOLIDATION))
       {
         fCode = 2;
       }
-      else if (C.nReversal == CZSC_REVERSAL_TREND)
+      else if (bFirstSignal && (C.nReversal == CZSC_REVERSAL_TREND))
       {
         fCode = 3;
       }
@@ -2718,15 +2724,16 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_AFTERMATH_EXTEND;
   }
-  if (C.nReversal == CZSC_REVERSAL_TREND)
+  bool bFirstSignal = IsFirstSignal(C.fSignal);
+  if (bFirstSignal && (C.nReversal == CZSC_REVERSAL_TREND))
   {
     nFlags |= CZSC_SIGNAL_CTX_REVERSAL_TREND;
   }
-  else if (C.nReversal == CZSC_REVERSAL_CONSOLIDATION)
+  else if (bFirstSignal && (C.nReversal == CZSC_REVERSAL_CONSOLIDATION))
   {
     nFlags |= CZSC_SIGNAL_CTX_REVERSAL_CONS;
   }
-  else if (C.nReversal == CZSC_REVERSAL_EXTENSION)
+  else if (bFirstSignal && (C.nReversal == CZSC_REVERSAL_EXTENSION))
   {
     nFlags |= CZSC_SIGNAL_CTX_REVERSAL_EXTEND;
   }
