@@ -4806,6 +4806,9 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   WrongDirection.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   TradingSignalCandidate Invalid = MakeTestCandidate(9, 99.0f, 30);
   MakeStandardDivergence(&Invalid, 1);
+  Invalid.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Invalid.bOverlapped = true;
+  Invalid.nBreakout = 3;
   TradingSignalCandidate WrongSmallTurn = MakeTestCandidate(11, 3.0f, 20);
   WrongSmallTurn.nSmallTurn = -1;
   Candidates.push_back(Buy);
@@ -4837,6 +4840,7 @@ static bool TestApplyTradingContextFlagsMapsCodes()
          NearlyEqual(pOut[5], fExtendedExpected) &&
          NearlyEqual(pOut[7], fWrongDirectionExpected) &&
          NearlyEqual(pOut[9], 0.0f) &&
+         (BuildTradingSignalContextFlags(Invalid) == 0) &&
          NearlyEqual(pOut[11], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }

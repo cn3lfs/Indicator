@@ -2731,6 +2731,11 @@ void ApplyTradingSignalStandardDivergence(int nCount,
 
 int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
 {
+  if (!IsTradingSignal(C.fSignal))
+  {
+    return 0;
+  }
+
   int nFlags = 0;
   if (C.nQuality == CZSC_SIGNAL_QUALITY_STRONG)
   {
