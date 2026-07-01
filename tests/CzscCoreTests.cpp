@@ -6485,6 +6485,133 @@ static bool TestApplyTradingDivergenceSemanticUsesWinningPriority()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingFilterReasonsMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<int> Reasons((std::size_t)nCount, CZSC_FILTER_NONE);
+  Reasons[1] = CZSC_FILTER_NO_TREND;
+  Reasons[3] = CZSC_FILTER_RETEST_BACK_CENTER;
+
+  ApplyTradingFilterReasons(nCount, pOut, Reasons);
+
+  return NearlyEqual(pOut[1], (float)CZSC_FILTER_NO_TREND) &&
+         NearlyEqual(pOut[3], (float)CZSC_FILTER_RETEST_BACK_CENTER) &&
+         NearlyEqual(pOut[0], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f);
+}
+
+static bool TestBuildTradingFilterReasonsMarksNoTrend()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 9));
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates;
+
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 16 &&
+         Reasons[16] == CZSC_FILTER_NO_TREND &&
+         Reasons[0] == CZSC_FILTER_NONE;
+}
+
+static bool TestBuildTradingFilterReasonsMarksSecondOrder()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 22));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 8));
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(4, 1.0f, 30);
+  First.nPoint = 1;
+  First.nSource = 1;
+  Candidates.push_back(First);
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 12 &&
+         Reasons[12] == CZSC_FILTER_SECOND_ORDER;
+}
+
+static bool TestBuildTradingFilterReasonsMarksThirdRetestFailures()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));
+
+  std::vector<CenterBreakout> Breakouts;
+  CenterBreakout NotFirst = MakeTestBreakout(1, 2);
+  NotFirst.nCenter = 0;
+  NotFirst.bFirstRetest = false;
+  Breakouts.push_back(NotFirst);
+  CenterBreakout BackIntoCenter = MakeTestBreakout(-1, 3);
+  BackIntoCenter.nCenter = 0;
+  BackIntoCenter.bBackIntoCenter = true;
+  Breakouts.push_back(BackIntoCenter);
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<TradingSignalCandidate> Candidates;
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 12 &&
+         Reasons[8] == CZSC_FILTER_NOT_FIRST_RETEST &&
+         Reasons[12] == CZSC_FILTER_RETEST_BACK_CENTER;
+}
+
+static bool TestBuildTradingFilterReasonsMarksAbcNotAligned()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 9));
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(16, 1.0f, 30);
+  First.nPoint = 4;
+  First.nSource = 1;
+  First.nCenter = 0;
+  First.nAbcBreakout = -1;
+  Candidates.push_back(First);
+
+  std::vector<CenterBreakout> Breakouts;
+  CenterBreakout B = MakeTestBreakout(-1, 3);
+  B.nCenter = 0;
+  Breakouts.push_back(B);
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 16 &&
+         Reasons[16] == CZSC_FILTER_ABC_NOT_ALIGNED;
+}
+
 static bool TestNestedDivergenceMarksLowerSegmentInsideHigher()
 {
   const int nCount = 61;
@@ -7507,7 +7634,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -7634,6 +7761,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       }
       case 53: ApplyTradingSignalDivergenceSemantic(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 54: ApplyTradingSignalReversalPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 55: ApplyTradingFilterReasons(SSE_DAILY_COUNT, &Expected[0], An.TradingFilterReasons); break;
       default: return false;
     }
 
@@ -8682,6 +8810,26 @@ int main()
   if (!TestApplyTradingDivergenceSemanticUsesWinningPriority())
   {
     return 198;
+  }
+  if (!TestApplyTradingFilterReasonsMapsCodes())
+  {
+    return 205;
+  }
+  if (!TestBuildTradingFilterReasonsMarksNoTrend())
+  {
+    return 206;
+  }
+  if (!TestBuildTradingFilterReasonsMarksSecondOrder())
+  {
+    return 207;
+  }
+  if (!TestBuildTradingFilterReasonsMarksThirdRetestFailures())
+  {
+    return 208;
+  }
+  if (!TestBuildTradingFilterReasonsMarksAbcNotAligned())
+  {
+    return 209;
   }
   if (!TestNestedDivergenceMarksLowerSegmentInsideHigher())
   {

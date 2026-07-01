@@ -1051,6 +1051,276 @@ std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vect
   return Candidates;
 }
 
+static void SetFilterReason(std::vector<int> *pReasons, const std::vector<SegmentPoint> &Points, int nPoint, int nReason)
+{
+  if ((pReasons == 0) || (nReason == CZSC_FILTER_NONE) ||
+      (nPoint < 0) || ((std::size_t)nPoint >= Points.size()))
+  {
+    return;
+  }
+
+  int nIndex = Points[(std::size_t)nPoint].nIndex;
+  if ((nIndex < 0) || ((std::size_t)nIndex >= pReasons->size()))
+  {
+    return;
+  }
+  if ((*pReasons)[(std::size_t)nIndex] == CZSC_FILTER_NONE)
+  {
+    (*pReasons)[(std::size_t)nIndex] = nReason;
+  }
+}
+
+static bool HasCandidateAtPoint(const std::vector<TradingSignalCandidate> &Candidates, int nPoint, float fSignal)
+{
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    if ((Candidates[i].nPoint == nPoint) && (Candidates[i].fSignal == fSignal))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static int ClassifyFirstFilterReason(const std::vector<SegmentPoint> &Points,
+                                     const std::vector<Center> &Centers,
+                                     const std::vector<TrendStructure> &Structures,
+                                     std::size_t nPoint,
+                                     int nDirection)
+{
+  int nRequiredType = (nDirection > 0) ? CZSC_POINT_TOP : CZSC_POINT_BOTTOM;
+  if ((nPoint < 4) || (Points[nPoint].nType != nRequiredType))
+  {
+    return CZSC_FILTER_NONE;
+  }
+
+  int nTrend = -1;
+  if (!FindLastTrendStructure(Structures, Points[nPoint].nIndex, nDirection, &nTrend))
+  {
+    return CZSC_FILTER_NO_TREND;
+  }
+  if (Structures[(std::size_t)nTrend].nLastCenter <= Structures[(std::size_t)nTrend].nFirstCenter)
+  {
+    return CZSC_FILTER_NO_TREND;
+  }
+
+  int nLastCenter = Structures[(std::size_t)nTrend].nLastCenter;
+  if ((nLastCenter < 0) || ((std::size_t)nLastCenter >= Centers.size()))
+  {
+    return CZSC_FILTER_MISSING_CENTER;
+  }
+  int nNearCenter = FindLastCenterBeforeIndex(Centers, Points[nPoint].nIndex);
+  if (nNearCenter < 0)
+  {
+    return CZSC_FILTER_MISSING_CENTER;
+  }
+  if (nNearCenter != nLastCenter)
+  {
+    return CZSC_FILTER_NON_TREND_DIVERGENCE;
+  }
+
+  const SegmentPoint &CurrentStart = Points[nPoint - 1];
+  const SegmentPoint &CurrentEnd = Points[nPoint];
+  if (nDirection < 0)
+  {
+    if ((CurrentStart.nType != CZSC_POINT_TOP) || (CurrentEnd.fLow >= Centers[(std::size_t)nLastCenter].fLow))
+    {
+      return CZSC_FILTER_NON_TREND_DIVERGENCE;
+    }
+  }
+  else
+  {
+    if ((CurrentStart.nType != CZSC_POINT_BOTTOM) || (CurrentEnd.fHigh <= Centers[(std::size_t)nLastCenter].fHigh))
+    {
+      return CZSC_FILTER_NON_TREND_DIVERGENCE;
+    }
+  }
+
+  std::size_t nPrevMove = 0;
+  if (!FindPreviousSameDirectionMoveBeforeIndex(Points,
+                                                nPoint,
+                                                nDirection,
+                                                Centers[(std::size_t)nLastCenter].nStart,
+                                                &nPrevMove))
+  {
+    return CZSC_FILTER_NON_TREND_DIVERGENCE;
+  }
+
+  const SegmentPoint &PrevStart = Points[nPrevMove];
+  const SegmentPoint &PrevEnd = Points[nPrevMove + 1];
+  if (nDirection < 0)
+  {
+    if ((PrevStart.nType != CZSC_POINT_TOP) || (PrevEnd.nType != CZSC_POINT_BOTTOM))
+    {
+      return CZSC_FILTER_DIRECTION_MISMATCH;
+    }
+  }
+  else
+  {
+    if ((PrevStart.nType != CZSC_POINT_BOTTOM) || (PrevEnd.nType != CZSC_POINT_TOP))
+    {
+      return CZSC_FILTER_DIRECTION_MISMATCH;
+    }
+  }
+
+  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, nDirection);
+  return Divergence.bDivergence ? CZSC_FILTER_NONE : CZSC_FILTER_NON_TREND_DIVERGENCE;
+}
+
+static void MarkFirstFilterReasons(std::vector<int> *pReasons,
+                                   const std::vector<SegmentPoint> &Points,
+                                   const std::vector<Center> &Centers,
+                                   const std::vector<TrendStructure> &Structures,
+                                   const std::vector<TradingSignalCandidate> &Candidates)
+{
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    if ((Points[i].nType == CZSC_POINT_BOTTOM) && !HasCandidateAtPoint(Candidates, (int)i, SIGNAL_FIRST_BUY))
+    {
+      SetFilterReason(pReasons,
+                      Points,
+                      (int)i,
+                      ClassifyFirstFilterReason(Points, Centers, Structures, i, -1));
+    }
+    else if ((Points[i].nType == CZSC_POINT_TOP) && !HasCandidateAtPoint(Candidates, (int)i, SIGNAL_FIRST_SELL))
+    {
+      SetFilterReason(pReasons,
+                      Points,
+                      (int)i,
+                      ClassifyFirstFilterReason(Points, Centers, Structures, i, 1));
+    }
+  }
+}
+
+static void MarkSecondFilterReasons(std::vector<int> *pReasons,
+                                    const std::vector<SegmentPoint> &Points,
+                                    const std::vector<TradingSignalCandidate> &Candidates)
+{
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &First = Candidates[i];
+    if (First.nSource != SIGNAL_SOURCE_FIRST)
+    {
+      continue;
+    }
+    if ((First.nPoint < 0) || ((std::size_t)First.nPoint + 2 >= Points.size()))
+    {
+      continue;
+    }
+
+    std::size_t nPoint = (std::size_t)First.nPoint;
+    const SegmentPoint &FirstPoint = Points[nPoint];
+    const SegmentPoint &Turn = Points[nPoint + 1];
+    const SegmentPoint &Second = Points[nPoint + 2];
+    bool bValid = false;
+    if (First.fSignal == SIGNAL_FIRST_BUY)
+    {
+      bValid = (Turn.nType == CZSC_POINT_TOP) &&
+               (Second.nType == CZSC_POINT_BOTTOM) &&
+               (Second.fLow >= FirstPoint.fLow);
+    }
+    else if (First.fSignal == SIGNAL_FIRST_SELL)
+    {
+      bValid = (Turn.nType == CZSC_POINT_BOTTOM) &&
+               (Second.nType == CZSC_POINT_TOP) &&
+               (Second.fHigh <= FirstPoint.fHigh);
+    }
+    if (!bValid)
+    {
+      SetFilterReason(pReasons, Points, (int)nPoint + 2, CZSC_FILTER_SECOND_ORDER);
+    }
+  }
+}
+
+static void MarkThirdFilterReasons(std::vector<int> *pReasons,
+                                   const std::vector<SegmentPoint> &Points,
+                                   const std::vector<CenterBreakout> &Breakouts,
+                                   const std::vector<TradingSignalCandidate> &Candidates)
+{
+  for (std::size_t i = 0; i < Breakouts.size(); i++)
+  {
+    const CenterBreakout &B = Breakouts[i];
+    if ((B.nRetestPoint < 0) || ((std::size_t)B.nRetestPoint >= Points.size()))
+    {
+      continue;
+    }
+
+    float fSignal = (B.nDirection > 0) ? SIGNAL_THIRD_BUY :
+                    ((B.nDirection < 0) ? SIGNAL_THIRD_SELL : 0.0f);
+    if ((fSignal != 0.0f) && HasCandidateAtPoint(Candidates, B.nRetestPoint, fSignal))
+    {
+      continue;
+    }
+    if (!B.bFirstRetest)
+    {
+      SetFilterReason(pReasons, Points, B.nRetestPoint, CZSC_FILTER_NOT_FIRST_RETEST);
+    }
+    else if (B.bBackIntoCenter)
+    {
+      SetFilterReason(pReasons, Points, B.nRetestPoint, CZSC_FILTER_RETEST_BACK_CENTER);
+    }
+    else if ((B.nDirection == 0) || (B.nCenter < 0))
+    {
+      SetFilterReason(pReasons, Points, B.nRetestPoint, CZSC_FILTER_DIRECTION_MISMATCH);
+    }
+  }
+}
+
+static void MarkAbcFilterReasons(std::vector<int> *pReasons,
+                                 const std::vector<SegmentPoint> &Points,
+                                 const std::vector<CenterBreakout> &Breakouts,
+                                 const std::vector<TradingSignalCandidate> &Candidates)
+{
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nSource != SIGNAL_SOURCE_FIRST) || (C.nAbcBreakout >= 0))
+    {
+      continue;
+    }
+
+    for (std::size_t j = 0; j < Breakouts.size(); j++)
+    {
+      const CenterBreakout &B = Breakouts[j];
+      if (!B.bFirstRetest || !B.bThirdSignal ||
+          (B.nCenter != C.nCenter) ||
+          (B.nRetestPoint < 0) || (B.nRetestPoint >= C.nPoint))
+      {
+        continue;
+      }
+      if (((C.fSignal == SIGNAL_FIRST_BUY) && (B.nDirection < 0)) ||
+          ((C.fSignal == SIGNAL_FIRST_SELL) && (B.nDirection > 0)))
+      {
+        SetFilterReason(pReasons, Points, C.nPoint, CZSC_FILTER_ABC_NOT_ALIGNED);
+        break;
+      }
+    }
+  }
+}
+
+std::vector<int> BuildTradingFilterReasons(const std::vector<SegmentPoint> &Points,
+                                           const std::vector<Center> &Centers,
+                                           const std::vector<TrendStructure> &Structures,
+                                           const std::vector<CenterBreakout> &Breakouts,
+                                           const std::vector<TradingSignalCandidate> &Candidates)
+{
+  int nCount = 0;
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    if (Points[i].nIndex + 1 > nCount)
+    {
+      nCount = Points[i].nIndex + 1;
+    }
+  }
+
+  std::vector<int> Reasons((std::size_t)nCount, CZSC_FILTER_NONE);
+  MarkFirstFilterReasons(&Reasons, Points, Centers, Structures, Candidates);
+  MarkSecondFilterReasons(&Reasons, Points, Candidates);
+  MarkThirdFilterReasons(&Reasons, Points, Breakouts, Candidates);
+  MarkAbcFilterReasons(&Reasons, Points, Breakouts, Candidates);
+  return Reasons;
+}
+
 void ApplyTradingSignalCandidates(int nCount,
                                   float *pOut,
                                   const std::vector<TradingSignalCandidate> &Candidates)
@@ -1114,6 +1384,25 @@ void ApplyTradingSignalQuality(int nCount,
       pOut[C.nIndex] = (float)C.nQuality;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
+  }
+}
+
+void ApplyTradingFilterReasons(int nCount, float *pOut, const std::vector<int> &Reasons)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  int nSize = (int)Reasons.size();
+  if (nSize > nCount)
+  {
+    nSize = nCount;
+  }
+  for (int i = 0; i < nSize; i++)
+  {
+    pOut[i] = (float)Reasons[(std::size_t)i];
   }
 }
 

@@ -117,6 +117,19 @@ enum CzscDivergenceSemantic
   CZSC_DIVERGENCE_SEM_SMALL_TURN    = 3,  // 小转大：小级别背驰后出现同向三买/三卖必要条件
 };
 
+enum CzscTradingFilterReason
+{
+  CZSC_FILTER_NONE                 = 0,
+  CZSC_FILTER_NO_TREND             = 1,  // 一类候选缺少至少两个同向中枢构成的趋势
+  CZSC_FILTER_NON_TREND_DIVERGENCE = 2,  // 趋势上下文存在，但未构成趋势背驰
+  CZSC_FILTER_SECOND_ORDER         = 3,  // 二类端点顺序不满足 一类<反向端点<二类
+  CZSC_FILTER_NOT_FIRST_RETEST     = 4,  // 三类候选不是首次回试
+  CZSC_FILTER_RETEST_BACK_CENTER   = 5,  // 三类回试重新回到中枢
+  CZSC_FILTER_DIRECTION_MISMATCH   = 6,  // 方向、端点类型或买卖方向不匹配
+  CZSC_FILTER_ABC_NOT_ALIGNED      = 7,  // ABC 关联突破未对齐当前 C 段起点
+  CZSC_FILTER_MISSING_CENTER       = 8,  // 候选缺少可归属中枢
+};
+
 // 均线吻分类（第11课）：短长均线靠近/相交处的反抗强度，递增
 enum CzscKissType
 {
@@ -326,6 +339,7 @@ struct CzscAnalyzer
   std::vector<TrendStructure>         Structures;
   std::vector<CenterBreakout>         Breakouts;
   std::vector<TradingSignalCandidate> Candidates;
+  std::vector<int>                    TradingFilterReasons;
   std::vector<float>                  MaShort;     // 仅 H/L 家族填充
   std::vector<float>                  MaLong;
   std::vector<int>                    Kiss;

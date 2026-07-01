@@ -28,6 +28,11 @@ std::vector<TradingSignalCandidate> BuildTradingSignalCandidates(const std::vect
                                                                   const std::vector<Center> &Centers,
                                                                   const std::vector<TrendStructure> &Structures,
                                                                   const std::vector<CenterBreakout> &Breakouts);
+std::vector<int> BuildTradingFilterReasons(const std::vector<SegmentPoint> &Points,
+                                           const std::vector<Center> &Centers,
+                                           const std::vector<TrendStructure> &Structures,
+                                           const std::vector<CenterBreakout> &Breakouts,
+                                           const std::vector<TradingSignalCandidate> &Candidates);
 int BuildTradingSignalContextFlags(const TradingSignalCandidate &C);
 int BuildTradingSignalDivergenceSemantic(const TradingSignalCandidate &C);
 
@@ -71,5 +76,6 @@ void ApplyTradingSignalDivergenceCurrentEndPointId(int nCount, float *pOut, cons
 void ApplyTradingSignalContextFlags(int nCount, float *pOut, const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalDivergenceSemantic(int nCount, float *pOut, const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalCenterLifecycle(int nCount, float *pOut, const std::vector<TradingSignalCandidate> &Candidates, const std::vector<Center> &Centers);
+void ApplyTradingFilterReasons(int nCount, float *pOut, const std::vector<int> &Reasons);
 
 #endif

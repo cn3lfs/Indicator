@@ -877,6 +877,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     }
     case 53: ApplyTradingSignalDivergenceSemantic(nCount, pOut, An.Candidates); break; // 胜出候选背驰语义
     case 54: ApplyTradingSignalReversalPointId(nCount, pOut, An.Candidates); break; // 一类背驰后首段回拉端点编号
+    case 55: ApplyTradingFilterReasons(nCount, pOut, An.TradingFilterReasons); break; // 买卖点候选过滤原因
     default: ClearOutput(nCount, pOut); break;
   }
 }

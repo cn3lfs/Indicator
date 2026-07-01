@@ -30,6 +30,11 @@ static void BuildCentersStage(CzscAnalyzer &An, int nCount, float *pHigh, float 
   An.Structures = BuildTrendStructures(An.Centers);
   An.Breakouts = BuildCenterBreakouts(An.Points, An.Centers, An.Structures);
   An.Candidates = BuildTradingSignalCandidates(An.Points, An.Centers, An.Structures, An.Breakouts);
+  An.TradingFilterReasons = BuildTradingFilterReasons(An.Points,
+                                                       An.Centers,
+                                                       An.Structures,
+                                                       An.Breakouts,
+                                                       An.Candidates);
 }
 
 // 旁路成交量（注册且校验通过则填，否则空）

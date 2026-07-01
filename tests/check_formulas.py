@@ -843,6 +843,7 @@ def main() -> int:
     "中枢关系：1上涨/-1下跌/2扩展",
     "一类背驰转折：1扩展/2盘整/3反趋势",
     "一类背驰后首段回拉端点编号：一基",
+    "买卖点过滤原因：1无趋势/2非趋势背驰/3二类顺序/4非首次回试/5回中枢/6方向错/7ABC未对齐/8缺中枢",
     "三买三卖后续：1扩张/2新生",
     "上下文位图：含2048二三重合/4096首次回试",
     "胜出候选优先级：二10三20一30",
@@ -877,6 +878,7 @@ def main() -> int:
   expected_debug_lines = [
     "DRAWNUMBER(BSP<>0 AND POS<>2,L*0.995,POS)",
     "DRAWNUMBER(BSP<>0 AND RVP>0,H*1.003,RVP)",
+    "DRAWNUMBER(FLT>0 AND BSP=0,L*0.938,FLT)",
     "DRAWNUMBER(BSP<>0,H*1.005,MOV)",
     "DRAWNUMBER(BSP<>0,H*1.010,PRI)",
     "DRAWNUMBER(BSP<>0 AND CEN>0,L*0.990,CEN)",
