@@ -113,6 +113,9 @@ make mingw32-test
 make test
 ```
 
+`make test` 会同时检查 `tests/czsc_sse_result.txt` 是否与当前 SSE 生成器一致。若提示结果文件过期，运行
+`make sse-result` 重新生成并人工核对差异；人工批注请保存在 `tests/czsc_sse_golden_notes.md`，避免被生成器覆盖。
+
 检查工具链、运行测试并打包 DLL（脚本会先 `make clean` 再做 检查→原生测试→Win 测试构建→打 DLL）：
 
 ```bash

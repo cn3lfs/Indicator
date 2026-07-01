@@ -45,6 +45,7 @@ TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
 SSE_DUMP_OBJECTS=CzscCore.o CzscAnalyzer.o tests/DumpSseResult.o
 SSE_DUMP_TARGET=tests/dump_sse$(EXEEXT)
 SSE_DUMP_TARGETS=tests/dump_sse tests/dump_sse.exe
+SSE_RESULT=tests/czsc_sse_result.txt
 LEGACY_OBJECTS=CCentroid.o
 LEGACY_DEPENDS=CCentroid.dep
 OBJECTS=$(OBJECT1)
@@ -53,7 +54,7 @@ DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep)
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
-        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result run clean debug
+        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result sse-result-check run clean debug
 
 all : $(TARGETS)
 
@@ -96,7 +97,7 @@ debug: all
 	@echo [DB] $(TARGETS)
 	@gdb -w $(TARGETS)
 
-test: $(TEST_TARGET) formula-test
+test: $(TEST_TARGET) formula-test sse-result-check
 	@echo [TE] $(TEST_TARGET)
 	@$(TEST_TARGET)
 
@@ -108,8 +109,12 @@ formula-test:
 	@python3 tests/check_formulas.py
 
 sse-result: clean $(SSE_DUMP_TARGET)
-	@echo [SE] tests/czsc_sse_result.txt
-	@$(SSE_DUMP_TARGET) tests/czsc_sse_result.txt
+	@echo [SE] $(SSE_RESULT)
+	@$(SSE_DUMP_TARGET) $(SSE_RESULT)
+
+sse-result-check: $(SSE_DUMP_TARGET)
+	@echo [SC] $(SSE_RESULT)
+	@python3 tests/check_sse_result.py $(SSE_DUMP_TARGET) $(SSE_RESULT)
 
 mingw32-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build
