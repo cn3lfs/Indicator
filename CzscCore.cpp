@@ -51,6 +51,21 @@ static bool IsThirdSignal(float fSignal)
   return (fSignal == SIGNAL_THIRD_BUY) || (fSignal == SIGNAL_THIRD_SELL);
 }
 
+static int GetTradingSignalSide(float fSignal)
+{
+  if ((fSignal == SIGNAL_FIRST_BUY) || (fSignal == SIGNAL_SECOND_BUY) ||
+      (fSignal == SIGNAL_THIRD_BUY))
+  {
+    return 1;
+  }
+  if ((fSignal == SIGNAL_FIRST_SELL) || (fSignal == SIGNAL_SECOND_SELL) ||
+      (fSignal == SIGNAL_THIRD_SELL))
+  {
+    return -1;
+  }
+  return 0;
+}
+
 //=============================================================================
 // 形态学辅助：输出校验、K线包含处理、分型/线段点构造
 //=============================================================================
@@ -2583,9 +2598,10 @@ void ApplyTradingSignalMacdLineWeakness(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       float fCode = 0;
-      if (IsMacdLineWeak(C.Divergence))
+      int nSide = GetTradingSignalSide(C.fSignal);
+      if ((nSide != 0) && IsMacdLineWeak(C.Divergence))
       {
-        fCode = (C.fSignal >= SIGNAL_FIRST_SELL) ? -1.0f : 1.0f;
+        fCode = (float)nSide;
       }
       pOut[C.nIndex] = fCode;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
@@ -2708,7 +2724,7 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_MACD_ZERO_PULL;
   }
-  if (IsMacdLineWeak(C.Divergence))
+  if ((GetTradingSignalSide(C.fSignal) != 0) && IsMacdLineWeak(C.Divergence))
   {
     nFlags |= CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
   }

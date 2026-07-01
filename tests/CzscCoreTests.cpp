@@ -4554,7 +4554,7 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
 
 static bool TestApplyTradingMacdLineWeaknessMapsCodes()
 {
-  const int nCount = 6;
+  const int nCount = 8;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4577,15 +4577,22 @@ static bool TestApplyTradingMacdLineWeaknessMapsCodes()
   None.Divergence.Previous.fDeaHeight = 2;
   None.Divergence.Current.fDifHeight = 3;
   None.Divergence.Current.fDeaHeight = 1;
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.Previous.fDifHeight = 6;
+  Invalid.Divergence.Previous.fDeaHeight = 5;
+  Invalid.Divergence.Current.fDifHeight = 4;
+  Invalid.Divergence.Current.fDeaHeight = 3;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(None);
+  Candidates.push_back(Invalid);
 
   ApplyTradingSignalMacdLineWeakness(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) &&
          NearlyEqual(pOut[3], -1.0f) &&
          NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
@@ -4711,7 +4718,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
 
 static bool TestApplyTradingContextFlagsMapsCodes()
 {
-  const int nCount = 8;
+  const int nCount = 10;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4740,10 +4747,13 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   WrongDirection.nAbcStructure = -1;
   WrongDirection.nMacdZeroPullback = -1;
   WrongDirection.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
+  TradingSignalCandidate Invalid = MakeTestCandidate(9, 99.0f, 30);
+  MakeStandardDivergence(&Invalid, 1);
   Candidates.push_back(Buy);
   Candidates.push_back(Newborn);
   Candidates.push_back(Extended);
   Candidates.push_back(WrongDirection);
+  Candidates.push_back(Invalid);
 
   ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
 
@@ -4766,6 +4776,7 @@ static bool TestApplyTradingContextFlagsMapsCodes()
          NearlyEqual(pOut[3], fNewbornExpected) &&
          NearlyEqual(pOut[5], fExtendedExpected) &&
          NearlyEqual(pOut[7], fWrongDirectionExpected) &&
+         NearlyEqual(pOut[9], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
