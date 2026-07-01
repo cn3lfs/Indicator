@@ -943,6 +943,57 @@ static bool TestCenterBreakoutsUseFirstRetestOnly()
          (Breakouts[0].nRetestPoint == 6);
 }
 
+static bool TestCenterBreakoutsUseCenterEndAsLeavePoint()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 12));     // 中枢末端已向上离开
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 9.5f)); // 下一段反向即首次回试
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection != 1) ||
+        (Breakouts[0].nLeavePoint != 3) ||
+        (Breakouts[0].nRetestPoint != 4) ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 2));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 1));   // 中枢末端已向下离开
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 3.5f));   // 下一段反向即首次回试
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection != -1) ||
+        (Breakouts[0].nLeavePoint != 3) ||
+        (Breakouts[0].nRetestPoint != 4) ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestCenterBreakoutsSkipBackIntoCenter()
 {
   std::vector<SegmentPoint> Points;
@@ -4902,6 +4953,10 @@ int main()
   if (!TestCenterBreakoutsUseFirstRetestOnly())
   {
     return 19;
+  }
+  if (!TestCenterBreakoutsUseCenterEndAsLeavePoint())
+  {
+    return 153;
   }
   if (!TestCenterBreakoutsSkipBackIntoCenter())
   {
