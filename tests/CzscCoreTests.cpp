@@ -1716,6 +1716,54 @@ static bool TestThirdCandidateKeepsBreakoutDivergence()
          (pThird->nSmallTurn == 0);
 }
 
+static bool TestThirdCandidateUsesOnlyCompletedTrendStructure()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 9.5f));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 18));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 14));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 36, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 15));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 44, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 48, 17.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 9, 4, 10, 1));
+  Centers.push_back(MakeTestCenterFull(28, 40, 17, 14, 18, 13));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  if ((Structures.size() != 1) || (Structures[0].nType != CZSC_MOVEMENT_UP))
+  {
+    return false;
+  }
+
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 6));
+  Breakouts.back().nCenter = 0;
+  Breakouts.push_back(MakeTestBreakout(1, 12));
+  Breakouts.back().nCenter = 1;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  const TradingSignalCandidate *pEarlyThird = FindSignalCandidate(Candidates, 24, 3.0f);
+  const TradingSignalCandidate *pCompletedThird = FindSignalCandidate(Candidates, 48, 3.0f);
+  return (pEarlyThird != 0) &&
+         (pEarlyThird->nCenter == 0) &&
+         (pEarlyThird->nTrend == -1) &&
+         (pEarlyThird->nMovementType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (pEarlyThird->nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN) &&
+         (pCompletedThird != 0) &&
+         (pCompletedThird->nCenter == 1) &&
+         (pCompletedThird->nTrend == 0) &&
+         (pCompletedThird->nMovementType == CZSC_MOVEMENT_UP);
+}
+
 static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
 {
   const int nCount = 41;
@@ -5118,6 +5166,10 @@ int main()
   if (!TestThirdCandidateKeepsBreakoutDivergence())
   {
     return 31;
+  }
+  if (!TestThirdCandidateUsesOnlyCompletedTrendStructure())
+  {
+    return 157;
   }
   if (!TestTradingCandidatesMarkSecondThirdBuyOverlap())
   {

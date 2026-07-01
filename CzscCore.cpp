@@ -1419,7 +1419,9 @@ static int FindLastCenterBeforeIndex(const std::vector<Center> &Centers, int nIn
   return nCenter;
 }
 
-static int FindTrendByCenter(const std::vector<TrendStructure> &Structures, int nCenter)
+static int FindCompletedTrendByCenter(const std::vector<TrendStructure> &Structures,
+                                      int nCenter,
+                                      int nIndex)
 {
   if (nCenter < 0)
   {
@@ -1428,7 +1430,9 @@ static int FindTrendByCenter(const std::vector<TrendStructure> &Structures, int 
 
   for (std::size_t i = 0; i < Structures.size(); i++)
   {
-    if ((Structures[i].nFirstCenter <= nCenter) && (nCenter <= Structures[i].nLastCenter))
+    if ((Structures[i].nFirstCenter <= nCenter) &&
+        (nCenter <= Structures[i].nLastCenter) &&
+        (Structures[i].nEnd <= nIndex))
     {
       return (int)i;
     }
@@ -1923,7 +1927,9 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
     }
 
     float fSignal = (B.nDirection > 0) ? SIGNAL_THIRD_BUY : SIGNAL_THIRD_SELL;
-    int nTrend = FindTrendByCenter(Structures, B.nCenter);
+    int nTrend = FindCompletedTrendByCenter(Structures,
+                                            B.nCenter,
+                                            Points[B.nRetestPoint].nIndex);
     int nMovementType = (nTrend >= 0) ? Structures[(std::size_t)nTrend].nType : CZSC_MOVEMENT_CONSOLIDATION;
     pCandidates->push_back(MakeTradingSignalCandidate(Points[B.nRetestPoint].nIndex,
                                                       fSignal,
