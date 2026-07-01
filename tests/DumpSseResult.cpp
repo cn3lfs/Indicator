@@ -236,6 +236,106 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
   }
 }
 
+static void PrintCandidateSummary(FILE *pFile, const char *pTitle,
+                                  const std::vector<TradingSignalCandidate> &Candidates)
+{
+  int nFirstBuy = 0;
+  int nSecondBuy = 0;
+  int nThirdBuy = 0;
+  int nFirstSell = 0;
+  int nSecondSell = 0;
+  int nThirdSell = 0;
+  int nStrong = 0;
+  int nAbc = 0;
+  int nZeroPull = 0;
+  int nLineWeak = 0;
+  int nStandard = 0;
+  int nSmallTurn = 0;
+  int nOverlapped = 0;
+  int nBreakout = 0;
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (C.fSignal == 1.0f)
+    {
+      nFirstBuy++;
+    }
+    else if (C.fSignal == 2.0f)
+    {
+      nSecondBuy++;
+    }
+    else if (C.fSignal == 3.0f)
+    {
+      nThirdBuy++;
+    }
+    else if (C.fSignal == 11.0f)
+    {
+      nFirstSell++;
+    }
+    else if (C.fSignal == 12.0f)
+    {
+      nSecondSell++;
+    }
+    else if (C.fSignal == 13.0f)
+    {
+      nThirdSell++;
+    }
+
+    int nCtx = BuildTradingSignalContextFlags(C);
+    if ((nCtx & CZSC_SIGNAL_CTX_STRONG_QUALITY) != 0)
+    {
+      nStrong++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_ABC_STRUCTURE) != 0)
+    {
+      nAbc++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_MACD_ZERO_PULL) != 0)
+    {
+      nZeroPull++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_MACD_LINE_WEAK) != 0)
+    {
+      nLineWeak++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_STANDARD_DIV) != 0)
+    {
+      nStandard++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_SMALL_TURN) != 0)
+    {
+      nSmallTurn++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_OVERLAPPED) != 0)
+    {
+      nOverlapped++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_CENTER_BREAKOUT) != 0)
+    {
+      nBreakout++;
+    }
+  }
+
+  std::fprintf(pFile, "\n========== %s摘要 ==========\n", pTitle);
+  std::fprintf(pFile,
+               "买: 一%d 二%d 三%d | 卖: 一%d 二%d 三%d | 上下文: 强质%d ABC%d 回零%d 黄白弱%d 标准%d 小转大%d 二三重合%d 首次回试%d\n",
+               nFirstBuy,
+               nSecondBuy,
+               nThirdBuy,
+               nFirstSell,
+               nSecondSell,
+               nThirdSell,
+               nStrong,
+               nAbc,
+               nZeroPull,
+               nLineWeak,
+               nStandard,
+               nSmallTurn,
+               nOverlapped,
+               nBreakout);
+}
+
 int main(int argc, char **argv)
 {
   FILE *pFile = stdout;
@@ -283,6 +383,8 @@ int main(int argc, char **argv)
   PrintCenters(pFile, "线段中枢", "SZ", SegmentAn.Centers);
   PrintCenterRelations(pFile, "笔中枢关系", "BZ", StrokeAn.Centers);
   PrintCenterRelations(pFile, "线段中枢关系", "SZ", SegmentAn.Centers);
+  PrintCandidateSummary(pFile, "买卖点(笔中枢)", StrokeAn.Candidates);
+  PrintCandidateSummary(pFile, "买卖点(线段中枢)", SegmentAn.Candidates);
   PrintCandidates(pFile, "买卖点(笔中枢)", StrokeAn.Candidates);
   PrintCandidates(pFile, "买卖点(线段中枢)", SegmentAn.Candidates);
   PrintPoints(pFile, "笔端点", "B", StrokeAn.Points);
