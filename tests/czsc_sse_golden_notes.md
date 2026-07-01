@@ -32,7 +32,7 @@ candidate date, signal type, quality, center/point/breakout ids, position,
 movement type, aftermath, and context flags in C++ tests.
 The generated `czsc_sse_result.txt` candidate lines also include raw A/C
 strengths, C/A percent ratios, and divergence condition flags for manual
-P4动力学核对, plus `bko[...]` leave/retest context for checking 第20课首次离开/首次回试;
+P4动力学核对, plus `BLP`/`BRP` and `bko[...]` leave/retest context for checking 第20课首次离开/首次回试;
 those diagnostics are generated, not edited here.
 
 | unit | date | signal | quality | center | movement | point | breakout | position | aftermath | ctx |

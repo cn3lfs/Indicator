@@ -8,7 +8,11 @@ import tempfile
 
 CANDIDATE_LINE = re.compile(r"^  [0-9]{4}-[0-9]{2}-[0-9]{2}  ")
 BREAKOUT_FIELD = re.compile(r"突破(?P<breakout>-?[0-9]+)")
-DEBUG_IDS = re.compile(r"调试CEN(?P<center>[0-9]+) BKO(?P<bko>[0-9]+) PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)")
+DEBUG_IDS = re.compile(
+  r"调试CEN(?P<center>[0-9]+) BKO(?P<bko>[0-9]+) "
+  r"BLP(?P<blp>[0-9]+) BRP(?P<brp>[0-9]+) "
+  r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)"
+)
 BKO_CONTEXT = re.compile(
   r"bko\[离P(?P<leave>[0-9]+)/(?P<leave_date>[0-9]{4}-[0-9]{2}-[0-9]{2}) "
   r"回P(?P<retest>[0-9]+)/(?P<retest_date>[0-9]{4}-[0-9]{2}-[0-9]{2}) "
@@ -30,8 +34,8 @@ def validate_candidate_context(text: str):
       errors.append(f"line {n_line}: candidate missing debug ids")
       continue
     if "bko[-]" in line:
-      if int(debug_ids.group("bko")) != 0:
-        errors.append(f"line {n_line}: bko[-] conflicts with BKO{debug_ids.group('bko')}")
+      if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp")):
+        errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP debug ids")
       continue
     breakout_field = BREAKOUT_FIELD.search(line)
     bko_context = BKO_CONTEXT.search(line)
@@ -44,11 +48,17 @@ def validate_candidate_context(text: str):
 
     n_breakout = int(breakout_field.group("breakout"))
     n_bko = int(debug_ids.group("bko"))
+    n_blp = int(debug_ids.group("blp"))
+    n_brp = int(debug_ids.group("brp"))
     n_pid = int(debug_ids.group("pid"))
     n_leave = int(bko_context.group("leave"))
     n_retest = int(bko_context.group("retest"))
     if n_breakout >= 0 and n_bko != n_breakout + 1:
       errors.append(f"line {n_line}: BKO{n_bko} does not match breakout {n_breakout}")
+    if n_blp != n_leave:
+      errors.append(f"line {n_line}: BLP{n_blp} does not match leave P{n_leave}")
+    if n_brp != n_retest:
+      errors.append(f"line {n_line}: BRP{n_brp} does not match retest P{n_retest}")
     if n_retest != n_pid:
       errors.append(f"line {n_line}: retest P{n_retest} does not match PID{n_pid}")
     if n_leave >= n_retest:

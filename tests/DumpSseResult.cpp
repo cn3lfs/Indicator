@@ -243,6 +243,24 @@ static const char *PointDateAt(const std::vector<SegmentPoint> &Points, int nPoi
   return DateAt(Points[(std::size_t)nPoint].nIndex);
 }
 
+static int BreakoutLeavePointId(const std::vector<CenterBreakout> &Breakouts, int nBreakout)
+{
+  if ((nBreakout < 0) || ((std::size_t)nBreakout >= Breakouts.size()))
+  {
+    return 0;
+  }
+  return OneBasedId(Breakouts[(std::size_t)nBreakout].nLeavePoint);
+}
+
+static int BreakoutRetestPointId(const std::vector<CenterBreakout> &Breakouts, int nBreakout)
+{
+  if ((nBreakout < 0) || ((std::size_t)nBreakout >= Breakouts.size()))
+  {
+    return 0;
+  }
+  return OneBasedId(Breakouts[(std::size_t)nBreakout].nRetestPoint);
+}
+
 static void PrintBreakoutContext(FILE *pFile,
                                  const std::vector<SegmentPoint> &Points,
                                  const std::vector<CenterBreakout> &Breakouts,
@@ -337,7 +355,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
     const TradingSignalCandidate &C = Candidates[i];
     int nCtx = BuildTradingSignalContextFlags(C);
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d PID%d TID%d  ctx%d",
+                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d PID%d TID%d  ctx%d",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -355,6 +373,8 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  ScopedFirstSignalValue(C.fSignal, C.nMacdZeroPullback),
                  OneBasedId(C.nCenter),
                  OneBasedId(C.nBreakout),
+                 BreakoutLeavePointId(Breakouts, C.nBreakout),
+                 BreakoutRetestPointId(Breakouts, C.nBreakout),
                  OneBasedId(C.nPoint),
                  OneBasedId(C.nTrend),
                  nCtx);
