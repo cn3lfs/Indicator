@@ -3224,12 +3224,12 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
     {
       SegmentInterval Interval = MakeSegmentInterval(Points[nExtend], Points[nExtend + 1]);
 
-      // 先检查是否与 ZG/ZD 有重叠 → 正常延伸（穿越会在 ExtendCenter 内被拒绝）
+      // 先检查是否与 ZG/ZD 有重叠 → 正常延伸；穿越整个区间也按重叠吸收。
       if (IntervalsOverlap(C.fLow, C.fHigh, Interval.fLow, Interval.fHigh))
       {
         if (!ExtendCenter(&C, Interval))
         {
-          break;  // 穿越中枢 → 立即封死
+          break;
         }
         nExtend++;
         continue;
