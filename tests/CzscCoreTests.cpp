@@ -2213,6 +2213,63 @@ static bool TestSecondThirdOverlapRequiresFirstCenter()
          (pSecond->nBreakout == -1);
 }
 
+static bool TestSecondThirdSellOverlapRequiresFirstCenter()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+  pIn[36] = -1;
+  pHigh[36] = pLow[36] = 11;
+  pIn[40] = 1;
+  pHigh[40] = pLow[40] = 12.5f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(-1, 10));
+  Breakouts.back().nCenter = 0;  // 同端点三卖，但不属于一卖的最后中枢
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 12.0f);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 13.0f);
+
+  return (pSecond != 0) &&
+         (pThird != 0) &&
+         !pSecond->bOverlapped &&
+         (pSecond->nBreakout == -1);
+}
+
 static bool TestSmallTurnRequiresSameCenterAndLaterThird()
 {
   const int nCount = 45;
@@ -5607,6 +5664,10 @@ int main()
   if (!TestSecondThirdOverlapRequiresFirstCenter())
   {
     return 163;
+  }
+  if (!TestSecondThirdSellOverlapRequiresFirstCenter())
+  {
+    return 164;
   }
   if (!TestSmallTurnRequiresSameCenterAndLaterThird())
   {
