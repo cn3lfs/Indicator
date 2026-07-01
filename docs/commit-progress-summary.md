@@ -1,9 +1,9 @@
 # czsc-tdx 近 300 个提交完成情况汇总
 
-生成日期：2026-07-01  
-基准提交：`cf8fd7f build: refresh release dlls`  
-统计范围：原始近 300 个提交覆盖 `81c131c` 到 `1bf2780`；本次增量补充最近 20 个提交，覆盖 `49e6b4c` 到 `cf8fd7f`，时间均为 2026-07-01。  
-依据：`git log -20 --date=short --stat`、`git log -20 --name-only`、提交改动文件分布、当前源码/公式/测试入口。
+生成日期：2026-07-02
+基准提交：`346322e refactor: split czsc core modules`
+统计范围：原始近 300 个提交覆盖 `81c131c` 到 `1bf2780`；当前近 20 个提交覆盖 `ef79aa3` 到 `346322e`，其中 `346322e` 为结构重构，`ef79aa3` 到 `cf8fd7f` 为结构重构前的算法/发布增量。
+依据：`git log -20 --date=short --stat`、`git log -20 --name-only`、`346322e` 提交 diff、当前源码/公式/测试入口。
 
 ## 总体结论
 
@@ -11,14 +11,44 @@
 
 - 32/64 位 TongDaXin DLL 发布产物：`build/CZSC.dll`、`build/CZSC64.dll`。
 - 统一入口 `Func30(mode)`，旧 `Func1-20` 和 `Func40(C,V)` 继续保留。
+- 源码已按职责拆分为 `include/` 接口层和 `src/` 实现层，`CzscCore.h` 保留兼容聚合入口。
 - 可配置的分型/笔/线段/中枢/走势/买卖点分析管线。
 - 买卖点候选的上下文、质量、所属中枢、突破、走势、背驰动力学和端点编号诊断。
 - 主图、调试、三类买卖点、动力学、标准背驰、小转大、多级别共振等公式包。
 - `make test`、公式检查、SSE golden 文件、release DLL 检查组成的回归链路。
 
-## 最近 20 个提交增量补充
+## 最新结构重构增量补充
 
-这 20 个提交完成了上一轮“形态学 → 中枢生命周期 → 买卖点质量 → 区间套 → 回归 → 公式发布”和本轮“背驰语义 → 背驰后回拉 → ABC 边界 → SSE 动力学回归 → DLL 发布”的连续演进。整体上，公共输出从 `Func30` 0-46 扩展到 0-54，release DLL 已刷新到最新实现。
+提交 `346322e refactor: split czsc core modules` 已完成一次不改变功能的工程结构拆分。该提交没有新增或删除 TDX 公共函数、没有改变 `Func30` 输出编号、没有刷新正式 release DLL；它只把原来集中在 `CzscCore.cpp` / `CzscCore.h` 的核心实现拆到更清晰的模块边界，便于下一轮计划继续开发和测试。
+
+### 新源码结构
+
+| 层级 | 路径 | 责任 |
+| --- | --- | --- |
+| 兼容入口 | `CzscCore.h` | 聚合 include，保证既有测试和 `Main.cpp` 调用不需要迁移 |
+| 类型层 | `include/CzscTypes.h` | 枚举、配置、K 线、分型、笔、线段点、中枢、走势、候选、区间套、`CzscAnalyzer` |
+| 公共接口层 | `include/Czsc*.h` | 按形态、中枢、动力学、买卖点、区间套、分析器、TDX 导出拆分声明 |
+| 内部共享层 | `include/CzscInternal.h` | 跨实现文件共享的常量、输入清洗、输出清零、端点/区间 helper |
+| 实现层 | `src/CzscCommon.cpp` | 通达信无效值清洗、旁路 C/V 注册、配置解码 |
+| 实现层 | `src/CzscMorphology.cpp` | 包含处理、分型、笔、启发式线段、特征序列线段、配置端点 |
+| 实现层 | `src/CzscCenter.cpp` | 中枢、走势结构、中枢关系/生命周期、中枢投影 |
+| 实现层 | `src/CzscDynamics.cpp` | MACD、均线、吻、力度、背驰、即时背驰 |
+| 实现层 | `src/CzscTrading.cpp` | 一二三类买卖点候选、质量、上下文、投影输出 |
+| 实现层 | `src/CzscNestedDivergence.cpp` | 区间套背驰上下文和输出 |
+| 实现层 | `src/CzscAnalyzer.cpp` | 中心化分析器和缓存 |
+| 实现层 | `src/CzscTdxExports.cpp` | `Parse1/2`、`Func1-20/30/40` TDX 适配层 |
+
+### 结构重构完成情况
+
+- `Makefile` 已改为 `CORE_OBJECTS`，`make test`、SSE dump、DLL 链接都使用同一组 `src/*.o`。
+- `tests/check_formulas.py` 已从 `src/CzscTdxExports.cpp` 解析 `Func30` switch，并保留旧 `CzscCore.cpp` 回退路径。
+- `AGENTS.md`、`CLAUDE.md` 已同步新目录结构和本机 clang 验证命令。
+- 已验证 `python tests/check_formulas.py --self-test`、`python tests/check_formulas.py`、`make test`、临时 MinGW 32 位 DLL 链接和 `git diff --check`。
+- 根目录 `CzscCore.cpp`、`CzscAnalyzer.cpp` 现在只是迁移说明壳；后续实现不要继续写回这两个根文件。
+
+## 算法/发布最近 19 个提交增量补充
+
+以下 19 个提交是当前近 20 个提交中除 `346322e` 结构重构之外的算法/发布增量，完成了上一轮“形态学 → 中枢生命周期 → 买卖点质量 → 区间套 → 回归 → 公式发布”和本轮“背驰语义 → 背驰后回拉 → ABC 边界 → SSE 动力学回归 → DLL 发布”的连续演进。整体上，公共输出从 `Func30` 0-46 扩展到 0-54，release DLL 在 `cf8fd7f` 已刷新到最新算法实现。
 
 ### 增量清单
 
@@ -43,7 +73,6 @@
 | `ce88c51` | build | 刷新小转大源点输出后的 release DLL | `build/` |
 | `e597697` | feat | 新增小转大关联一类端点输出 42，完善小转大调试/选股上下文 | 核心、README、公式、SSE dump、测试 |
 | `ef79aa3` | test | 校验多周期公式中周期级 `Func40` 辅助数据注册顺序 | `tests/check_formulas.py` |
-| `49e6b4c` | fix | 修正多周期共振公式的 C/V 注册，避免日线与 30 分钟数据污染 | `formulas/chan-multi-buy.txt`、公式说明、校验 |
 
 ### 增量完成情况
 
@@ -77,9 +106,9 @@
 | `tests/` | 256 | 回归体系是主要投入点 |
 | `build/` | 151 | 发布 DLL 多次随功能刷新 |
 | `formulas/` | 136 | TDX 使用体验和选股公式持续扩展 |
-| `CzscCore.cpp` | 92 | 核心算法和投影函数主要承载处 |
+| `CzscCore.cpp` | 92 | 历史核心算法和投影函数主要承载处，现已拆入 `src/` |
 | `README.md` | 54 | 用户安装、公式和输出说明持续同步 |
-| `CzscCore.h` | 41 | 公共结构、配置、Func30 输出说明扩展 |
+| `CzscCore.h` | 41 | 历史公共结构、配置、Func30 输出说明承载处，现为兼容聚合头 |
 
 时间分布上，2026-07-01 有 195 个提交，主要是在已有核心能力上密集补齐诊断输出、公式校验、边界 guard 和 release 产物。
 
@@ -257,7 +286,7 @@
 - release DLL 校验脚本：`scripts/check-release-dlls.sh`。
 - `make release` 会清理、跑核心测试、交叉构建测试代码、生成 `build/CZSC.dll` 和 `build/CZSC64.dll`，并检查 PE32/PE32+ 产物和静态依赖。
 - release DLL timestamp 归零，构建趋于可复现。
-- `build/CZSC.dll`、`build/CZSC64.dll` 随功能变更多次刷新，当前 HEAD 已刷新。
+- `build/CZSC.dll`、`build/CZSC64.dll` 随功能变更多次刷新，最新 release 刷新点是 `cf8fd7f`；`346322e` 仅做源码结构拆分，未刷新 DLL。
 
 代表提交：
 
@@ -295,6 +324,22 @@
 
 `Func40(C,V)` 已作为真实收盘价/成交量旁路入口；需要动力学或多周期公式时，公式层已要求先注册对应周期的 C/V。
 
+## 当前源码结构快照
+
+当前 HEAD 的开发入口已经从单一 `CzscCore.cpp` 转为分层模块：
+
+- 类型和公共结构：`include/CzscTypes.h`。
+- 形态学：`include/CzscMorphology.h` / `src/CzscMorphology.cpp`。
+- 中枢与走势：`include/CzscCenter.h` / `src/CzscCenter.cpp`。
+- 动力学与背驰度量：`include/CzscDynamics.h` / `src/CzscDynamics.cpp`。
+- 买卖点候选与输出投影：`include/CzscTrading.h` / `src/CzscTrading.cpp`。
+- 区间套：`include/CzscNestedDivergence.h` / `src/CzscNestedDivergence.cpp`。
+- 分析器与缓存：`include/CzscAnalyzer.h` / `src/CzscAnalyzer.cpp`。
+- TDX 导出适配：`include/CzscTdxExports.h` / `src/CzscTdxExports.cpp`。
+- 通用输入/配置/旁路数据：`include/CzscCommon.h` / `src/CzscCommon.cpp`。
+- 内部 helper：`include/CzscInternal.h`，不要把只给实现文件使用的 helper 暴露到用户文档。
+- 兼容入口：`CzscCore.h` 继续给旧调用方 include；不要在根目录 `CzscCore.cpp` 或 `CzscAnalyzer.cpp` 继续新增实现。
+
 ## 当前已知质量门禁
 
 后续改动应继续保持以下门禁：
@@ -304,12 +349,15 @@
 - `wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make test'`
 - release 前：`wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make release'`
 - 修改 SSE 输出后：先 `make sse-result`，人工核对 diff，再跑 `make test`。
-- 修改 `Func30` 输出后：同步 `CzscCore.h` 注释、README、公式/调试公式、`check_formulas.py`、C++ projection 测试。
+- 修改 `Func30` 输出后：同步 `include/CzscTdxExports.h` 注释、`src/CzscTdxExports.cpp` switch、README、公式/调试公式、`tests/check_formulas.py`、C++ projection 测试。
+- 修改类型/候选字段后：同步 `include/CzscTypes.h`，并检查 `src/CzscAnalyzer.cpp`、`src/CzscTrading.cpp`、SSE dump 和结构校验脚本。
+- 修改实现模块边界后：同步 `Makefile` 的 `CORE_OBJECTS`、`CLAUDE.md` 本机 clang 命令和公式校验脚本的源码定位。
 
 ## 后续 plan 的入口观察
 
-以下不是已经完成项，而是基于最新 20 个提交后的状态整理出的下一步规划入口：
+以下不是已经完成项，而是基于 `346322e` 之后的当前结构整理出的下一步规划入口：
 
+- 源码结构已拆分，下一轮优化应优先沿 `src/` 职责边界落点；不要把新算法继续堆回 `CzscCore.cpp`。
 - 形态学已经完成一轮原文校准，下一步更适合引入第二个真实行情样本，防止 SSE 单样本过拟合。
 - 中枢生命周期已输出 47/48，后续可继续做多级别生命周期迁移校验，而不是继续增加旧式散装函数。
 - 买卖点候选已经按一二三类来源和上下文收紧，下一步可以在调试层保留更多“被过滤原因”，辅助人工核对。
