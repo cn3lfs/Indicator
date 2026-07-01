@@ -66,6 +66,16 @@ static int GetTradingSignalSide(float fSignal)
   return 0;
 }
 
+static bool IsTradingSignal(float fSignal)
+{
+  return GetTradingSignalSide(fSignal) != 0;
+}
+
+static bool HasTradingSignalOutput(const TradingSignalCandidate &C, int nCount)
+{
+  return (C.nIndex >= 0) && (C.nIndex < nCount) && IsTradingSignal(C.fSignal);
+}
+
 //=============================================================================
 // 形态学辅助：输出校验、K线包含处理、分型/线段点构造
 //=============================================================================
@@ -2060,7 +2070,7 @@ void ApplyTradingSignalCandidates(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2094,7 +2104,7 @@ void ApplyTradingSignalQuality(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2128,7 +2138,7 @@ void ApplyTradingSignalReversal(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2175,7 +2185,7 @@ void ApplyTradingSignalAftermath(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2218,7 +2228,7 @@ void ApplyTradingSignalCenterPosition(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2251,7 +2261,7 @@ void ApplyTradingSignalMovementType(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2284,7 +2294,7 @@ void ApplyTradingSignalPriority(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2317,7 +2327,7 @@ void ApplyTradingSignalCenterId(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2350,7 +2360,7 @@ void ApplyTradingSignalBreakoutId(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2383,7 +2393,7 @@ void ApplyTradingSignalPointId(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2416,7 +2426,7 @@ void ApplyTradingSignalTrendId(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2460,7 +2470,7 @@ void ApplyTradingSignalSmallTurn(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2519,7 +2529,7 @@ void ApplyTradingSignalAbcStructure(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2553,7 +2563,7 @@ void ApplyTradingSignalStrictAbcCandidates(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2601,7 +2611,7 @@ void ApplyTradingSignalMacdLineWeakness(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2641,7 +2651,7 @@ void ApplyTradingSignalMacdZeroPullback(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2702,7 +2712,7 @@ void ApplyTradingSignalStandardDivergence(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }
@@ -2801,7 +2811,7 @@ void ApplyTradingSignalContextFlags(int nCount,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
-    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    if (!HasTradingSignalOutput(C, nCount))
     {
       continue;
     }

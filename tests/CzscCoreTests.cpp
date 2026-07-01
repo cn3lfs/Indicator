@@ -1600,6 +1600,51 @@ static bool TestApplyTradingCandidatesThirdOverridesSecond()
   return NearlyEqual(pOut[2], 3.0f);
 }
 
+static bool TestApplyTradingOutputsSkipInvalidSignals()
+{
+  const int nCount = 4;
+  float pSignal[nCount] = {-1, -1, -1, -1};
+  float pQuality[nCount] = {-1, -1, -1, -1};
+  float pPriority[nCount] = {-1, -1, -1, -1};
+  float pCenter[nCount] = {-1, -1, -1, -1};
+  float pContext[nCount] = {-1, -1, -1, -1};
+
+  TradingSignalCandidate Valid = MakeTestCandidate(2, 3.0f, 20);
+  Valid.nQuality = CZSC_SIGNAL_QUALITY_CONFIRMED;
+  Valid.nCenter = 4;
+  Valid.nBreakout = 2;
+  Valid.bOverlapped = true;
+
+  TradingSignalCandidate Invalid = MakeTestCandidate(2, 99.0f, 30);
+  Invalid.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Invalid.nCenter = 8;
+  Invalid.nBreakout = 8;
+  Invalid.bOverlapped = false;
+
+  std::vector<TradingSignalCandidate> Candidates;
+  Candidates.push_back(Valid);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalCandidates(nCount, pSignal, Candidates);
+  ApplyTradingSignalQuality(nCount, pQuality, Candidates);
+  ApplyTradingSignalPriority(nCount, pPriority, Candidates);
+  ApplyTradingSignalCenterId(nCount, pCenter, Candidates);
+  ApplyTradingSignalContextFlags(nCount, pContext, Candidates);
+
+  float fContext = (float)(CZSC_SIGNAL_CTX_OVERLAPPED |
+                           CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  return NearlyEqual(pSignal[2], 3.0f) &&
+         NearlyEqual(pQuality[2], (float)CZSC_SIGNAL_QUALITY_CONFIRMED) &&
+         NearlyEqual(pPriority[2], 20.0f) &&
+         NearlyEqual(pCenter[2], 5.0f) &&
+         NearlyEqual(pContext[2], fContext) &&
+         NearlyEqual(pSignal[0], 0.0f) &&
+         NearlyEqual(pQuality[0], 0.0f) &&
+         NearlyEqual(pPriority[0], 0.0f) &&
+         NearlyEqual(pCenter[0], 0.0f) &&
+         NearlyEqual(pContext[0], 0.0f);
+}
+
 static bool TestFirstCandidateKeepsTrendDivergence()
 {
   const int nCount = 41;
@@ -6218,6 +6263,10 @@ int main()
   if (!TestApplyTradingCandidatesThirdOverridesSecond())
   {
     return 29;
+  }
+  if (!TestApplyTradingOutputsSkipInvalidSignals())
+  {
+    return 170;
   }
   if (!TestFirstCandidateKeepsTrendDivergence())
   {
