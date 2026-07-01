@@ -717,6 +717,20 @@ struct SseCandidateExpectation
   int nContextFlags;
 };
 
+struct SseBreakoutExpectation
+{
+  int nBreakout;
+  int nCenter;
+  int nDirection;
+  int nLeavePoint;
+  const char *pLeaveDate;
+  int nRetestPoint;
+  const char *pRetestDate;
+  bool bFirstRetest;
+  bool bBackIntoCenter;
+  bool bThirdSignal;
+};
+
 static bool ContainsSseCandidate(const std::vector<TradingSignalCandidate> &Candidates,
                                  const SseCandidateExpectation &E)
 {
@@ -757,6 +771,51 @@ static bool ContainsAllSseCandidates(const std::vector<TradingSignalCandidate> &
   for (std::size_t i = 0; i < nExpected; i++)
   {
     if (!ContainsSseCandidate(Candidates, pExpected[i]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool CheckSseBreakout(const std::vector<SegmentPoint> &Points,
+                             const std::vector<CenterBreakout> &Breakouts,
+                             const SseBreakoutExpectation &E)
+{
+  if ((E.nBreakout < 0) || ((std::size_t)E.nBreakout >= Breakouts.size()) ||
+      (E.nLeavePoint < 0) || ((std::size_t)E.nLeavePoint >= Points.size()) ||
+      (E.nRetestPoint < 0) || ((std::size_t)E.nRetestPoint >= Points.size()))
+  {
+    return false;
+  }
+
+  int nLeaveIndex = FindSseDateIndex(E.pLeaveDate);
+  int nRetestIndex = FindSseDateIndex(E.pRetestDate);
+  if ((nLeaveIndex < 0) || (nRetestIndex < 0))
+  {
+    return false;
+  }
+
+  const CenterBreakout &B = Breakouts[(std::size_t)E.nBreakout];
+  return (B.nCenter == E.nCenter) &&
+         (B.nDirection == E.nDirection) &&
+         (B.nLeavePoint == E.nLeavePoint) &&
+         (B.nRetestPoint == E.nRetestPoint) &&
+         (B.bFirstRetest == E.bFirstRetest) &&
+         (B.bBackIntoCenter == E.bBackIntoCenter) &&
+         (B.bThirdSignal == E.bThirdSignal) &&
+         (Points[(std::size_t)E.nLeavePoint].nIndex == nLeaveIndex) &&
+         (Points[(std::size_t)E.nRetestPoint].nIndex == nRetestIndex);
+}
+
+static bool CheckAllSseBreakouts(const std::vector<SegmentPoint> &Points,
+                                 const std::vector<CenterBreakout> &Breakouts,
+                                 const SseBreakoutExpectation *pExpected,
+                                 std::size_t nExpected)
+{
+  for (std::size_t i = 0; i < nExpected; i++)
+  {
+    if (!CheckSseBreakout(Points, Breakouts, pExpected[i]))
     {
       return false;
     }
@@ -881,6 +940,42 @@ static bool TestRealSseGoldenCandidatesPresent()
          ContainsAllSseCandidates(SegmentAn.Candidates,
                                   SegmentExpected,
                                   sizeof(SegmentExpected) / sizeof(SegmentExpected[0]));
+}
+
+static bool TestRealSseGoldenBreakoutsPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  static const SseBreakoutExpectation StrokeExpected[] = {
+    {0, 0, -1, 8, "2018-07-06", 9, "2018-07-12", true, false, true},
+    {5, 5, 1, 57, "2021-01-25", 58, "2021-01-29", true, false, true},
+    {13, 13, -1, 134, "2025-04-07", 135, "2025-04-24", true, false, true},
+    {15, 15, 1, 145, "2025-10-30", 146, "2025-11-05", true, false, true}
+  };
+
+  static const SseBreakoutExpectation SegmentExpected[] = {
+    {0, 0, 1, 5, "2019-04-08", 6, "2019-06-06", true, false, true},
+    {3, 3, 1, 29, "2025-11-14", 30, "2025-12-16", true, false, true}
+  };
+
+  return CheckAllSseBreakouts(StrokeAn.Points,
+                              StrokeAn.Breakouts,
+                              StrokeExpected,
+                              sizeof(StrokeExpected) / sizeof(StrokeExpected[0])) &&
+         CheckAllSseBreakouts(SegmentAn.Points,
+                              SegmentAn.Breakouts,
+                              SegmentExpected,
+                              sizeof(SegmentExpected) / sizeof(SegmentExpected[0]));
 }
 
 static bool TestFunc1WritesCompatibleSignal()
@@ -6963,6 +7058,10 @@ int main()
   if (!TestRealSseGoldenCandidatesPresent())
   {
     return 158;
+  }
+  if (!TestRealSseGoldenBreakoutsPresent())
+  {
+    return 188;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {
