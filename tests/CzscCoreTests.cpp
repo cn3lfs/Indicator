@@ -6383,6 +6383,23 @@ static bool TestFunc30RejectsInvalidMode()
     }
   }
 
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> InvalidConfig((std::size_t)SSE_DAILY_COUNT);
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    InvalidConfig[(std::size_t)i] = 9.0f;
+  }
+  float fInvalidConfig = 2000;
+  Func30(SSE_DAILY_COUNT, &InvalidConfig[0], &High[0], &Low[0], &fInvalidConfig);
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (!NearlyEqual(InvalidConfig[(std::size_t)i], 0.0f))
+    {
+      return false;
+    }
+  }
+
   return true;
 }
 

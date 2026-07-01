@@ -228,6 +228,25 @@ CzscConfig DefaultConfig()
   return Config;
 }
 
+static bool IsValidConfigCode(int nCode)
+{
+  if (nCode < 0)
+  {
+    return false;
+  }
+
+  for (int i = 0; i < 4; i++)
+  {
+    int nDigit = nCode % 10;
+    if ((nDigit != 0) && (nDigit != 1))
+    {
+      return false;
+    }
+    nCode /= 10;
+  }
+  return nCode == 0;
+}
+
 // 把单个数字码解出四维配置：个位=笔类型、十位=笔结束、百位=中枢构件、千位=线段法；非法值回落默认
 CzscConfig DecodeConfig(float fCode)
 {
@@ -4404,7 +4423,13 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     ClearOutput(nCount, pOut);
     return;
   }
-  CzscConfig Config = DecodeConfig((float)(nMode / 1000));
+  int nConfig = nMode / 1000;
+  if (!IsValidConfigCode(nConfig))
+  {
+    ClearOutput(nCount, pOut);
+    return;
+  }
+  CzscConfig Config = DecodeConfig((float)nConfig);
   int nOutput = (nMode % 1000) / 10;
 
   const CzscAnalyzer &An = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, Config);
