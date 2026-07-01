@@ -4397,6 +4397,11 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   {
     nMode = 0;
   }
+  if ((nMode % 10) != 0)
+  {
+    ClearOutput(nCount, pOut);
+    return;
+  }
   CzscConfig Config = DecodeConfig((float)(nMode / 1000));
   int nOutput = (nMode % 1000) / 10;
 

@@ -6228,6 +6228,44 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   return true;
 }
 
+static bool TestFunc30RejectsInvalidMode()
+{
+  const int nCount = 5;
+  float pHigh[nCount] = {5, 6, 7, 6, 5};
+  float pLow[nCount] = {1, 2, 3, 2, 1};
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = 9;
+  }
+  float fBadTail = 11;
+  Func30(nCount, pOut, pHigh, pLow, &fBadTail);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pOut[i], 0.0f))
+    {
+      return false;
+    }
+  }
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = 9;
+  }
+  float fUnknownOutput = 290;
+  Func30(nCount, pOut, pHigh, pLow, &fUnknownOutput);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pOut[i], 0.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFunc30HandlesEmptyInput()
 {
   Func30(0, 0, 0, 0, 0);
@@ -7135,6 +7173,10 @@ int main()
   if (!TestFunc30DiagnosticOutputsMatchProjections())
   {
     return 143;
+  }
+  if (!TestFunc30RejectsInvalidMode())
+  {
+    return 180;
   }
   if (!TestFunc30HandlesEmptyInput())
   {
