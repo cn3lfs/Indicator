@@ -121,6 +121,7 @@ make test
 ```bash
 sh scripts/build-mingw32.sh    # 32 位 → build/CZSC.dll
 sh scripts/build-mingw64.sh    # 64 位 → build/CZSC64.dll
+make release-check             # 校验 PE32/PE32+ 类型与静态依赖
 ```
 
 ## 40 号 旁路注册真实收盘价 / 成交量

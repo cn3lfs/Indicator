@@ -54,7 +54,7 @@ DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep)
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
-        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result sse-result-check run clean debug
+        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result sse-result-check release-check run clean debug
 
 all : $(TARGETS)
 
@@ -115,6 +115,9 @@ sse-result: clean $(SSE_DUMP_TARGET)
 sse-result-check: $(SSE_DUMP_TARGET)
 	@echo [SC] $(SSE_RESULT)
 	@python3 tests/check_sse_result.py $(SSE_DUMP_TARGET) $(SSE_RESULT)
+
+release-check:
+	@sh scripts/check-release-dlls.sh
 
 mingw32-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build
