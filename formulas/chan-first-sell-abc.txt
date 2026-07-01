@@ -1,0 +1,5 @@
+{缠论 ABC确认一卖 条件选股}
+{最近10个交易日内出现满足A-B-C结构的一卖}
+XC:=TDXDLL1(40,C,V,0);
+ABX:=TDXDLL1(30,H,L,160);
+BARSLAST(ABX=11)<10;

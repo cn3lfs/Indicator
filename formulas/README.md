@@ -43,15 +43,23 @@
 - 分别导入 `chan-first-buy.txt`（一买）、`chan-second-buy.txt`（二买）、`chan-third-buy.txt`（三买）
 - 分别导入 `chan-first-sell.txt`（一卖）、`chan-second-sell.txt`（二卖）、`chan-third-sell.txt`（三卖）
 - 需要第21课原文位置口径的一买时，另导入 `chan-first-buy-original.txt`（一买 + 中枢下方 + 下跌走势）
+- 需要第21课原文位置口径的一卖时，另导入 `chan-first-sell-original.txt`（一卖 + 中枢上方 + 上涨走势）
 - 需要第37课 A-B-C 结构确认的一买时，另导入 `chan-first-buy-abc.txt`
+- 需要第37课 A-B-C 结构确认的一卖时，另导入 `chan-first-sell-abc.txt`
 - 需要第24/25/37课标准趋势背驰确认的一买时，另导入 `chan-first-buy-standard.txt`
 - 需要第24/25/37课标准趋势背驰确认的一卖时，另导入 `chan-first-sell-standard.txt`
 - 需要用 `CTX` 位图组合强质量、ABC、MACD 回零、黄白线走弱、标准趋势背驰时，另导入 `chan-first-buy-context.txt`
+- 需要用 `CTX` 位图组合强质量、ABC、MACD 回零、黄白线走弱、标准趋势背驰的一卖时，另导入 `chan-first-sell-context.txt`
 - 需要强质量三买且关联中枢首次离开/回试时，另导入 `chan-third-buy-strong.txt`
+- 需要强质量三卖且关联中枢首次离开/回试时，另导入 `chan-third-sell-strong.txt`
 - 需要第20课原文位置口径的三买时，另导入 `chan-third-buy-original.txt`（三买 + 中枢上方 + 首次离开/回试）
+- 需要第20课原文位置口径的三卖时，另导入 `chan-third-sell-original.txt`（三卖 + 中枢下方 + 首次离开/回试）
 - 需要第21课三买后中枢扩张时，另导入 `chan-third-buy-expanded.txt`
+- 需要第21课三卖后中枢扩张时，另导入 `chan-third-sell-expanded.txt`
 - 需要第21课三买后中枢新生时，另导入 `chan-third-buy-newborn.txt`
+- 需要第21课三卖后中枢新生时，另导入 `chan-third-sell-newborn.txt`
 - 需要第21/61课二三类重合买点时，另导入 `chan-overlap-buy.txt`
+- 需要第21/61课二三类重合卖点时，另导入 `chan-overlap-sell.txt`
 - 需要日线二买叠加 30 分钟二/三买共振时，另导入 `chan-multi-buy.txt`
 - 每次粘贴后点确定
 

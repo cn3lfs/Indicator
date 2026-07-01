@@ -41,6 +41,24 @@ EXPECTED_FORMULA_SNIPPETS = {
     "BSP:=TDXDLL1(30,H,L,40);",
     "BARSLAST(BSP=11)<10;",
   ],
+  "chan-first-sell-abc.txt": [
+    "ABX:=TDXDLL1(30,H,L,160);",
+    "BARSLAST(ABX=11)<10;",
+  ],
+  "chan-first-sell-context.txt": [
+    "CTX:=TDXDLL1(30,H,L,210);",
+    "QST:=MOD(INTPART(CTX/1),2)=1;",
+    "ABC:=MOD(INTPART(CTX/2),2)=1;",
+    "MZP:=MOD(INTPART(CTX/4),2)=1;",
+    "MLW:=MOD(INTPART(CTX/8),2)=1;",
+    "STD:=MOD(INTPART(CTX/32),2)=1;",
+    "BARSLAST(BSP=11 AND QST AND ABC AND MZP AND MLW AND STD)<10;",
+  ],
+  "chan-first-sell-original.txt": [
+    "POS:=TDXDLL1(30,H,L,220);",
+    "MOV:=TDXDLL1(30,H,L,230);",
+    "BARSLAST(BSP=11 AND POS=1 AND MOV=1)<10;",
+  ],
   "chan-second-sell.txt": [
     "BSP:=TDXDLL1(30,H,L,40);",
     "BARSLAST(BSP=12)<10;",
@@ -57,6 +75,11 @@ EXPECTED_FORMULA_SNIPPETS = {
     "CTX:=TDXDLL1(30,H,L,210);",
     "OVL:=MOD(INTPART(CTX/2048),2)=1;",
     "BARSLAST((BSP=2 OR BSP=3) AND OVL)<10;",
+  ],
+  "chan-overlap-sell.txt": [
+    "CTX:=TDXDLL1(30,H,L,210);",
+    "OVL:=MOD(INTPART(CTX/2048),2)=1;",
+    "BARSLAST((BSP=12 OR BSP=13) AND OVL)<10;",
   ],
   "chan-third-buy-original.txt": [
     "POS:=TDXDLL1(30,H,L,220);",
@@ -77,6 +100,26 @@ EXPECTED_FORMULA_SNIPPETS = {
     "CTX:=TDXDLL1(30,H,L,210);",
     "BRK:=MOD(INTPART(CTX/4096),2);",
     "BARSLAST(BSP=3 AND QLT=2 AND BRK=1)<10;",
+  ],
+  "chan-third-sell-original.txt": [
+    "POS:=TDXDLL1(30,H,L,220);",
+    "CTX:=TDXDLL1(30,H,L,210);",
+    "BRK:=MOD(INTPART(CTX/4096),2)=1;",
+    "BARSLAST(BSP=13 AND POS=-1 AND BRK)<10;",
+  ],
+  "chan-third-sell-expanded.txt": [
+    "AFT:=TDXDLL1(30,H,L,80);",
+    "BARSLAST(BSP=13 AND AFT=1)<10;",
+  ],
+  "chan-third-sell-newborn.txt": [
+    "AFT:=TDXDLL1(30,H,L,80);",
+    "BARSLAST(BSP=13 AND AFT=2)<10;",
+  ],
+  "chan-third-sell-strong.txt": [
+    "QLT:=TDXDLL1(30,H,L,50);",
+    "CTX:=TDXDLL1(30,H,L,210);",
+    "BRK:=MOD(INTPART(CTX/4096),2);",
+    "BARSLAST(BSP=13 AND QLT=2 AND BRK=1)<10;",
   ],
 }
 
@@ -253,6 +296,24 @@ def self_test() -> int:
       "BSP:=TDXDLL1(30,H,L,40);\n"
       "BARSLAST(BSP=11)<10;\n"
     ),
+    "chan-first-sell-abc.txt": (
+      "ABX:=TDXDLL1(30,H,L,160);\n"
+      "BARSLAST(ABX=11)<10;\n"
+    ),
+    "chan-first-sell-context.txt": (
+      "CTX:=TDXDLL1(30,H,L,210);\n"
+      "QST:=MOD(INTPART(CTX/1),2)=1;\n"
+      "ABC:=MOD(INTPART(CTX/2),2)=1;\n"
+      "MZP:=MOD(INTPART(CTX/4),2)=1;\n"
+      "MLW:=MOD(INTPART(CTX/8),2)=1;\n"
+      "STD:=MOD(INTPART(CTX/32),2)=1;\n"
+      "BARSLAST(BSP=11 AND QST AND ABC AND MZP AND MLW AND STD)<10;\n"
+    ),
+    "chan-first-sell-original.txt": (
+      "POS:=TDXDLL1(30,H,L,220);\n"
+      "MOV:=TDXDLL1(30,H,L,230);\n"
+      "BARSLAST(BSP=11 AND POS=1 AND MOV=1)<10;\n"
+    ),
     "chan-second-sell.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
       "BARSLAST(BSP=12)<10;\n"
@@ -270,6 +331,11 @@ def self_test() -> int:
       "OVL:=MOD(INTPART(CTX/2048),2)=1;\n"
       "BARSLAST((BSP=2 OR BSP=3) AND OVL)<10;\n"
     ),
+    "chan-overlap-sell.txt": (
+      "CTX:=TDXDLL1(30,H,L,210);\n"
+      "OVL:=MOD(INTPART(CTX/2048),2)=1;\n"
+      "BARSLAST((BSP=12 OR BSP=13) AND OVL)<10;\n"
+    ),
     "chan-third-buy-expanded.txt": (
       "AFT:=TDXDLL1(30,H,L,80);\n"
       "BARSLAST(BSP=3 AND AFT=1)<10;\n"
@@ -283,6 +349,26 @@ def self_test() -> int:
       "CTX:=TDXDLL1(30,H,L,210);\n"
       "BRK:=MOD(INTPART(CTX/4096),2);\n"
       "BARSLAST(BSP=3 AND QLT=2 AND BRK=1)<10;\n"
+    ),
+    "chan-third-sell-original.txt": (
+      "POS:=TDXDLL1(30,H,L,220);\n"
+      "CTX:=TDXDLL1(30,H,L,210);\n"
+      "BRK:=MOD(INTPART(CTX/4096),2)=1;\n"
+      "BARSLAST(BSP=13 AND POS=-1 AND BRK)<10;\n"
+    ),
+    "chan-third-sell-expanded.txt": (
+      "AFT:=TDXDLL1(30,H,L,80);\n"
+      "BARSLAST(BSP=13 AND AFT=1)<10;\n"
+    ),
+    "chan-third-sell-newborn.txt": (
+      "AFT:=TDXDLL1(30,H,L,80);\n"
+      "BARSLAST(BSP=13 AND AFT=2)<10;\n"
+    ),
+    "chan-third-sell-strong.txt": (
+      "QLT:=TDXDLL1(30,H,L,50);\n"
+      "CTX:=TDXDLL1(30,H,L,210);\n"
+      "BRK:=MOD(INTPART(CTX/4096),2);\n"
+      "BARSLAST(BSP=13 AND QLT=2 AND BRK=1)<10;\n"
     ),
     "chan-third-buy-original.txt": "POS:=TDXDLL1(30,H,L,220);\n",
   })
