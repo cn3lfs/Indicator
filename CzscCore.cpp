@@ -2617,6 +2617,10 @@ static bool IsStandardMacdDivergence(const TradingSignalCandidate &C)
   {
     return false;
   }
+  if (!C.Divergence.bDivergence)
+  {
+    return false;
+  }
   if (!HasMatchingAbcStructure(C) || !HasMatchingMacdZeroPullback(C))
   {
     return false;

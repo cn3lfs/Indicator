@@ -4436,6 +4436,7 @@ static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
   pC->nMacdZeroPullback = nSign;
   pC->Divergence.bNewExtreme = true;
   pC->Divergence.bWeakMacd = true;
+  pC->Divergence.bDivergence = true;
   pC->Divergence.Previous.fDifHeight = 6;
   pC->Divergence.Previous.fDeaHeight = 5;
   pC->Divergence.Current.fDifHeight = 4;
@@ -4444,7 +4445,7 @@ static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
 
 static bool TestApplyTradingStandardDivergenceMapsCodes()
 {
-  const int nCount = 16;
+  const int nCount = 18;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4474,6 +4475,9 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   TradingSignalCandidate WrongPullbackDirection = MakeTestCandidate(15, 11.0f, 30);
   MakeStandardDivergence(&WrongPullbackDirection, -1);
   WrongPullbackDirection.nMacdZeroPullback = 1;
+  TradingSignalCandidate MissingBaseDivergence = MakeTestCandidate(17, 1.0f, 30);
+  MakeStandardDivergence(&MissingBaseDivergence, 1);
+  MissingBaseDivergence.Divergence.bDivergence = false;
 
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
@@ -4483,6 +4487,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   Candidates.push_back(MissingLineWeak);
   Candidates.push_back(WrongAbcDirection);
   Candidates.push_back(WrongPullbackDirection);
+  Candidates.push_back(MissingBaseDivergence);
 
   ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
 
@@ -4494,6 +4499,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
          NearlyEqual(pOut[11], 0.0f) &&
          NearlyEqual(pOut[13], 0.0f) &&
          NearlyEqual(pOut[15], 0.0f) &&
+         NearlyEqual(pOut[17], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
