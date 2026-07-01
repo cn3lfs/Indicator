@@ -1,9 +1,23 @@
 #!/usr/bin/env python3
 import difflib
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
+
+CANDIDATE_LINE = re.compile(r"^  [0-9]{4}-[0-9]{2}-[0-9]{2}  ")
+
+
+def validate_candidate_context(text: str):
+  errors = []
+  for n_line, line in enumerate(text.splitlines(), start=1):
+    if CANDIDATE_LINE.search(line) is None:
+      continue
+    for snippet in (" A[价", " C[价", " flags["):
+      if snippet not in line:
+        errors.append(f"line {n_line}: candidate missing {snippet.strip()}")
+  return errors
 
 
 def main() -> int:
@@ -26,6 +40,13 @@ def main() -> int:
 
     expected = golden_file.read_text(encoding="utf-8").splitlines(keepends=True)
     actual = actual_file.read_text(encoding="utf-8").splitlines(keepends=True)
+    context_errors = validate_candidate_context("".join(actual))
+    if context_errors:
+      print(f"{actual_file} is missing candidate strength context.", file=sys.stderr)
+      for item in context_errors:
+        print(item, file=sys.stderr)
+      return 1
+
     if actual == expected:
       return 0
 
