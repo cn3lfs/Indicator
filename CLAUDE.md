@@ -55,7 +55,8 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 买卖点判定（第20/21课，CzscCore.h/cpp）：**一类**针对趋势(≥2同向中枢)末端背驰，且**同一趋势只保留价格
 最极端的一个**(去重，否则趋势内每个创新高/低背驰都各成一类→泛滥)；**二类**紧随一类(一买后第一个不
 创新低=二买)；**三类**=中枢被首次离开(突破ZG/ZD)后回试不破ZG/ZD(上升中枢→三买、下降中枢→三卖)。
-数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续等）见 `CzscCore.h` 注释。
+数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续、优先级、中枢/突破/端点/走势编号等）
+见 `CzscCore.h` 注释。
 
 ## 架构：CzscAnalyzer + 缓存 + 配置 + Func30
 
@@ -91,7 +92,7 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 17 | Func17 | 即时背驰预警(1见顶/-1见底) | 第15课 |
 | 18 / 19 | Func18 / Func19 | 笔(新笔标准) / 线段(特征序列法) | 第62-67课 |
 | 20 | Func20 | 配置驱动端点(笔/线段中枢) | 见上「架构」 |
-| 30 | Func30 | mode 统一入口(配置+输出，一步算全链路) | 见上「架构」 |
+| 30 | Func30 | mode 统一入口(配置+输出，一步算全链路；输出21-28为胜出候选上下文/位置/走势/优先级/编号) | 见上「架构」 |
 | 40 | Func40 | 旁路注册真实 C/V(透传 C)，供后续函数启用 | 见上「旁路注册数据契约」 |
 
 新增输出函数时：在 `CzscCore.h` 声明、`CzscCore.cpp` 实现、`Main.cpp` 注册 `{n,&Funcn}`、
@@ -99,7 +100,7 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 
 ## 本机构建与测试（重要：无 make/g++/mingw）
 
-本 Windows 机器只装了 clang，Makefile 的 `make test` 用不了。跑核心回归（当前 117 用例）：
+本 Windows 机器只装了 clang，Makefile 的 `make test` 用不了。跑核心回归：
 
 ```bash
 cd D:/github/czsc-tdx
