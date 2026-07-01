@@ -2879,6 +2879,75 @@ static bool TestFunc5WritesCenterThirdSell()
   return NearlyEqual(pOut[24], 13.0f);
 }
 
+static bool TestFunc5WritesThirdSignalsAtCenterBoundary()
+{
+  {
+    const int nCount = 33;
+    float pIn[nCount];
+    float pHigh[nCount];
+    float pLow[nCount];
+    float pOut[nCount];
+
+    for (int i = 0; i < nCount; i++)
+    {
+      pIn[i] = 0;
+      pHigh[i] = 0;
+      pLow[i] = 0;
+      pOut[i] = -1;
+    }
+
+    pIn[0] = -1;  pHigh[0] = pLow[0] = 1;
+    pIn[4] = 1;   pHigh[4] = pLow[4] = 6;
+    pIn[8] = -1;  pHigh[8] = pLow[8] = 4;
+    pIn[12] = 1;  pHigh[12] = pLow[12] = 5.5f;
+    pIn[16] = -1; pHigh[16] = pLow[16] = 5.6f;
+    pIn[20] = 1;  pHigh[20] = pLow[20] = 7;
+    pIn[24] = -1; pHigh[24] = pLow[24] = 5.5f;  // 回试低点等于 ZG，不跌破
+    pIn[28] = 1;  pHigh[28] = pLow[28] = 8;
+    pIn[32] = -1; pHigh[32] = pLow[32] = 7;
+
+    Func5(nCount, pOut, pIn, pHigh, pLow);
+    if (!NearlyEqual(pOut[24], 3.0f))
+    {
+      return false;
+    }
+  }
+
+  {
+    const int nCount = 33;
+    float pIn[nCount];
+    float pHigh[nCount];
+    float pLow[nCount];
+    float pOut[nCount];
+
+    for (int i = 0; i < nCount; i++)
+    {
+      pIn[i] = 0;
+      pHigh[i] = 0;
+      pLow[i] = 0;
+      pOut[i] = -1;
+    }
+
+    pIn[0] = 1;   pHigh[0] = pLow[0] = 12;
+    pIn[4] = -1;  pHigh[4] = pLow[4] = 9;
+    pIn[8] = 1;   pHigh[8] = pLow[8] = 11;
+    pIn[12] = -1; pHigh[12] = pLow[12] = 9.5f;
+    pIn[16] = 1;  pHigh[16] = pLow[16] = 9.3f;
+    pIn[20] = -1; pHigh[20] = pLow[20] = 7;
+    pIn[24] = 1;  pHigh[24] = pLow[24] = 9.5f;  // 回抽高点等于 ZD，不升破
+    pIn[28] = -1; pHigh[28] = pLow[28] = 6;
+    pIn[32] = 1;  pHigh[32] = pLow[32] = 7;
+
+    Func5(nCount, pOut, pIn, pHigh, pLow);
+    if (!NearlyEqual(pOut[24], 13.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFunc5WritesSecondBuyAfterFirstBuy()
 {
   const int nCount = 41;
@@ -5781,6 +5850,10 @@ int main()
   if (!TestFunc5WritesCenterThirdSell())
   {
     return 42;
+  }
+  if (!TestFunc5WritesThirdSignalsAtCenterBoundary())
+  {
+    return 162;
   }
   if (!TestFunc5WritesSecondBuyAfterFirstBuy())
   {
