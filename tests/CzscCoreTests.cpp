@@ -369,6 +369,140 @@ static bool TestRealSseSignalsWellFormed()
   return true;
 }
 
+struct SseCandidateSummary
+{
+  int nFirstBuy;
+  int nSecondBuy;
+  int nThirdBuy;
+  int nFirstSell;
+  int nSecondSell;
+  int nThirdSell;
+  int nStrong;
+  int nAbc;
+  int nZeroPull;
+  int nLineWeak;
+  int nStandard;
+  int nSmallTurn;
+  int nOverlapped;
+  int nBreakout;
+};
+
+static SseCandidateSummary CountSseCandidateSummary(const std::vector<TradingSignalCandidate> &Candidates)
+{
+  SseCandidateSummary S;
+  S.nFirstBuy = 0;
+  S.nSecondBuy = 0;
+  S.nThirdBuy = 0;
+  S.nFirstSell = 0;
+  S.nSecondSell = 0;
+  S.nThirdSell = 0;
+  S.nStrong = 0;
+  S.nAbc = 0;
+  S.nZeroPull = 0;
+  S.nLineWeak = 0;
+  S.nStandard = 0;
+  S.nSmallTurn = 0;
+  S.nOverlapped = 0;
+  S.nBreakout = 0;
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (NearlyEqual(C.fSignal, 1.0f))
+    {
+      S.nFirstBuy++;
+    }
+    else if (NearlyEqual(C.fSignal, 2.0f))
+    {
+      S.nSecondBuy++;
+    }
+    else if (NearlyEqual(C.fSignal, 3.0f))
+    {
+      S.nThirdBuy++;
+    }
+    else if (NearlyEqual(C.fSignal, 11.0f))
+    {
+      S.nFirstSell++;
+    }
+    else if (NearlyEqual(C.fSignal, 12.0f))
+    {
+      S.nSecondSell++;
+    }
+    else if (NearlyEqual(C.fSignal, 13.0f))
+    {
+      S.nThirdSell++;
+    }
+
+    int nCtx = BuildTradingSignalContextFlags(C);
+    if ((nCtx & CZSC_SIGNAL_CTX_STRONG_QUALITY) != 0)
+    {
+      S.nStrong++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_ABC_STRUCTURE) != 0)
+    {
+      S.nAbc++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_MACD_ZERO_PULL) != 0)
+    {
+      S.nZeroPull++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_MACD_LINE_WEAK) != 0)
+    {
+      S.nLineWeak++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_STANDARD_DIV) != 0)
+    {
+      S.nStandard++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_SMALL_TURN) != 0)
+    {
+      S.nSmallTurn++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_OVERLAPPED) != 0)
+    {
+      S.nOverlapped++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_CENTER_BREAKOUT) != 0)
+    {
+      S.nBreakout++;
+    }
+  }
+
+  return S;
+}
+
+static bool CheckSseCandidateSummary(const SseCandidateSummary &S,
+                                     int nFirstBuy,
+                                     int nSecondBuy,
+                                     int nThirdBuy,
+                                     int nFirstSell,
+                                     int nSecondSell,
+                                     int nThirdSell,
+                                     int nStrong,
+                                     int nAbc,
+                                     int nZeroPull,
+                                     int nLineWeak,
+                                     int nStandard,
+                                     int nSmallTurn,
+                                     int nOverlapped,
+                                     int nBreakout)
+{
+  return (S.nFirstBuy == nFirstBuy) &&
+         (S.nSecondBuy == nSecondBuy) &&
+         (S.nThirdBuy == nThirdBuy) &&
+         (S.nFirstSell == nFirstSell) &&
+         (S.nSecondSell == nSecondSell) &&
+         (S.nThirdSell == nThirdSell) &&
+         (S.nStrong == nStrong) &&
+         (S.nAbc == nAbc) &&
+         (S.nZeroPull == nZeroPull) &&
+         (S.nLineWeak == nLineWeak) &&
+         (S.nStandard == nStandard) &&
+         (S.nSmallTurn == nSmallTurn) &&
+         (S.nOverlapped == nOverlapped) &&
+         (S.nBreakout == nBreakout);
+}
+
 static bool TestRealSseDiagnosticCounts()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
@@ -386,13 +520,20 @@ static bool TestRealSseDiagnosticCounts()
   CzscAnalyzer SegmentAn;
   BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
 
+  SseCandidateSummary StrokeSummary = CountSseCandidateSummary(StrokeAn.Candidates);
+  SseCandidateSummary SegmentSummary = CountSseCandidateSummary(SegmentAn.Candidates);
+
   return (Strokes.size() == 157) &&
          (StrokeAn.Points.size() == 158) &&
          (SegmentAn.Points.size() == 31) &&
          (StrokeAn.Centers.size() == 18) &&
          (SegmentAn.Centers.size() == 4) &&
          (StrokeAn.Candidates.size() == 17) &&
-         (SegmentAn.Candidates.size() == 4);
+         (SegmentAn.Candidates.size() == 4) &&
+         CheckSseCandidateSummary(StrokeSummary, 0, 0, 9, 0, 0, 8,
+                                  5, 0, 0, 3, 0, 0, 0, 17) &&
+         CheckSseCandidateSummary(SegmentSummary, 0, 0, 3, 0, 0, 1,
+                                  1, 0, 0, 1, 0, 0, 0, 4);
 }
 
 static bool TestRealSsePricePointsStayOnStrictStrokeEndpoints()
