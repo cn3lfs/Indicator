@@ -2393,6 +2393,64 @@ void ApplyTradingSignalBreakoutId(int nCount,
   }
 }
 
+static void ApplyTradingSignalBreakoutPointId(int nCount,
+                                              float *pOut,
+                                              const std::vector<TradingSignalCandidate> &Candidates,
+                                              const std::vector<CenterBreakout> &Breakouts,
+                                              bool bLeavePoint)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      int nPoint = -1;
+      if ((C.nBreakout >= 0) && ((std::size_t)C.nBreakout < Breakouts.size()))
+      {
+        const CenterBreakout &B = Breakouts[(std::size_t)C.nBreakout];
+        nPoint = bLeavePoint ? B.nLeavePoint : B.nRetestPoint;
+      }
+      pOut[C.nIndex] = (nPoint >= 0) ? (float)(nPoint + 1) : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 按优先级取胜，导出胜出信号关联突破的离开端点一基编号；0 表示无关联突破。
+void ApplyTradingSignalBreakoutLeavePointId(int nCount,
+                                            float *pOut,
+                                            const std::vector<TradingSignalCandidate> &Candidates,
+                                            const std::vector<CenterBreakout> &Breakouts)
+{
+  ApplyTradingSignalBreakoutPointId(nCount, pOut, Candidates, Breakouts, true);
+}
+
+// 按优先级取胜，导出胜出信号关联突破的回试端点一基编号；0 表示无关联突破。
+void ApplyTradingSignalBreakoutRetestPointId(int nCount,
+                                             float *pOut,
+                                             const std::vector<TradingSignalCandidate> &Candidates,
+                                             const std::vector<CenterBreakout> &Breakouts)
+{
+  ApplyTradingSignalBreakoutPointId(nCount, pOut, Candidates, Breakouts, false);
+}
+
 // 按优先级取胜，导出胜出信号对应端点的一基编号；0 表示无信号或未知端点。
 void ApplyTradingSignalPointId(int nCount,
                                float *pOut,
@@ -4703,6 +4761,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 30: ApplyTradingSignalSpaceRatio(nCount, pOut, An.Candidates); break; // C/A段价差力度比
     case 31: ApplyTradingSignalSpeedRatio(nCount, pOut, An.Candidates); break; // C/A段平均力度比
     case 32: ApplyTradingSignalDivergenceFlags(nCount, pOut, An.Candidates); break; // 背驰要素位图
+    case 33: ApplyTradingSignalBreakoutLeavePointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 突破离开端点编号
+    case 34: ApplyTradingSignalBreakoutRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 突破回试端点编号
     default: ClearOutput(nCount, pOut); break;
   }
 }

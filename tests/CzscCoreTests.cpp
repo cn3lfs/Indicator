@@ -5022,6 +5022,45 @@ static bool TestApplyTradingBreakoutIdMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingBreakoutPointIdsMapCodes()
+{
+  const int nCount = 6;
+  float pLeave[nCount];
+  float pRetest[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pLeave[i] = -1;
+    pRetest[i] = -1;
+  }
+
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 4));
+  Breakouts.back().nLeavePoint = 3;
+  Breakouts.push_back(MakeTestBreakout(-1, 8));
+  Breakouts.back().nLeavePoint = 7;
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nBreakout = 0;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nBreakout = 1;
+  TradingSignalCandidate Missing = MakeTestCandidate(4, 1.0f, 30);
+  Missing.nBreakout = 8;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Missing);
+
+  ApplyTradingSignalBreakoutLeavePointId(nCount, pLeave, Candidates, Breakouts);
+  ApplyTradingSignalBreakoutRetestPointId(nCount, pRetest, Candidates, Breakouts);
+
+  return NearlyEqual(pLeave[2], 8.0f) &&
+         NearlyEqual(pRetest[2], 9.0f) &&
+         NearlyEqual(pLeave[4], 0.0f) &&
+         NearlyEqual(pRetest[4], 0.0f) &&
+         NearlyEqual(pLeave[0], 0.0f) &&
+         NearlyEqual(pRetest[0], 0.0f);
+}
+
 static bool TestApplyTradingPointIdMapsCodes()
 {
   const int nCount = 5;
@@ -6581,7 +6620,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6657,6 +6696,8 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 30: ApplyTradingSignalSpaceRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 31: ApplyTradingSignalSpeedRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 32: ApplyTradingSignalDivergenceFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 33: ApplyTradingSignalBreakoutLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 34: ApplyTradingSignalBreakoutRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
       default: return false;
     }
 
@@ -7514,6 +7555,10 @@ int main()
   if (!TestApplyTradingBreakoutIdMapsCodes())
   {
     return 148;
+  }
+  if (!TestApplyTradingBreakoutPointIdsMapCodes())
+  {
+    return 189;
   }
   if (!TestApplyTradingPointIdMapsCodes())
   {

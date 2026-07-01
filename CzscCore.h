@@ -400,6 +400,14 @@ void ApplyTradingSignalCenterId(int nCount,
 void ApplyTradingSignalBreakoutId(int nCount,
                                   float *pOut,
                                   const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalBreakoutLeavePointId(int nCount,
+                                            float *pOut,
+                                            const std::vector<TradingSignalCandidate> &Candidates,
+                                            const std::vector<CenterBreakout> &Breakouts);
+void ApplyTradingSignalBreakoutRetestPointId(int nCount,
+                                             float *pOut,
+                                             const std::vector<TradingSignalCandidate> &Candidates,
+                                             const std::vector<CenterBreakout> &Breakouts);
 void ApplyTradingSignalPointId(int nCount,
                                float *pOut,
                                const std::vector<TradingSignalCandidate> &Candidates);
@@ -478,6 +486,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 30 为胜出买卖点 C/A 段价差力度比(百分比)，0=无有效 A 段价差，不占用旧函数编号。
 // Func30 输出 31 为胜出买卖点 C/A 段平均力度比(百分比)，0=无有效 A 段速度，不占用旧函数编号。
 // Func30 输出 32 为胜出买卖点背驰要素位图，位值见 CzscDivergenceFlag，不占用旧函数编号。
+// Func30 输出 33/34 为胜出买卖点关联突破的离开/回试端点一基编号，0=无关联突破。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
