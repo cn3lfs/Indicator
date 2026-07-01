@@ -295,7 +295,7 @@ static bool TestRealSseStrokesWellFormed()
 
   if (Strokes.size() < 10)
   {
-    return false;  // 500 根日线应有足够多笔
+    return false;  // 随仓日线样本应有足够多笔
   }
   for (std::size_t i = 0; i < Strokes.size(); i++)
   {
@@ -341,7 +341,7 @@ static bool TestRealSseSegmentsSubsetOfStrokes()
 
   if (SegPts.size() < 2)
   {
-    return false;  // 500 根日线应有若干线段
+    return false;  // 随仓日线样本应有若干线段
   }
   if (SegPts.size() > StrokePts.size())
   {

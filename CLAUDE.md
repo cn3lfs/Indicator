@@ -132,7 +132,7 @@ cd D:/github/czsc-tdx
 信号编码约定：买 1/2/3、卖 11/12/13；构造测试中枢用 `MakeTestCenter`（4参，自动令 GG=fHigh、
 DD=fLow）或 `MakeTestCenterFull`（6参，可指定 GG/DD）。
 
-**真实数据测试**：`tests/SseIndexDaily.h` 是从通达信拉取的上证指数(000001.SH) 500 根日线(前复权)，
+**真实数据测试**：`tests/SseIndexDaily.h` 是从通达信拉取的上证指数(000001.SH) 日线样本(前复权)，
 笔/线段类测试优先用它验证**结构性质**（顶底交替、方向、严格笔合并跨度≥4、线段是笔端点子集且更高级别），
 而非脆弱的小手工 fixture（手工 fixture 易因笔/线段判据调整而需重算）。刷新数据见 `scripts/fetch-sse-data.py`
 （须在通达信 PYPlugins 环境运行）。新增笔/线段算法改动后，跑诊断看真实数据上笔数/线段数是否合理。
