@@ -13,6 +13,24 @@ FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\
 CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
 
 EXPECTED_FORMULA_SNIPPETS = {
+  "chan-first-buy-abc.txt": [
+    "ABX:=TDXDLL1(30,H,L,160);",
+    "BARSLAST(ABX=1)<10;",
+  ],
+  "chan-first-buy-context.txt": [
+    "CTX:=TDXDLL1(30,H,L,210);",
+    "QST:=MOD(INTPART(CTX/1),2)=1;",
+    "ABC:=MOD(INTPART(CTX/2),2)=1;",
+    "MZP:=MOD(INTPART(CTX/4),2)=1;",
+    "MLW:=MOD(INTPART(CTX/8),2)=1;",
+    "STD:=MOD(INTPART(CTX/32),2)=1;",
+    "BARSLAST(BSP=1 AND QST AND ABC AND MZP AND MLW AND STD)<10;",
+  ],
+  "chan-first-buy-original.txt": [
+    "POS:=TDXDLL1(30,H,L,220);",
+    "MOV:=TDXDLL1(30,H,L,230);",
+    "BARSLAST(BSP=1 AND POS=-1 AND MOV=-1)<10;",
+  ],
   "chan-overlap-buy.txt": [
     "CTX:=TDXDLL1(30,H,L,210);",
     "OVL:=MOD(INTPART(CTX/2048),2)=1;",
@@ -152,6 +170,24 @@ def self_test() -> int:
     return 1
 
   snippet_errors = validate_formula_snippets({
+    "chan-first-buy-abc.txt": (
+      "ABX:=TDXDLL1(30,H,L,160);\n"
+      "BARSLAST(ABX=1)<10;\n"
+    ),
+    "chan-first-buy-context.txt": (
+      "CTX:=TDXDLL1(30,H,L,210);\n"
+      "QST:=MOD(INTPART(CTX/1),2)=1;\n"
+      "ABC:=MOD(INTPART(CTX/2),2)=1;\n"
+      "MZP:=MOD(INTPART(CTX/4),2)=1;\n"
+      "MLW:=MOD(INTPART(CTX/8),2)=1;\n"
+      "STD:=MOD(INTPART(CTX/32),2)=1;\n"
+      "BARSLAST(BSP=1 AND QST AND ABC AND MZP AND MLW AND STD)<10;\n"
+    ),
+    "chan-first-buy-original.txt": (
+      "POS:=TDXDLL1(30,H,L,220);\n"
+      "MOV:=TDXDLL1(30,H,L,230);\n"
+      "BARSLAST(BSP=1 AND POS=-1 AND MOV=-1)<10;\n"
+    ),
     "chan-overlap-buy.txt": (
       "CTX:=TDXDLL1(30,H,L,210);\n"
       "OVL:=MOD(INTPART(CTX/2048),2)=1;\n"
