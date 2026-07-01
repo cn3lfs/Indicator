@@ -59,6 +59,7 @@ all : $(TARGETS)
 
 mingw32: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX)
+	@$(MAKE) clean
 
 mingw32-test:
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) test
@@ -72,6 +73,7 @@ check-mingw32:
 # 64 位通达信版本：x86_64 工具链，产物 build/CZSC64.dll（指针随架构变 8 字节，pack/cdecl 不变）
 mingw64: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) TARGET1=$(BUILD_DIR)/CZSC64.dll
+	@$(MAKE) clean
 
 mingw64-test:
 	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) test
@@ -111,9 +113,11 @@ sse-result: clean $(SSE_DUMP_TARGET)
 
 mingw32-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build
+	@$(MAKE) clean
 
 mingw64-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) EXEEXT=.exe test-build
+	@$(MAKE) clean
 
 $(TEST_TARGET) : $(TEST_OBJECTS)
 	@echo [LD] $@
