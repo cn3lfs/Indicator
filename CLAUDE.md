@@ -119,10 +119,12 @@ cd D:/github/czsc-tdx
 - **发布产物统一在 `build/`，32/64 双版本并存**：`make mingw32` → `build/CZSC.dll`（PE32，给 32 位通达信）；
   `make mingw64` → `build/CZSC64.dll`（PE32+，给 64 位通达信，`x86_64-w64-mingw32-` 工具链，`TARGET1` 覆盖为
   CZSC64.dll）。两版同源，导出/公式一致，仅指针宽度不同（`pack(1)`+cdecl 随架构自然移植，无需改头）。
-  链接均加 `-static -static-libgcc -static-libstdc++` 使 DLL 自包含（仅依赖 `KERNEL32`/`msvcrt`），
-  免在通达信机器另装 MinGW 运行时。两个 DLL 作为正式包**已纳入 git 跟踪**（覆盖发布即重新构建提交）。
-  打包/校验：`sh scripts/build-mingw32.sh` / `sh scripts/build-mingw64.sh`（均先 `make clean` 再 check→原生测试→
-  Win 测试构建→打 DLL）；`<prefix>objdump -p build/CZSC*.dll | grep "DLL Name"` 应只剩 KERNEL32/msvcrt。
+  链接均加 `-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp` 使 DLL 自包含（仅依赖
+  `KERNEL32`/`msvcrt`）且 PE 时间戳为 0，免在通达信机器另装 MinGW 运行时，并避免无源码变化时 DLL 漂移。
+  两个 DLL 作为正式包**已纳入 git 跟踪**（覆盖发布即重新构建提交）。
+  打包/校验：优先跑 `make release`（顺序执行 32/64 位构建与 `make release-check`）；也可单独跑
+  `sh scripts/build-mingw32.sh` / `sh scripts/build-mingw64.sh`（均先 `make clean` 再 check→原生测试→
+  Win 测试构建→打 DLL）。`make release-check` 会确认 PE32/PE32+、导入 DLL 仅 KERNEL32/msvcrt、PE 时间戳为 0。
 
 ## 测试约定
 
