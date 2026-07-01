@@ -63,6 +63,17 @@ EXPECTED_FORMULA_SNIPPETS = {
     "STD:=TDXDLL1(30,H,L,200);",
     "BARSLAST(STD=1)<10;",
   ],
+  "chan-first-buy-dynamics.txt": [
+    "XC:=TDXDLL1(40,C,V,0);",
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "DVG:=TDXDLL1(30,H,L,320);",
+    "MAR:=TDXDLL1(30,H,L,290);",
+    "SPR:=TDXDLL1(30,H,L,300);",
+    "VPR:=TDXDLL1(30,H,L,310);",
+    "NEX:=MOD(INTPART(DVG/1),2)=1;",
+    "DOK:=MOD(INTPART(DVG/16),2)=1;",
+    "BARSLAST(BSP=1 AND NEX AND DOK AND WSP AND WVP AND WMA AND MAR>0 AND MAR<100 AND SPR>0 AND SPR<100 AND VPR>0 AND VPR<100)<10;",
+  ],
   "chan-small-turn-buy.txt": [
     "XC:=TDXDLL1(40,C,V,0);",
     "STB:=TDXDLL1(30,H,L,140);",
@@ -117,6 +128,17 @@ EXPECTED_FORMULA_SNIPPETS = {
   "chan-first-sell-standard.txt": [
     "STD:=TDXDLL1(30,H,L,200);",
     "BARSLAST(STD=-1)<10;",
+  ],
+  "chan-first-sell-dynamics.txt": [
+    "XC:=TDXDLL1(40,C,V,0);",
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "DVG:=TDXDLL1(30,H,L,320);",
+    "MAR:=TDXDLL1(30,H,L,290);",
+    "SPR:=TDXDLL1(30,H,L,300);",
+    "VPR:=TDXDLL1(30,H,L,310);",
+    "NEX:=MOD(INTPART(DVG/1),2)=1;",
+    "DOK:=MOD(INTPART(DVG/16),2)=1;",
+    "BARSLAST(BSP=11 AND NEX AND DOK AND WSP AND WVP AND WMA AND MAR>0 AND MAR<100 AND SPR>0 AND SPR<100 AND VPR>0 AND VPR<100)<10;",
   ],
   "chan-small-turn-sell.txt": [
     "XC:=TDXDLL1(40,C,V,0);",
@@ -438,6 +460,17 @@ def self_test() -> int:
       "STD:=TDXDLL1(30,H,L,200);\n"
       "BARSLAST(STD=1)<10;\n"
     ),
+    "chan-first-buy-dynamics.txt": (
+      "XC:=TDXDLL1(40,C,V,0);\n"
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "DVG:=TDXDLL1(30,H,L,320);\n"
+      "MAR:=TDXDLL1(30,H,L,290);\n"
+      "SPR:=TDXDLL1(30,H,L,300);\n"
+      "VPR:=TDXDLL1(30,H,L,310);\n"
+      "NEX:=MOD(INTPART(DVG/1),2)=1;\n"
+      "DOK:=MOD(INTPART(DVG/16),2)=1;\n"
+      "BARSLAST(BSP=1 AND NEX AND DOK AND WSP AND WVP AND WMA AND MAR>0 AND MAR<100 AND SPR>0 AND SPR<100 AND VPR>0 AND VPR<100)<10;\n"
+    ),
     "chan-small-turn-buy.txt": (
       "XC:=TDXDLL1(40,C,V,0);\n"
       "STB:=TDXDLL1(30,H,L,140);\n"
@@ -492,6 +525,17 @@ def self_test() -> int:
     "chan-first-sell-standard.txt": (
       "STD:=TDXDLL1(30,H,L,200);\n"
       "BARSLAST(STD=-1)<10;\n"
+    ),
+    "chan-first-sell-dynamics.txt": (
+      "XC:=TDXDLL1(40,C,V,0);\n"
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "DVG:=TDXDLL1(30,H,L,320);\n"
+      "MAR:=TDXDLL1(30,H,L,290);\n"
+      "SPR:=TDXDLL1(30,H,L,300);\n"
+      "VPR:=TDXDLL1(30,H,L,310);\n"
+      "NEX:=MOD(INTPART(DVG/1),2)=1;\n"
+      "DOK:=MOD(INTPART(DVG/16),2)=1;\n"
+      "BARSLAST(BSP=11 AND NEX AND DOK AND WSP AND WVP AND WMA AND MAR>0 AND MAR<100 AND SPR>0 AND SPR<100 AND VPR>0 AND VPR<100)<10;\n"
     ),
     "chan-small-turn-sell.txt": (
       "XC:=TDXDLL1(40,C,V,0);\n"
