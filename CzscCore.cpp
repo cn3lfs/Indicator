@@ -2428,6 +2428,16 @@ void ApplyTradingSignalTrendId(int nCount,
   }
 }
 
+static bool HasMatchingSmallTurn(const TradingSignalCandidate &C)
+{
+  if (!IsThirdSignal(C.fSignal))
+  {
+    return false;
+  }
+  int nSide = GetTradingSignalSide(C.fSignal);
+  return (nSide != 0) && (C.nSmallTurn == nSide);
+}
+
 // 第44课小转大必要条件：小级别底/顶背驰后，最后中枢出现三买/三卖才可能引发大级别转折。
 // 输出 1=底背驰后的三买必要条件成立，-1=顶背驰后的三卖必要条件成立，0=无。
 void ApplyTradingSignalSmallTurn(int nCount,
@@ -2456,7 +2466,7 @@ void ApplyTradingSignalSmallTurn(int nCount,
     }
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
-      pOut[C.nIndex] = IsThirdSignal(C.fSignal) ? (float)C.nSmallTurn : 0.0f;
+      pOut[C.nIndex] = HasMatchingSmallTurn(C) ? (float)C.nSmallTurn : 0.0f;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -2728,7 +2738,7 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
   }
-  if (IsThirdSignal(C.fSignal) && (C.nSmallTurn != 0))
+  if (HasMatchingSmallTurn(C))
   {
     nFlags |= CZSC_SIGNAL_CTX_SMALL_TURN;
   }

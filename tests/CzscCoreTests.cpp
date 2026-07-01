@@ -4457,7 +4457,7 @@ static bool TestApplyTradingTrendIdMapsCodes()
 
 static bool TestApplyTradingSmallTurnMapsCodes()
 {
-  const int nCount = 8;
+  const int nCount = 12;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4470,17 +4470,24 @@ static bool TestApplyTradingSmallTurnMapsCodes()
   TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
   Sell.nSmallTurn = -1;
   TradingSignalCandidate None = MakeTestCandidate(5, 3.0f, 20);
-  TradingSignalCandidate NonThird = MakeTestCandidate(7, 1.0f, 20);
+  TradingSignalCandidate WrongBuy = MakeTestCandidate(7, 3.0f, 20);
+  WrongBuy.nSmallTurn = -1;
+  TradingSignalCandidate WrongSell = MakeTestCandidate(9, 13.0f, 20);
+  WrongSell.nSmallTurn = 1;
+  TradingSignalCandidate NonThird = MakeTestCandidate(11, 1.0f, 20);
   NonThird.nSmallTurn = 1;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(None);
+  Candidates.push_back(WrongBuy);
+  Candidates.push_back(WrongSell);
   Candidates.push_back(NonThird);
 
   ApplyTradingSignalSmallTurn(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
          NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) && NearlyEqual(pOut[11], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
@@ -4718,7 +4725,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
 
 static bool TestApplyTradingContextFlagsMapsCodes()
 {
-  const int nCount = 10;
+  const int nCount = 12;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4749,11 +4756,14 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   WrongDirection.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   TradingSignalCandidate Invalid = MakeTestCandidate(9, 99.0f, 30);
   MakeStandardDivergence(&Invalid, 1);
+  TradingSignalCandidate WrongSmallTurn = MakeTestCandidate(11, 3.0f, 20);
+  WrongSmallTurn.nSmallTurn = -1;
   Candidates.push_back(Buy);
   Candidates.push_back(Newborn);
   Candidates.push_back(Extended);
   Candidates.push_back(WrongDirection);
   Candidates.push_back(Invalid);
+  Candidates.push_back(WrongSmallTurn);
 
   ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
 
@@ -4777,6 +4787,7 @@ static bool TestApplyTradingContextFlagsMapsCodes()
          NearlyEqual(pOut[5], fExtendedExpected) &&
          NearlyEqual(pOut[7], fWrongDirectionExpected) &&
          NearlyEqual(pOut[9], 0.0f) &&
+         NearlyEqual(pOut[11], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
