@@ -66,6 +66,9 @@ def validate_readme_func30_docs(readme_text: str, outputs):
     marker = f"30 号输出 {n_output}"
     if marker not in readme_text:
       errors.append(f"README.md missing Func30 output doc: {marker}")
+    mode_ref = f"TDXDLL1(30,H,L,{n_output * 10})"
+    if mode_ref not in readme_text:
+      errors.append(f"README.md missing Func30 mode example: {mode_ref}")
   return errors
 
 
@@ -112,8 +115,15 @@ def self_test() -> int:
       print(f"self-test failed: mode validation {actual!r} != {expected!r}", file=sys.stderr)
       return 1
 
-  doc_errors = validate_readme_func30_docs("30 号输出 14\n30 号输出 16\n", {0, 13, 14, 15, 16})
-  if doc_errors != ["README.md missing Func30 output doc: 30 号输出 15"]:
+  doc_errors = validate_readme_func30_docs(
+    "30 号输出 14 `TDXDLL1(30,H,L,140)`\n30 号输出 16\n",
+    {0, 13, 14, 15, 16})
+  expected_doc_errors = [
+    "README.md missing Func30 output doc: 30 号输出 15",
+    "README.md missing Func30 mode example: TDXDLL1(30,H,L,150)",
+    "README.md missing Func30 mode example: TDXDLL1(30,H,L,160)",
+  ]
+  if doc_errors != expected_doc_errors:
     print(f"self-test failed: README output docs {doc_errors!r}", file=sys.stderr)
     return 1
   return 0
