@@ -1805,6 +1805,61 @@ static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
          NearlyEqual(pOut[40], 2.0f);
 }
 
+static bool TestTradingCandidatesMarkSecondSellInsideCenter()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+  pIn[36] = -1;
+  pHigh[36] = pLow[36] = 11;
+  pIn[40] = 1;
+  pHigh[40] = pLow[40] = 12.9f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 12.0f);
+  ApplyTradingSignalCandidates(nCount, pOut, Candidates);
+
+  return (pSecond != 0) &&
+         (pSecond->nCenterPosition == CZSC_CENTER_POSITION_INSIDE) &&
+         NearlyEqual(pOut[40], 12.0f);
+}
+
 // 真实上证日线：Func9 输出有效的线段端点信号（每个非零值为 ±1、顶底交替、至少两个端点）
 static bool TestFunc9WritesLineSegmentSignal()
 {
@@ -4920,6 +4975,10 @@ int main()
   if (!TestTradingCandidatesMarkSecondBuyInsideCenter())
   {
     return 34;
+  }
+  if (!TestTradingCandidatesMarkSecondSellInsideCenter())
+  {
+    return 152;
   }
   if (!TestFunc9WritesLineSegmentSignal())
   {
