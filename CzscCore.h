@@ -37,7 +37,7 @@ enum CzscMovementType
   CZSC_MOVEMENT_UP            = 1,
 };
 
-// 买卖点信号质量（Func10 输出）：观察、确认、标准背驰（最强）
+// 买卖点信号质量（Func10 输出）：观察、确认、强质量（动力学确认）
 enum CzscSignalQuality
 {
   CZSC_SIGNAL_QUALITY_WATCH     = 0,

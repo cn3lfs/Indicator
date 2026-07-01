@@ -3466,7 +3466,7 @@ static bool TestFirstCandidateMacdUpgradesQuality()
     return false;
   }
 
-  // 注入末段 MACD 面积小于前段：第24课标准背驰，才生成强一类信号。
+  // 注入末段 MACD 面积小于前段：动力学走弱后，才生成强一类信号。
   Points[2].fEnergy = 100;
   Points[3].fEnergy = 70;
   Points[4].fEnergy = 50;

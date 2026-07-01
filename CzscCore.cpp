@@ -1439,7 +1439,7 @@ static int ClassifyTradingSignalQuality(int nSource, const DivergenceResult &Div
 {
   if (nSource == SIGNAL_SOURCE_FIRST)
   {
-    // 一类买卖点：价差与速度同时走弱，或 MACD 柱面积走弱（第24课标准背驰），即为强信号。
+    // 一类买卖点：价差与速度同时走弱，或 MACD 柱面积走弱，即为强质量信号。
     bool bStrong = Divergence.bDivergence &&
                    ((Divergence.bWeakSpace && Divergence.bWeakSpeed) || Divergence.bWeakMacd);
     return bStrong ? CZSC_SIGNAL_QUALITY_STRONG : CZSC_SIGNAL_QUALITY_CONFIRMED;
@@ -2032,7 +2032,7 @@ void ApplyTradingSignalCandidates(int nCount,
 }
 
 // 与 ApplyTradingSignalCandidates 同样按优先级取胜，但导出胜出信号的质量等级
-// （0=观察，1=确认，2=标准背驰）。两者并用即可在图上区分 MACD 背驰确认的强信号。
+// （0=观察，1=确认，2=强质量）。两者并用即可在图上区分 MACD 动力学确认的强信号。
 void ApplyTradingSignalQuality(int nCount,
                                float *pOut,
                                const std::vector<TradingSignalCandidate> &Candidates)
@@ -3866,7 +3866,7 @@ void Func9(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
 }
 
 //=============================================================================
-// 输出函数10号：三类买卖点信号质量（0=观察，1=确认，2=标准背驰）
+// 输出函数10号：三类买卖点信号质量（0=观察，1=确认，2=强质量）
 //=============================================================================
 
 void Func10(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow)
