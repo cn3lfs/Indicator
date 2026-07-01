@@ -343,6 +343,10 @@ def main() -> int:
     "DRAWNUMBER(BSP<>0 AND BKO>0,H*1.015,BKO)",
     "DRAWNUMBER(BSP<>0 AND PID>0,L*0.985,PID)",
     "DRAWNUMBER(BSP<>0 AND TID>0,H*1.020,TID)",
+    "DRAWLINE(BSG=1,L,BSG=2,L,0),COLORBLUE",
+    "DRAWLINE(BSG=-1,H,BSG=-2,H,0),COLORBLUE",
+    "DRAWLINE(NST=1,L,NST=2,L,0),COLORCYAN",
+    "DRAWLINE(NST=-1,H,NST=-2,H,0),COLORCYAN",
   ]
   for comment in expected_debug_comments:
     if comment not in debug_text:
