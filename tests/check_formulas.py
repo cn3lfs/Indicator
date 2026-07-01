@@ -10,6 +10,8 @@ FUNC30_REF = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*([0-9]+)\s*\)"
 FUNC30_CALL = re.compile(r"TDXDLL1\s*\(\s*30\s*,")
 FUNC40_CALL = re.compile(r"TDXDLL1\s*\(\s*40\s*,\s*C\s*,\s*V\s*,\s*0\s*\)")
 FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\n//=+\n// 输出函数40号", re.S)
+TDXDLL_REF = re.compile(r"TDXDLL1\s*\(\s*([0-9]+)\s*,")
+REGISTERED_FUNC_REF = re.compile(r"\{\s*([0-9]+)\s*,\s*&Func[0-9]+\s*\}")
 CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
 
 EXPECTED_FORMULA_SNIPPETS = {
@@ -84,6 +86,18 @@ def read_func30_outputs():
   return outputs, validate_func30_outputs(outputs)
 
 
+def parse_registered_tdx_funcs(text: str):
+  funcs = {int(item) for item in REGISTERED_FUNC_REF.findall(text)}
+  if not funcs:
+    return funcs, ["unable to parse registered TDX functions in Main.cpp"]
+  return funcs, []
+
+
+def read_registered_tdx_funcs():
+  text = (ROOT / "Main.cpp").read_text(encoding="utf-8")
+  return parse_registered_tdx_funcs(text)
+
+
 def validate_func30_mode(n_mode: int, outputs):
   n_output = (n_mode % 1000) // 10
   n_config = n_mode // 1000
@@ -147,6 +161,15 @@ def self_test() -> int:
   outputs, errors = parse_func30_outputs("void Func29() {}")
   if not errors:
     print("self-test failed: detect missing Func30", file=sys.stderr)
+    return 1
+
+  funcs, errors = parse_registered_tdx_funcs("{1, &Func1},\n{30, &Func30},\n{40, &Func40},\n")
+  if errors or funcs != {1, 30, 40}:
+    print(f"self-test failed: parse registered functions {funcs!r} {errors!r}", file=sys.stderr)
+    return 1
+  funcs, errors = parse_registered_tdx_funcs("static PluginTCalcFuncInfo Info[] = {{0, NULL}};")
+  if not errors:
+    print("self-test failed: detect missing registered functions", file=sys.stderr)
     return 1
 
   outputs = {0, 1}
@@ -224,6 +247,8 @@ def main() -> int:
   formula_snippet_errors = []
   func30_errors = []
   func30_outputs, func30_errors = read_func30_outputs()
+  registered_funcs, registered_func_errors = read_registered_tdx_funcs()
+  tdx_func_errors = []
   readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
   func30_doc_errors = validate_readme_func30_docs(readme_text, func30_outputs)
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
@@ -243,6 +268,10 @@ def main() -> int:
 
   for doc in DOCS + formula_files:
     text = doc.read_text(encoding="utf-8")
+    for match in TDXDLL_REF.finditer(text):
+      n_func = int(match.group(1))
+      if n_func not in registered_funcs:
+        tdx_func_errors.append(f"{doc.relative_to(ROOT)} -> {n_func}")
     for match in FUNC30_REF.finditer(text):
       n_mode = int(match.group(1))
       error = validate_func30_mode(n_mode, func30_outputs)
@@ -295,7 +324,8 @@ def main() -> int:
       stale_comments.append(f"chan-debug.txt missing debug line: {line}")
 
   if (missing or empty or undocumented or invalid_modes or stale_comments or
-      aux_order_errors or formula_snippet_errors or func30_errors or func30_doc_errors):
+      aux_order_errors or formula_snippet_errors or func30_errors or
+      func30_doc_errors or registered_func_errors or tdx_func_errors):
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -314,6 +344,10 @@ def main() -> int:
       print(f"Func30 parser error: {item}", file=sys.stderr)
     for item in func30_doc_errors:
       print(f"Func30 documentation error: {item}", file=sys.stderr)
+    for item in registered_func_errors:
+      print(f"TDX registry parser error: {item}", file=sys.stderr)
+    for item in tdx_func_errors:
+      print(f"unknown TDX function reference: {item}", file=sys.stderr)
     return 1
   return 0
 
