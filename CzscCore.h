@@ -297,6 +297,18 @@ struct TradingSignalCandidate
   DivergenceResult Divergence;
 };
 
+// 区间套背驰上下文：高级别背驰段内收缩出的低级别一类背驰段
+struct NestedDivergenceContext
+{
+  int  nIndex;                 // 低级别背驰段终点所在原始 K 线下标
+  int  nLevel;                 // 1=一层区间套，2=低级别小转大必要条件已成立
+  int  nSourceDivergence;      // 源高级别背驰段候选下标（无则 -1）
+  int  nLowStartPoint;         // 低级别背驰段起点端点下标（无则 -1）
+  int  nLowEndPoint;           // 低级别背驰段终点端点下标（无则 -1）
+  int  nDirection;             // 买=1，卖=-1
+  bool bSmallTurnSatisfied;    // 是否满足第44课小转大必要条件
+};
+
 // 中心化分析器：对一组输入一次算成全部中间与最终结果，各 Func 只做投影，消除重复重算。
 // 两个 Build 入口对应两类输入家族（信号 pIn / 原始 H/L+config），Points 就绪后共用下游。
 struct CzscAnalyzer
@@ -515,6 +527,23 @@ void WriteNestedDivergenceSignal(int nCount,
                                  const std::vector<TradingSignalCandidate> &HighCandidates,
                                  const std::vector<SegmentPoint> &LowPoints,
                                  const std::vector<TradingSignalCandidate> &LowCandidates);
+std::vector<NestedDivergenceContext> BuildNestedDivergenceContexts(
+  const std::vector<SegmentPoint> &HighPoints,
+  const std::vector<TradingSignalCandidate> &HighCandidates,
+  const std::vector<SegmentPoint> &LowPoints,
+  const std::vector<TradingSignalCandidate> &LowCandidates);
+void ApplyNestedDivergenceLevel(int nCount,
+                                float *pOut,
+                                const std::vector<NestedDivergenceContext> &Contexts);
+void ApplyNestedDivergenceSourceId(int nCount,
+                                   float *pOut,
+                                   const std::vector<NestedDivergenceContext> &Contexts);
+void ApplyNestedDivergenceStartPointId(int nCount,
+                                       float *pOut,
+                                       const std::vector<NestedDivergenceContext> &Contexts);
+void ApplyNestedDivergenceEndPointId(int nCount,
+                                     float *pOut,
+                                     const std::vector<NestedDivergenceContext> &Contexts);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 void WriteCenterLifecycleSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
@@ -559,6 +588,9 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 45/46 为胜出买卖点背驰 C 段起点/终点一基编号，0=无 C 段端点。
 // Func30 输出 47 为胜出买卖点所属中枢生命周期，0未知/1延伸/2扩展/3上涨新生/-3下跌新生。
 // Func30 输出 48 为相邻中枢生命周期关系，在后中枢起点标记，编码同输出47。
+// Func30 输出 49 为区间套层级，1=一层区间套，2=低级别小转大必要条件成立。
+// Func30 输出 50 为区间套源高级别背驰段一基编号，0=无。
+// Func30 输出 51/52 为区间套低级别背驰段起点/终点端点一基编号，0=无。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

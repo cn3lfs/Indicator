@@ -4987,24 +4987,57 @@ static bool GetDivergenceSegmentBars(const std::vector<SegmentPoint> &Points,
   return true;
 }
 
-// 第27/61课区间套：在高级别背驰段中继续找低级别一类背驰段。输出编码沿用背驰段：
-// 买 起点1/终点2，卖 起点-1/终点-2。该函数只做几何包含标记，不改变买卖点判定。
-void WriteNestedDivergenceSignal(int nCount,
-                                 float *pOut,
-                                 const std::vector<SegmentPoint> &HighPoints,
-                                 const std::vector<TradingSignalCandidate> &HighCandidates,
-                                 const std::vector<SegmentPoint> &LowPoints,
-                                 const std::vector<TradingSignalCandidate> &LowCandidates)
+static bool IsTrendDivergenceFirstCandidate(const TradingSignalCandidate &C)
 {
-  if (!HasOutput(nCount, pOut))
+  return (C.nSource == SIGNAL_SOURCE_FIRST) &&
+         IsFirstSignal(C.fSignal) &&
+         C.Divergence.bDivergence &&
+         C.Divergence.bNewExtreme;
+}
+
+static bool HasNestedSmallTurnConfirmation(const std::vector<TradingSignalCandidate> &Candidates,
+                                           const TradingSignalCandidate &Low,
+                                           int nHighStart,
+                                           int nHighEnd)
+{
+  int nSide = GetTradingSignalSide(Low.fSignal);
+  if ((nSide == 0) || (Low.nPoint < 0))
   {
-    return;
+    return false;
   }
 
-  ClearOutput(nCount, pOut);
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasMatchingSmallTurn(C) ||
+        (C.nSmallTurnBasePoint != Low.nPoint) ||
+        (GetTradingSignalSide(C.fSignal) != nSide) ||
+        (C.nIndex < nHighStart) ||
+        (C.nIndex > nHighEnd))
+    {
+      continue;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+std::vector<NestedDivergenceContext> BuildNestedDivergenceContexts(
+  const std::vector<SegmentPoint> &HighPoints,
+  const std::vector<TradingSignalCandidate> &HighCandidates,
+  const std::vector<SegmentPoint> &LowPoints,
+  const std::vector<TradingSignalCandidate> &LowCandidates)
+{
+  std::vector<NestedDivergenceContext> Contexts;
   for (std::size_t i = 0; i < HighCandidates.size(); i++)
   {
     const TradingSignalCandidate &High = HighCandidates[i];
+    if (!IsTrendDivergenceFirstCandidate(High))
+    {
+      continue;
+    }
+
     int nHighStart = 0;
     int nHighEnd = 0;
     if (!GetDivergenceSegmentBars(HighPoints, High, &nHighStart, &nHighEnd))
@@ -5015,7 +5048,7 @@ void WriteNestedDivergenceSignal(int nCount,
     for (std::size_t j = 0; j < LowCandidates.size(); j++)
     {
       const TradingSignalCandidate &Low = LowCandidates[j];
-      if (Low.fSignal != High.fSignal)
+      if ((Low.fSignal != High.fSignal) || !IsTrendDivergenceFirstCandidate(Low))
       {
         continue;
       }
@@ -5035,17 +5068,143 @@ void WriteNestedDivergenceSignal(int nCount,
         continue;
       }
 
-      int nSign = (Low.fSignal == SIGNAL_FIRST_BUY) ? 1 : -1;
-      if ((nLowStart >= 0) && (nLowStart < nCount))
+      NestedDivergenceContext Ctx;
+      Ctx.nIndex = Low.nIndex;
+      Ctx.nLevel = 1;
+      Ctx.nSourceDivergence = (int)i;
+      Ctx.nLowStartPoint = Low.nPoint - 1;
+      Ctx.nLowEndPoint = Low.nPoint;
+      Ctx.nDirection = GetTradingSignalSide(Low.fSignal);
+      Ctx.bSmallTurnSatisfied =
+        HasNestedSmallTurnConfirmation(LowCandidates, Low, nHighStart, nHighEnd);
+      if (Ctx.bSmallTurnSatisfied)
       {
-        pOut[nLowStart] = (float)(nSign * 1);
+        Ctx.nLevel = 2;
       }
-      if ((nLowEnd >= 0) && (nLowEnd < nCount))
-      {
-        pOut[nLowEnd] = (float)(nSign * 2);
-      }
+      Contexts.push_back(Ctx);
     }
   }
+
+  return Contexts;
+}
+
+// 第27/61课区间套：在高级别背驰段中继续找低级别一类背驰段。输出编码沿用背驰段：
+// 买 起点1/终点2，卖 起点-1/终点-2。该函数只做几何包含标记，不改变买卖点判定。
+void WriteNestedDivergenceSignal(int nCount,
+                                 float *pOut,
+                                 const std::vector<SegmentPoint> &HighPoints,
+                                 const std::vector<TradingSignalCandidate> &HighCandidates,
+                                 const std::vector<SegmentPoint> &LowPoints,
+                                 const std::vector<TradingSignalCandidate> &LowCandidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<NestedDivergenceContext> Contexts =
+    BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  for (std::size_t i = 0; i < Contexts.size(); i++)
+  {
+    const NestedDivergenceContext &Ctx = Contexts[i];
+    if ((Ctx.nLowStartPoint < 0) || ((std::size_t)Ctx.nLowStartPoint >= LowPoints.size()) ||
+        (Ctx.nLowEndPoint < 0) || ((std::size_t)Ctx.nLowEndPoint >= LowPoints.size()) ||
+        (Ctx.nDirection == 0))
+    {
+      continue;
+    }
+
+    int nLowStart = LowPoints[(std::size_t)Ctx.nLowStartPoint].nIndex;
+    int nLowEnd = LowPoints[(std::size_t)Ctx.nLowEndPoint].nIndex;
+    int nSign = (Ctx.nDirection > 0) ? 1 : -1;
+    if ((nLowStart >= 0) && (nLowStart < nCount))
+    {
+      pOut[nLowStart] = (float)(nSign * 1);
+    }
+    if ((nLowEnd >= 0) && (nLowEnd < nCount))
+    {
+      pOut[nLowEnd] = (float)(nSign * 2);
+    }
+  }
+}
+
+static void ApplyNestedDivergenceContextValue(int nCount,
+                                              float *pOut,
+                                              const std::vector<NestedDivergenceContext> &Contexts,
+                                              int nWhich)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Contexts.size(); i++)
+  {
+    const NestedDivergenceContext &Ctx = Contexts[i];
+    if ((Ctx.nIndex < 0) || (Ctx.nIndex >= nCount) ||
+        (Ctx.nLevel < Priorities[(std::size_t)Ctx.nIndex]))
+    {
+      continue;
+    }
+
+    float fCode = 0.0f;
+    if (nWhich == 0)
+    {
+      fCode = (float)Ctx.nLevel;
+    }
+    else if (nWhich == 1)
+    {
+      fCode = (Ctx.nSourceDivergence >= 0) ? (float)(Ctx.nSourceDivergence + 1) : 0.0f;
+    }
+    else if (nWhich == 2)
+    {
+      fCode = (Ctx.nLowStartPoint >= 0) ? (float)(Ctx.nLowStartPoint + 1) : 0.0f;
+    }
+    else if (nWhich == 3)
+    {
+      fCode = (Ctx.nLowEndPoint >= 0) ? (float)(Ctx.nLowEndPoint + 1) : 0.0f;
+    }
+
+    pOut[Ctx.nIndex] = fCode;
+    Priorities[(std::size_t)Ctx.nIndex] = Ctx.nLevel;
+  }
+}
+
+void ApplyNestedDivergenceLevel(int nCount,
+                                float *pOut,
+                                const std::vector<NestedDivergenceContext> &Contexts)
+{
+  ApplyNestedDivergenceContextValue(nCount, pOut, Contexts, 0);
+}
+
+void ApplyNestedDivergenceSourceId(int nCount,
+                                   float *pOut,
+                                   const std::vector<NestedDivergenceContext> &Contexts)
+{
+  ApplyNestedDivergenceContextValue(nCount, pOut, Contexts, 1);
+}
+
+void ApplyNestedDivergenceStartPointId(int nCount,
+                                       float *pOut,
+                                       const std::vector<NestedDivergenceContext> &Contexts)
+{
+  ApplyNestedDivergenceContextValue(nCount, pOut, Contexts, 2);
+}
+
+void ApplyNestedDivergenceEndPointId(int nCount,
+                                     float *pOut,
+                                     const std::vector<NestedDivergenceContext> &Contexts)
+{
+  ApplyNestedDivergenceContextValue(nCount, pOut, Contexts, 3);
 }
 
 //=============================================================================
@@ -5437,6 +5596,37 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 46: ApplyTradingSignalDivergenceCurrentEndPointId(nCount, pOut, An.Candidates); break; // 背驰C段终点端点编号
     case 47: ApplyTradingSignalCenterLifecycle(nCount, pOut, An.Candidates, An.Centers); break; // 胜出候选所属中枢生命周期
     case 48: WriteCenterLifecycleSignal(nCount, pOut, An.Centers); break; // 相邻中枢生命周期关系
+    case 49:
+    case 50:
+    case 51:
+    case 52:
+    {
+      CzscConfig HighConfig = DefaultConfig();
+      HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+      HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+      const CzscAnalyzer &HighAn = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, HighConfig);
+      const CzscAnalyzer &LowAn = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, DefaultConfig());
+      std::vector<NestedDivergenceContext> Contexts =
+        BuildNestedDivergenceContexts(HighAn.Points, HighAn.Candidates,
+                                      LowAn.Points, LowAn.Candidates);
+      if (nOutput == 49)
+      {
+        ApplyNestedDivergenceLevel(nCount, pOut, Contexts);
+      }
+      else if (nOutput == 50)
+      {
+        ApplyNestedDivergenceSourceId(nCount, pOut, Contexts);
+      }
+      else if (nOutput == 51)
+      {
+        ApplyNestedDivergenceStartPointId(nCount, pOut, Contexts);
+      }
+      else
+      {
+        ApplyNestedDivergenceEndPointId(nCount, pOut, Contexts);
+      }
+      break;
+    }
     default: ClearOutput(nCount, pOut); break;
   }
 }

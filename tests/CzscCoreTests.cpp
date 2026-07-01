@@ -6281,17 +6281,17 @@ static bool TestNestedDivergenceMarksLowerSegmentInsideHigher()
 
   std::vector<TradingSignalCandidate> HighCandidates;
   TradingSignalCandidate High = MakeTestCandidate(50, 1.0f, 30);
-  High.nSource = 1;
   High.nPoint = 1;
+  MakeStandardDivergence(&High, 1);
   HighCandidates.push_back(High);
 
   std::vector<TradingSignalCandidate> LowCandidates;
   TradingSignalCandidate Inside = MakeTestCandidate(32, 1.0f, 30);
-  Inside.nSource = 1;
   Inside.nPoint = 1;
+  MakeStandardDivergence(&Inside, 1);
   TradingSignalCandidate Outside = MakeTestCandidate(58, 1.0f, 30);
-  Outside.nSource = 1;
   Outside.nPoint = 3;
+  MakeStandardDivergence(&Outside, 1);
   LowCandidates.push_back(Inside);
   LowCandidates.push_back(Outside);
 
@@ -6322,14 +6322,14 @@ static bool TestNestedDivergenceMarksSellDirection()
 
   std::vector<TradingSignalCandidate> HighCandidates;
   TradingSignalCandidate High = MakeTestCandidate(50, 11.0f, 30);
-  High.nSource = 1;
   High.nPoint = 1;
+  MakeStandardDivergence(&High, -1);
   HighCandidates.push_back(High);
 
   std::vector<TradingSignalCandidate> LowCandidates;
   TradingSignalCandidate Low = MakeTestCandidate(40, 11.0f, 30);
-  Low.nSource = 1;
   Low.nPoint = 1;
+  MakeStandardDivergence(&Low, -1);
   LowCandidates.push_back(Low);
 
   WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
@@ -6372,6 +6372,106 @@ static bool TestNestedDivergenceRequiresFirstSignalCode()
   return NearlyEqual(pOut[20], 0.0f) &&
          NearlyEqual(pOut[32], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestNestedDivergenceRequiresTrendExtreme()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 1.0f, 30);
+  High.nPoint = 1;
+  MakeStandardDivergence(&High, 1);
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(32, 1.0f, 30);
+  Low.nPoint = 1;
+  MakeStandardDivergence(&Low, 1);
+  Low.Divergence.bNewExtreme = false;
+  LowCandidates.push_back(Low);
+
+  std::vector<NestedDivergenceContext> Contexts =
+    BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+
+  return Contexts.empty() &&
+         NearlyEqual(pOut[20], 0.0f) &&
+         NearlyEqual(pOut[32], 0.0f);
+}
+
+static bool TestNestedDivergenceContextOutputs()
+{
+  const int nCount = 61;
+  float pLevel[nCount];
+  float pSource[nCount];
+  float pStart[nCount];
+  float pEnd[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pLevel[i] = -1;
+    pSource[i] = -1;
+    pStart[i] = -1;
+    pEnd[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 44, 8));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 1.0f, 30);
+  High.nPoint = 1;
+  MakeStandardDivergence(&High, 1);
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(32, 1.0f, 30);
+  Low.nPoint = 1;
+  MakeStandardDivergence(&Low, 1);
+  TradingSignalCandidate Third = MakeTestCandidate(44, 3.0f, 20);
+  Third.nSource = 3;
+  Third.nPoint = 2;
+  Third.nCenter = 0;
+  Third.nBreakout = 0;
+  Third.nSmallTurn = 1;
+  Third.nSmallTurnBasePoint = 1;
+  LowCandidates.push_back(Low);
+  LowCandidates.push_back(Third);
+
+  std::vector<NestedDivergenceContext> Contexts =
+    BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  ApplyNestedDivergenceLevel(nCount, pLevel, Contexts);
+  ApplyNestedDivergenceSourceId(nCount, pSource, Contexts);
+  ApplyNestedDivergenceStartPointId(nCount, pStart, Contexts);
+  ApplyNestedDivergenceEndPointId(nCount, pEnd, Contexts);
+
+  return (Contexts.size() == 1) &&
+         Contexts[0].bSmallTurnSatisfied &&
+         (Contexts[0].nDirection == 1) &&
+         NearlyEqual(pLevel[32], 2.0f) &&
+         NearlyEqual(pSource[32], 1.0f) &&
+         NearlyEqual(pStart[32], 1.0f) &&
+         NearlyEqual(pEnd[32], 2.0f) &&
+         NearlyEqual(pLevel[0], 0.0f);
 }
 
 static bool TestFunc13HandlesEmptyInput()
@@ -7139,7 +7239,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -7231,6 +7331,39 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 46: ApplyTradingSignalDivergenceCurrentEndPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 47: ApplyTradingSignalCenterLifecycle(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Centers); break;
       case 48: WriteCenterLifecycleSignal(SSE_DAILY_COUNT, &Expected[0], An.Centers); break;
+      case 49:
+      case 50:
+      case 51:
+      case 52:
+      {
+        CzscConfig HighConfig = DefaultConfig();
+        HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+        HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+        CzscAnalyzer HighAn;
+        BuildAnalyzerFromPrice(HighAn, SSE_DAILY_COUNT, &High[0], &Low[0], HighConfig);
+        CzscAnalyzer LowAn;
+        BuildAnalyzerFromPrice(LowAn, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
+        std::vector<NestedDivergenceContext> Contexts =
+          BuildNestedDivergenceContexts(HighAn.Points, HighAn.Candidates,
+                                        LowAn.Points, LowAn.Candidates);
+        if (nOutput == 49)
+        {
+          ApplyNestedDivergenceLevel(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 50)
+        {
+          ApplyNestedDivergenceSourceId(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 51)
+        {
+          ApplyNestedDivergenceStartPointId(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else
+        {
+          ApplyNestedDivergenceEndPointId(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        break;
+      }
       default: return false;
     }
 
@@ -8275,6 +8408,14 @@ int main()
   if (!TestNestedDivergenceRequiresFirstSignalCode())
   {
     return 169;
+  }
+  if (!TestNestedDivergenceRequiresTrendExtreme())
+  {
+    return 200;
+  }
+  if (!TestNestedDivergenceContextOutputs())
+  {
+    return 201;
   }
   if (!TestFunc13HandlesEmptyInput())
   {

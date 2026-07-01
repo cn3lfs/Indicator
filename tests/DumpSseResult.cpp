@@ -570,6 +570,33 @@ static void PrintCandidateSummary(FILE *pFile, const char *pTitle,
                nBreakout);
 }
 
+static void PrintNestedDivergenceContexts(FILE *pFile,
+                                          const char *pTitle,
+                                          const std::vector<SegmentPoint> &HighPoints,
+                                          const std::vector<TradingSignalCandidate> &HighCandidates,
+                                          const std::vector<SegmentPoint> &LowPoints,
+                                          const std::vector<TradingSignalCandidate> &LowCandidates)
+{
+  std::vector<NestedDivergenceContext> Contexts =
+    BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  std::fprintf(pFile, "\n========== %s(%u) ==========\n", pTitle, (unsigned)Contexts.size());
+  for (std::size_t i = 0; i < Contexts.size(); i++)
+  {
+    const NestedDivergenceContext &C = Contexts[i];
+    std::fprintf(pFile,
+                 "  %s  级别%d  源H%02d  低P%d/%s->P%d/%s  方向%d  小转大%d\n",
+                 DateAt(C.nIndex),
+                 C.nLevel,
+                 C.nSourceDivergence + 1,
+                 OneBasedId(C.nLowStartPoint),
+                 PointDateAt(LowPoints, C.nLowStartPoint),
+                 OneBasedId(C.nLowEndPoint),
+                 PointDateAt(LowPoints, C.nLowEndPoint),
+                 C.nDirection,
+                 C.bSmallTurnSatisfied ? 1 : 0);
+  }
+}
+
 int main(int argc, char **argv)
 {
   FILE *pFile = stdout;
@@ -621,6 +648,9 @@ int main(int argc, char **argv)
   PrintCenterLifecycles(pFile, "线段中枢生命周期", "SZ", SegmentAn.Centers);
   PrintCandidateSummary(pFile, "买卖点(笔中枢)", StrokeAn.Candidates);
   PrintCandidateSummary(pFile, "买卖点(线段中枢)", SegmentAn.Candidates);
+  PrintNestedDivergenceContexts(pFile, "区间套背驰上下文",
+                                SegmentAn.Points, SegmentAn.Candidates,
+                                StrokeAn.Points, StrokeAn.Candidates);
   PrintCandidates(pFile, "买卖点(笔中枢)",
                   StrokeAn.Centers, StrokeAn.Points, StrokeAn.Breakouts, StrokeAn.Candidates);
   PrintCandidates(pFile, "买卖点(线段中枢)",
