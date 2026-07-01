@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = [ROOT / "README.md", ROOT / "formulas" / "README.md"]
 FORMULA_REF = re.compile(r"(?:formulas[\\/])?(chan-[A-Za-z0-9_-]+\.txt)")
 FUNC30_REF = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*([0-9]+)\s*\)")
-FUNC30_CALL = re.compile(r"TDXDLL1\s*\(\s*30\s*,")
-FUNC40_CALL = re.compile(r"TDXDLL1\s*\(\s*40\s*,\s*C\s*,\s*V\s*,\s*0\s*\)")
+FUNC30_CALL_WITH_SUFFIX = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*[0-9]+\s*\)\s*(?:#(?P<suffix>[A-Z0-9]+))?")
+FUNC40_CALL_WITH_SUFFIX = re.compile(r"TDXDLL1\s*\(\s*40\s*,\s*C\s*,\s*V\s*,\s*0\s*\)\s*(?:#(?P<suffix>[A-Z0-9]+))?")
 FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\n//=+\n// 输出函数40号", re.S)
 TDXDLL_REF = re.compile(r"TDXDLL1\s*\(\s*([0-9]+)\s*,")
 REGISTERED_FUNC_REF = re.compile(r"\{\s*([0-9]+)\s*,\s*&Func[0-9]+\s*\}")
@@ -345,14 +345,24 @@ def validate_aux_order(formula_texts):
   errors = []
   for name, text in formula_texts.items():
     active_text = strip_tdx_comments(text)
-    first_func30 = FUNC30_CALL.search(active_text)
-    if first_func30 is None:
-      continue
-    first_func40 = FUNC40_CALL.search(active_text)
-    if first_func40 is None:
-      errors.append(f"{name}: missing TDXDLL1(40,C,V,0) before Func30")
-    elif first_func40.start() > first_func30.start():
-      errors.append(f"{name}: TDXDLL1(40,C,V,0) must appear before Func30")
+    func40_by_suffix = {}
+    for match in FUNC40_CALL_WITH_SUFFIX.finditer(active_text):
+      suffix = match.group("suffix") or ""
+      func40_by_suffix.setdefault(suffix, []).append(match.start())
+
+    reported = set()
+    for match in FUNC30_CALL_WITH_SUFFIX.finditer(active_text):
+      suffix = match.group("suffix") or ""
+      if suffix in reported:
+        continue
+      positions = func40_by_suffix.get(suffix, [])
+      label = f"#{suffix}" if suffix else ""
+      if not positions:
+        errors.append(f"{name}: missing TDXDLL1(40,C,V,0){label} before Func30{label}")
+        reported.add(suffix)
+      elif not any(pos < match.start() for pos in positions):
+        errors.append(f"{name}: TDXDLL1(40,C,V,0){label} must appear before Func30{label}")
+        reported.add(suffix)
   return errors
 
 
@@ -662,12 +672,17 @@ def self_test() -> int:
     "comment_only.txt": "{XC:=TDXDLL1(40,C,V,0);}\nBSP:=TDXDLL1(30,H,L,40);\n",
     "missing.txt": "BSP:=TDXDLL1(30,H,L,40);\n",
     "late.txt": "BSP:=TDXDLL1(30,H,L,40);\nXC:=TDXDLL1(40,C,V,0);\n",
+    "period_ok.txt": "XC30:=TDXDLL1(40,C,V,0)#MIN30;\nBSP30:=TDXDLL1(30,H,L,40)#MIN30;\n",
+    "period_missing.txt": "XC:=TDXDLL1(40,C,V,0);\nBSP30:=TDXDLL1(30,H,L,40)#MIN30;\n",
+    "period_late.txt": "BSP30:=TDXDLL1(30,H,L,40)#MIN30;\nXC30:=TDXDLL1(40,C,V,0)#MIN30;\n",
     "plain.txt": "CLOSE>0;\n",
   })
   expected_aux_errors = [
     "comment_only.txt: missing TDXDLL1(40,C,V,0) before Func30",
     "missing.txt: missing TDXDLL1(40,C,V,0) before Func30",
     "late.txt: TDXDLL1(40,C,V,0) must appear before Func30",
+    "period_missing.txt: missing TDXDLL1(40,C,V,0)#MIN30 before Func30#MIN30",
+    "period_late.txt: TDXDLL1(40,C,V,0)#MIN30 must appear before Func30#MIN30",
   ]
   if aux_errors != expected_aux_errors:
     print(f"self-test failed: aux order {aux_errors!r}", file=sys.stderr)
