@@ -3,14 +3,37 @@
 #include "../CzscCore.h"
 #include "SseIndexDaily.h"
 #include <cstdio>
+#include <cstring>
+
+static int g_nSampleOffset = 0;
+static int g_nSampleCount = SSE_DAILY_COUNT;
 
 static const char *DateAt(int nIndex)
 {
-  if ((nIndex < 0) || (nIndex >= SSE_DAILY_COUNT))
+  int nRawIndex = g_nSampleOffset + nIndex;
+  if ((nIndex < 0) || (nIndex >= g_nSampleCount) ||
+      (nRawIndex < 0) || (nRawIndex >= SSE_DAILY_COUNT))
   {
     return "unknown";
   }
-  return SSE_DAILY_DATE[nIndex];
+  return SSE_DAILY_DATE[nRawIndex];
+}
+
+static int FindDateIndex(const char *pDate)
+{
+  if (pDate == 0)
+  {
+    return -1;
+  }
+
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (std::strcmp(SSE_DAILY_DATE[i], pDate) == 0)
+    {
+      return i;
+    }
+  }
+  return -1;
 }
 
 static float PointPrice(const SegmentPoint &P)
@@ -607,38 +630,38 @@ static void PrintNestedDivergenceContexts(FILE *pFile,
   }
 }
 
-int main(int argc, char **argv)
+static bool DumpSample(FILE *pFile, const char *pTitle, int nStart, int nEnd)
 {
-  FILE *pFile = stdout;
-  if (argc > 1)
+  if ((pFile == 0) || (pTitle == 0) ||
+      (nStart < 0) || (nEnd < nStart) || (nEnd >= SSE_DAILY_COUNT))
   {
-    pFile = std::fopen(argv[1], "wb");
-    if (pFile == 0)
-    {
-      return 1;
-    }
+    return false;
   }
 
-  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
-  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  g_nSampleOffset = nStart;
+  g_nSampleCount = nEnd - nStart + 1;
 
-  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH + nStart);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW + nStart);
+
+  std::vector<MergedBar> Bars = BuildMergedBars(g_nSampleCount, pH, pL);
   std::vector<Fractal> Fractals = BuildFractals(Bars);
   std::vector<Stroke> Strokes = BuildStrokes(Fractals);
 
   CzscAnalyzer StrokeAn;
-  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+  BuildAnalyzerFromPrice(StrokeAn, g_nSampleCount, pH, pL, DefaultConfig());
 
   CzscConfig SegmentConfig = DefaultConfig();
   SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
   SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
   CzscAnalyzer SegmentAn;
-  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+  BuildAnalyzerFromPrice(SegmentAn, g_nSampleCount, pH, pL, SegmentConfig);
 
+  std::fprintf(pFile, "\n########## 样本: %s ##########\n", pTitle);
   std::fprintf(pFile, "上证指数(000001.SH) 前复权日线 %d 根: %s ~ %s\n",
-               SSE_DAILY_COUNT,
-               SSE_DAILY_DATE[0],
-               SSE_DAILY_DATE[SSE_DAILY_COUNT - 1]);
+               g_nSampleCount,
+               DateAt(0),
+               DateAt(g_nSampleCount - 1));
   std::fprintf(pFile,
                "严格笔 %u(端点%u) | 线段 %u | 笔中枢 %u | 线段中枢 %u | 笔买卖点 %u | 线段买卖点 %u\n",
                (unsigned)Strokes.size(),
@@ -667,9 +690,29 @@ int main(int argc, char **argv)
                   SegmentAn.Centers, SegmentAn.Points, SegmentAn.Breakouts, SegmentAn.Candidates);
   PrintPoints(pFile, "笔端点", "B", StrokeAn.Points);
 
+  return true;
+}
+
+int main(int argc, char **argv)
+{
+  FILE *pFile = stdout;
+  if (argc > 1)
+  {
+    pFile = std::fopen(argv[1], "wb");
+    if (pFile == 0)
+    {
+      return 1;
+    }
+  }
+
+  bool bOk = DumpSample(pFile, "全量日线", 0, SSE_DAILY_COUNT - 1);
+  int nRecentStart = FindDateIndex("2024-01-02");
+  int nRecentEnd = FindDateIndex("2026-06-26");
+  bOk = bOk && DumpSample(pFile, "2024-2026 震荡上行切片", nRecentStart, nRecentEnd);
+
   if (pFile != stdout)
   {
     std::fclose(pFile);
   }
-  return 0;
+  return bOk ? 0 : 1;
 }

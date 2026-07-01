@@ -8,6 +8,13 @@ Current manually reviewed stroke-center anchors. These are matched by
 date/range in tests, not by ordinal id, because emitting all same-level centers
 can shift later generated labels.
 
+`czsc_sse_result.txt` now contains two real-data samples:
+
+- `全量日线`: the complete 000001.SH daily fixture.
+- `2024-2026 震荡上行切片`: a recent real-market window cut from the same
+  fixture to exercise shorter-range center extension, third-signal, and
+  line-segment reduction invariants.
+
 | id | direction | start | end | ZG | ZD |
 | --- | --- | --- | --- | --- | --- |
 | BZ00 | 上升 | 2018-02-26 | 2018-07-06 | 3129 | 3091 |
@@ -35,7 +42,8 @@ strengths, C/A percent ratios, and divergence condition flags for manual
 P4动力学核对, plus `BLP`/`BRP` and `bko[...]` leave/retest context for checking 第20课首次离开/首次回试;
 those diagnostics are generated, not edited here.
 
-Machine-checked structural invariants in `tests/check_sse_result.py`:
+Machine-checked structural invariants in `tests/check_sse_result.py` for each
+generated sample:
 
 - Every generated line-segment endpoint must also appear in the stroke endpoint
   section with the same date, type, and price.

@@ -44,15 +44,27 @@ NESTED_LINE = re.compile(
 
 
 def parse_point_sections(text: str):
-  sections = {}
+  samples = []
   current = None
+  current_sample = None
   for line in text.splitlines():
     header = SECTION_HEADER.match(line)
     if header is not None:
       title = header.group("title")
-      if title in ("线段端点", "笔端点"):
+      if title == "线段端点":
+        current_sample = {}
+        samples.append(current_sample)
         current = title
-        sections[current] = {
+        current_sample[current] = {
+          "declared": int(header.group("count")),
+          "points": [],
+        }
+      elif title == "笔端点":
+        if current_sample is None:
+          current_sample = {}
+          samples.append(current_sample)
+        current = title
+        current_sample[current] = {
           "declared": int(header.group("count")),
           "points": [],
         }
@@ -66,38 +78,44 @@ def parse_point_sections(text: str):
       if line.strip():
         current = None
       continue
-    sections[current]["points"].append((
+    current_sample[current]["points"].append((
       point.group("date"),
       point.group("kind"),
       point.group("price"),
     ))
-  return sections
+  return samples
 
 
 def validate_point_structure(text: str):
   errors = []
-  sections = parse_point_sections(text)
-  for title in ("线段端点", "笔端点"):
-    if title not in sections:
-      errors.append(f"missing point section: {title}")
-      continue
-    declared = sections[title]["declared"]
-    actual = len(sections[title]["points"])
-    if declared != actual:
-      errors.append(f"{title}: declared {declared} points but parsed {actual}")
-  if errors:
-    return errors
+  samples = parse_point_sections(text)
+  if not samples:
+    return ["missing point sections"]
 
-  segment_points = sections["线段端点"]["points"]
-  stroke_points = sections["笔端点"]["points"]
-  if len(segment_points) >= len(stroke_points):
-    errors.append(
-      f"line segments should reduce point count: segments {len(segment_points)} >= strokes {len(stroke_points)}"
-    )
-  stroke_set = set(stroke_points)
-  for point in segment_points:
-    if point not in stroke_set:
-      errors.append(f"line segment point not found in stroke points: {point[0]} {point[1]} {point[2]}")
+  for n_sample, sections in enumerate(samples, start=1):
+    for title in ("线段端点", "笔端点"):
+      if title not in sections:
+        errors.append(f"sample {n_sample}: missing point section: {title}")
+        continue
+      declared = sections[title]["declared"]
+      actual = len(sections[title]["points"])
+      if declared != actual:
+        errors.append(f"sample {n_sample} {title}: declared {declared} points but parsed {actual}")
+    if any(title not in sections for title in ("线段端点", "笔端点")):
+      continue
+
+    segment_points = sections["线段端点"]["points"]
+    stroke_points = sections["笔端点"]["points"]
+    if len(segment_points) >= len(stroke_points):
+      errors.append(
+        f"sample {n_sample}: line segments should reduce point count: segments {len(segment_points)} >= strokes {len(stroke_points)}"
+      )
+    stroke_set = set(stroke_points)
+    for point in segment_points:
+      if point not in stroke_set:
+        errors.append(
+          f"sample {n_sample}: line segment point not found in stroke points: {point[0]} {point[1]} {point[2]}"
+        )
   return errors
 
 
