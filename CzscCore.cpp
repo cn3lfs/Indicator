@@ -2578,7 +2578,20 @@ static bool IsStandardMacdDivergence(const TradingSignalCandidate &C)
   {
     return false;
   }
-  if ((C.nAbcStructure == 0) || (C.nMacdZeroPullback == 0))
+  int nSign = 0;
+  if (C.fSignal == SIGNAL_FIRST_BUY)
+  {
+    nSign = 1;
+  }
+  else if (C.fSignal == SIGNAL_FIRST_SELL)
+  {
+    nSign = -1;
+  }
+  else
+  {
+    return false;
+  }
+  if ((C.nAbcStructure != nSign) || (C.nMacdZeroPullback != nSign))
   {
     return false;
   }
