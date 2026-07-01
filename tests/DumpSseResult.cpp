@@ -55,6 +55,16 @@ static const char *SignalName(float fSignal)
   return "未知";
 }
 
+static bool IsFirstSignal(float fSignal)
+{
+  return (fSignal == 1.0f) || (fSignal == 11.0f);
+}
+
+static bool IsThirdSignal(float fSignal)
+{
+  return (fSignal == 3.0f) || (fSignal == 13.0f);
+}
+
 static const char *CenterPositionName(int nPosition)
 {
   if (nPosition == CZSC_CENTER_POSITION_BELOW) return "下方";
@@ -76,6 +86,26 @@ static const char *AftermathName(int nAfterEffect)
   if (nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED) return "扩张";
   if (nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN) return "新生";
   return "-";
+}
+
+static const char *ScopedReversalName(float fSignal, int nReversal)
+{
+  return IsFirstSignal(fSignal) ? ReversalName(nReversal) : "-";
+}
+
+static const char *ScopedAftermathName(float fSignal, int nAfterEffect)
+{
+  return IsThirdSignal(fSignal) ? AftermathName(nAfterEffect) : "-";
+}
+
+static int ScopedSmallTurn(float fSignal, int nSmallTurn)
+{
+  return IsThirdSignal(fSignal) ? nSmallTurn : 0;
+}
+
+static int ScopedFirstSignalValue(float fSignal, int nValue)
+{
+  return IsFirstSignal(fSignal) ? nValue : 0;
 }
 
 static const char *CenterRelationName(int nRelation)
@@ -217,11 +247,11 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  C.nPoint,
                  C.nBreakout,
                  CenterPositionName(C.nCenterPosition),
-                 ReversalName(C.nReversal),
-                 AftermathName(C.nAfterEffect),
-                 C.nSmallTurn,
-                 C.nAbcStructure,
-                 C.nMacdZeroPullback,
+                 ScopedReversalName(C.fSignal, C.nReversal),
+                 ScopedAftermathName(C.fSignal, C.nAfterEffect),
+                 ScopedSmallTurn(C.fSignal, C.nSmallTurn),
+                 ScopedFirstSignalValue(C.fSignal, C.nAbcStructure),
+                 ScopedFirstSignalValue(C.fSignal, C.nMacdZeroPullback),
                  OneBasedId(C.nCenter),
                  OneBasedId(C.nBreakout),
                  OneBasedId(C.nPoint),
