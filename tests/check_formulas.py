@@ -71,6 +71,7 @@ def main() -> int:
     "中枢关系：1上涨/-1下跌/2扩展",
     "一类背驰转折：1扩展/2盘整/3反趋势",
     "三买三卖后续：1扩张/2新生",
+    "上下文位图：含4096首次离开/回试",
   ]
   for comment in expected_debug_comments:
     if comment not in debug_text:
