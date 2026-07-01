@@ -5174,6 +5174,8 @@ static bool TestApplyTradingMacdZeroPullbackMapsCodes()
 static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
 {
   pC->nSource = 1;
+  pC->nTrend = 0;
+  pC->nMovementType = (nSign > 0) ? CZSC_MOVEMENT_DOWN : CZSC_MOVEMENT_UP;
   pC->nAbcStructure = nSign;
   pC->nMacdZeroPullback = nSign;
   pC->Divergence.nDirection = -nSign;
@@ -5188,7 +5190,7 @@ static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
 
 static bool TestApplyTradingStandardDivergenceMapsCodes()
 {
-  const int nCount = 24;
+  const int nCount = 28;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -5230,6 +5232,12 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   TradingSignalCandidate MissingNewExtreme = MakeTestCandidate(23, 1.0f, 30);
   MakeStandardDivergence(&MissingNewExtreme, 1);
   MissingNewExtreme.Divergence.bNewExtreme = false;
+  TradingSignalCandidate MissingTrend = MakeTestCandidate(25, 1.0f, 30);
+  MakeStandardDivergence(&MissingTrend, 1);
+  MissingTrend.nTrend = -1;
+  TradingSignalCandidate WrongMovement = MakeTestCandidate(27, 1.0f, 30);
+  MakeStandardDivergence(&WrongMovement, 1);
+  WrongMovement.nMovementType = CZSC_MOVEMENT_UP;
 
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
@@ -5243,6 +5251,8 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   Candidates.push_back(WrongDivergenceDirection);
   Candidates.push_back(NonFirstSource);
   Candidates.push_back(MissingNewExtreme);
+  Candidates.push_back(MissingTrend);
+  Candidates.push_back(WrongMovement);
 
   ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
 
@@ -5258,6 +5268,8 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
          NearlyEqual(pOut[19], 0.0f) &&
          NearlyEqual(pOut[21], 0.0f) &&
          NearlyEqual(pOut[23], 0.0f) &&
+         NearlyEqual(pOut[25], 0.0f) &&
+         NearlyEqual(pOut[27], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 

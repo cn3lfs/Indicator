@@ -2695,6 +2695,10 @@ static bool IsStandardMacdDivergence(const TradingSignalCandidate &C)
   {
     return false;
   }
+  if ((C.nTrend < 0) || (C.nMovementType != -nSignalDirection))
+  {
+    return false;
+  }
   if (!C.Divergence.bDivergence)
   {
     return false;
