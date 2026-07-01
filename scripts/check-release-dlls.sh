@@ -61,9 +61,16 @@ check_dll()
     exit 1
   }
 
+  timestamp="$("${objdump_prefix}objdump" -x "$dll" | sed -n 's/^Time\/Date stamp[	 ]*//p' | head -1)"
+  if [ "$timestamp" != "0" ]; then
+    echo "$dll has non-reproducible PE timestamp: $timestamp" >&2
+    exit 1
+  fi
+
   echo "[OK] $dll"
   echo "     $desc"
   echo "     imports: $(echo "$deps" | tr '\n' ' ')"
+  echo "     timestamp: $timestamp"
 }
 
 check_command file

@@ -34,6 +34,7 @@ CCFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
 CXFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
 FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
+DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
 
 # Objectives
 BUILD_DIR=build
@@ -88,10 +89,10 @@ check-mingw64:
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
-# 静态链接 libgcc/libstdc++(+winpthread)，使 DLL 自包含，免在通达信机器另装 MinGW 运行时
+# 静态链接 libgcc/libstdc++(+winpthread)，并清零 PE 时间戳，避免无源码变化时 DLL 漂移
 $(TARGET1) : $(OBJECTS) | $(BUILD_DIR)
 	@echo [LD] $@
-	@$(CXX) -shared -o $@ $^ -static -static-libgcc -static-libstdc++ $(LDFLAGS)
+	@$(CXX) -shared -o $@ $^ $(DLL_LDFLAGS) $(LDFLAGS)
 
 debug: all
 	@echo [DB] $(TARGETS)
