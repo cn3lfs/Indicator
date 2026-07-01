@@ -94,6 +94,11 @@ static const char *MovementName(int nMovement)
   return "未知";
 }
 
+static int OneBasedId(int nValue)
+{
+  return (nValue >= 0) ? (nValue + 1) : 0;
+}
+
 static void PrintPoints(FILE *pFile, const char *pTitle, const char *pPrefix,
                         const std::vector<SegmentPoint> &Points)
 {
@@ -158,7 +163,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
   {
     const TradingSignalCandidate &C = Candidates[i];
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  ctx%d%s\n",
+                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d PID%d TID%d  ctx%d%s\n",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -174,6 +179,10 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  C.nSmallTurn,
                  C.nAbcStructure,
                  C.nMacdZeroPullback,
+                 OneBasedId(C.nCenter),
+                 OneBasedId(C.nBreakout),
+                 OneBasedId(C.nPoint),
+                 OneBasedId(C.nTrend),
                  BuildTradingSignalContextFlags(C),
                  C.bOverlapped ? "  二三重合" : "");
   }
