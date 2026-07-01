@@ -2007,6 +2007,8 @@ static bool TestApplyTradingOutputsSkipInvalidSignals()
   float pContext[nCount] = {-1, -1, -1, -1};
 
   TradingSignalCandidate Valid = MakeTestCandidate(2, 3.0f, 20);
+  Valid.nSource = 3;
+  Valid.nPoint = 2;
   Valid.nQuality = CZSC_SIGNAL_QUALITY_CONFIRMED;
   Valid.nCenter = 4;
   Valid.nBreakout = 2;
@@ -6166,6 +6168,12 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   Extended.nSmallTurn = -1;
   Extended.nReversal = CZSC_REVERSAL_EXTENSION;
   Extended.nBreakout = 2;
+  TradingSignalCandidate SecondOverlap = MakeTestCandidate(10, 2.0f, 10);
+  SecondOverlap.nSource = 2;
+  SecondOverlap.nPoint = 10;
+  SecondOverlap.nCenter = 0;
+  SecondOverlap.nBreakout = 5;
+  SecondOverlap.bOverlapped = true;
   TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
   MakeStandardDivergence(&WrongDirection, 1);
   WrongDirection.nAbcStructure = -1;
@@ -6185,6 +6193,7 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   Candidates.push_back(Buy);
   Candidates.push_back(Newborn);
   Candidates.push_back(Extended);
+  Candidates.push_back(SecondOverlap);
   Candidates.push_back(WrongDirection);
   Candidates.push_back(Invalid);
   Candidates.push_back(WrongSmallTurn);
@@ -6197,7 +6206,6 @@ static bool TestApplyTradingContextFlagsMapsCodes()
                                CZSC_SIGNAL_CTX_MACD_LINE_WEAK |
                                CZSC_SIGNAL_CTX_STANDARD_DIV |
                                CZSC_SIGNAL_CTX_REVERSAL_TREND |
-                               CZSC_SIGNAL_CTX_OVERLAPPED |
                                CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fNewbornExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN |
                                    CZSC_SIGNAL_CTX_SMALL_TURN |
@@ -6205,6 +6213,8 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
                                     CZSC_SIGNAL_CTX_SMALL_TURN |
                                     CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  float fSecondOverlapExpected = (float)(CZSC_SIGNAL_CTX_OVERLAPPED |
+                                         CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fWrongDirectionExpected = (float)CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
   float fWrongSmallTurnExpected = (float)CZSC_SIGNAL_CTX_CENTER_BREAKOUT;
 
@@ -6213,6 +6223,7 @@ static bool TestApplyTradingContextFlagsMapsCodes()
          NearlyEqual(pOut[5], fExtendedExpected) &&
          NearlyEqual(pOut[7], fWrongDirectionExpected) &&
          NearlyEqual(pOut[9], 0.0f) &&
+         NearlyEqual(pOut[10], fSecondOverlapExpected) &&
          (BuildTradingSignalContextFlags(Invalid) == 0) &&
          NearlyEqual(pOut[11], fWrongSmallTurnExpected) &&
          NearlyEqual(pOut[0], 0.0f);
@@ -6233,6 +6244,9 @@ static bool TestApplyTradingContextFlagsUsesWinningPriority()
   Low.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
   Low.nReversal = CZSC_REVERSAL_TREND;
   TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nSource = 3;
+  High.nPoint = 2;
+  High.nCenter = 0;
   High.bOverlapped = true;
   High.nBreakout = 0;
   Candidates.push_back(Low);

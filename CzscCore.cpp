@@ -2063,7 +2063,8 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
       const TradingSignalCandidate &Second = (*pCandidates)[j];
       if ((Second.nSource == SIGNAL_SOURCE_SECOND) &&
           (Second.nBreakout == (int)i) &&
-          (Second.nIndex == Points[B.nRetestPoint].nIndex))
+          (Second.nIndex == Points[B.nRetestPoint].nIndex) &&
+          (GetTradingSignalSide(Second.fSignal) == GetTradingSignalSide(fSignal)))
       {
         bOverlapped = true;
         break;
@@ -2713,6 +2714,20 @@ static bool HasMatchingSmallTurn(const TradingSignalCandidate &C)
   }
   int nSide = GetTradingSignalSide(C.fSignal);
   return (nSide != 0) && (C.nSmallTurn == nSide);
+}
+
+static bool HasValidOverlapContext(const TradingSignalCandidate &C)
+{
+  if (!C.bOverlapped || (C.nBreakout < 0) || (C.nPoint < 0) || (C.nCenter < 0))
+  {
+    return false;
+  }
+  if ((C.nSource != SIGNAL_SOURCE_SECOND) && (C.nSource != SIGNAL_SOURCE_THIRD))
+  {
+    return false;
+  }
+  return (IsSecondSignal(C.fSignal) || IsThirdSignal(C.fSignal)) &&
+         (GetTradingSignalSide(C.fSignal) != 0);
 }
 
 // 第44课小转大必要条件：小级别底/顶背驰后，最后中枢出现三买/三卖才可能引发大级别转折。
@@ -3492,7 +3507,7 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_REVERSAL_EXTEND;
   }
-  if (C.bOverlapped)
+  if (HasValidOverlapContext(C))
   {
     nFlags |= CZSC_SIGNAL_CTX_OVERLAPPED;
   }
