@@ -1893,7 +1893,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
     if ((FirstSignal.fSignal == SIGNAL_FIRST_BUY) &&
         (Turn.nType == CZSC_POINT_TOP) &&
         (Second.nType == CZSC_POINT_BOTTOM) &&
-        (Second.fLow > First.fLow))
+        (Second.fLow >= First.fLow))
     {
       int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, FirstSignal.nCenter, 1);
       DivergenceResult Divergence = (nBreakout >= 0) ?
@@ -1917,7 +1917,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
     else if ((FirstSignal.fSignal == SIGNAL_FIRST_SELL) &&
              (Turn.nType == CZSC_POINT_BOTTOM) &&
              (Second.nType == CZSC_POINT_TOP) &&
-             (Second.fHigh < First.fHigh))
+             (Second.fHigh <= First.fHigh))
     {
       int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, FirstSignal.nCenter, -1);
       DivergenceResult Divergence = (nBreakout >= 0) ?

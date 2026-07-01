@@ -1707,6 +1707,69 @@ static bool TestTradingCandidatesGenerateFirstAndSecondBuy()
          HasSignalCandidate(Candidates, 40, 2.0f);
 }
 
+static bool TestTradingCandidatesAllowEqualSecondExtremes()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 8));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 7.5f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 4.2f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 3.8f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 36, 6));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 3.8f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+    Centers.push_back(MakeTestCenter(20, 32, 6, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+    if (!HasSignalCandidate(Candidates, 32, 1.0f) ||
+        !HasSignalCandidate(Candidates, 40, 2.0f))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 12.1f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 13));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 28, 12.8f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 32, 13.2f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 36, 12.6f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 40, 13.2f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+    Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+    if (!HasSignalCandidate(Candidates, 32, 11.0f) ||
+        !HasSignalCandidate(Candidates, 40, 12.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestTradingCandidatesGenerateThirdBuy()
 {
   std::vector<SegmentPoint> Points;
@@ -6734,6 +6797,10 @@ int main()
   if (!TestTradingCandidatesGenerateFirstAndSecondBuy())
   {
     return 25;
+  }
+  if (!TestTradingCandidatesAllowEqualSecondExtremes())
+  {
+    return 183;
   }
   if (!TestTradingCandidatesGenerateThirdBuy())
   {
