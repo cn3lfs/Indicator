@@ -2800,6 +2800,84 @@ void ApplyTradingSignalMacdAreaRatio(int nCount,
   }
 }
 
+// 第15课力度量化：按优先级导出胜出候选 C段/A段 的价差力度百分比。
+// 小于 100 表示 C段价差力度弱于 A段；无有效 A段价差时输出 0。
+void ApplyTradingSignalSpaceRatio(int nCount,
+                                  float *pOut,
+                                  const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0.0f;
+      if (C.Divergence.Previous.fSpace > 0)
+      {
+        fCode = C.Divergence.Current.fSpace / C.Divergence.Previous.fSpace * 100.0f;
+      }
+      pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 第15课趋势平均力度量化：按优先级导出胜出候选 C段/A段 的平均速度百分比。
+// 小于 100 表示 C段平均力度弱于 A段；无有效 A段速度时输出 0。
+void ApplyTradingSignalSpeedRatio(int nCount,
+                                  float *pOut,
+                                  const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0.0f;
+      if (C.Divergence.Previous.fSpeed > 0)
+      {
+        fCode = C.Divergence.Current.fSpeed / C.Divergence.Previous.fSpeed * 100.0f;
+      }
+      pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
 {
   if (!IsTradingSignal(C.fSignal))
@@ -4563,6 +4641,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 27: ApplyTradingSignalPointId(nCount, pOut, An.Candidates); break; // 胜出候选端点编号
     case 28: ApplyTradingSignalTrendId(nCount, pOut, An.Candidates); break; // 胜出候选走势结构编号
     case 29: ApplyTradingSignalMacdAreaRatio(nCount, pOut, An.Candidates); break; // C/A段MACD面积比
+    case 30: ApplyTradingSignalSpaceRatio(nCount, pOut, An.Candidates); break; // C/A段价差力度比
+    case 31: ApplyTradingSignalSpeedRatio(nCount, pOut, An.Candidates); break; // C/A段平均力度比
     default: ClearOutput(nCount, pOut); break;
   }
 }

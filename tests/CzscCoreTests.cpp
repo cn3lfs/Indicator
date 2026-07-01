@@ -5357,6 +5357,64 @@ static bool TestApplyTradingMacdAreaRatioMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingStrengthRatiosMapCodes()
+{
+  const int nCount = 8;
+  float pSpace[nCount];
+  float pSpeed[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pSpace[i] = -1;
+    pSpeed[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.Previous.fSpace = 120;
+  Buy.Divergence.Current.fSpace = 60;
+  Buy.Divergence.Previous.fSpeed = 6;
+  Buy.Divergence.Current.fSpeed = 3;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.Previous.fSpace = 200;
+  Low.Divergence.Current.fSpace = 100;
+  Low.Divergence.Previous.fSpeed = 5;
+  Low.Divergence.Current.fSpeed = 4;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.Previous.fSpace = 160;
+  High.Divergence.Current.fSpace = 40;
+  High.Divergence.Previous.fSpeed = 8;
+  High.Divergence.Current.fSpeed = 2;
+  TradingSignalCandidate MissingBase = MakeTestCandidate(5, 11.0f, 30);
+  MissingBase.Divergence.Previous.fSpace = 0;
+  MissingBase.Divergence.Current.fSpace = 50;
+  MissingBase.Divergence.Previous.fSpeed = 0;
+  MissingBase.Divergence.Current.fSpeed = 2;
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.Previous.fSpace = 100;
+  Invalid.Divergence.Current.fSpace = 10;
+  Invalid.Divergence.Previous.fSpeed = 10;
+  Invalid.Divergence.Current.fSpeed = 1;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(MissingBase);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalSpaceRatio(nCount, pSpace, Candidates);
+  ApplyTradingSignalSpeedRatio(nCount, pSpeed, Candidates);
+
+  return NearlyEqual(pSpace[1], 50.0f) &&
+         NearlyEqual(pSpeed[1], 50.0f) &&
+         NearlyEqual(pSpace[3], 25.0f) &&
+         NearlyEqual(pSpeed[3], 25.0f) &&
+         NearlyEqual(pSpace[5], 0.0f) &&
+         NearlyEqual(pSpeed[5], 0.0f) &&
+         NearlyEqual(pSpace[7], 0.0f) &&
+         NearlyEqual(pSpeed[7], 0.0f) &&
+         NearlyEqual(pSpace[0], 0.0f) &&
+         NearlyEqual(pSpeed[0], 0.0f);
+}
+
 static bool TestApplyTradingContextFlagsMapsCodes()
 {
   const int nCount = 12;
@@ -6346,7 +6404,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6419,6 +6477,8 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 27: ApplyTradingSignalPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 28: ApplyTradingSignalTrendId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 29: ApplyTradingSignalMacdAreaRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 30: ApplyTradingSignalSpaceRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 31: ApplyTradingSignalSpeedRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -7308,6 +7368,10 @@ int main()
   if (!TestApplyTradingMacdAreaRatioMapsCodes())
   {
     return 184;
+  }
+  if (!TestApplyTradingStrengthRatiosMapCodes())
+  {
+    return 185;
   }
   if (!TestApplyTradingContextFlagsMapsCodes())
   {

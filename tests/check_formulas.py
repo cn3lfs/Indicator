@@ -654,6 +654,8 @@ def main() -> int:
     "胜出候选端点编号：一基",
     "胜出候选走势编号：一基",
     "C/A段MACD面积比：小于100为柱面积走弱",
+    "C/A段价差力度比：小于100为空间走弱",
+    "C/A段平均力度比：小于100为速度走弱",
   ]
   expected_debug_lines = [
     "DRAWNUMBER(BSP<>0 AND POS<>2,L*0.995,POS)",
@@ -664,6 +666,8 @@ def main() -> int:
     "DRAWNUMBER(BSP<>0 AND PID>0,L*0.985,PID)",
     "DRAWNUMBER(BSP<>0 AND TID>0,H*1.020,TID)",
     "DRAWNUMBER(BSP<>0 AND MAR>0,L*0.980,MAR)",
+    "DRAWNUMBER(BSP<>0 AND SPR>0,H*1.025,SPR)",
+    "DRAWNUMBER(BSP<>0 AND VPR>0,L*0.975,VPR)",
     "DRAWLINE(BSG=1,L,BSG=2,L,0),COLORBLUE",
     "DRAWLINE(BSG=-1,H,BSG=-2,H,0),COLORBLUE",
     "DRAWLINE(NST=1,L,NST=2,L,0),COLORCYAN",
