@@ -4981,7 +4981,7 @@ static bool TestApplyTradingTrendIdMapsCodes()
 
 static bool TestApplyTradingSmallTurnMapsCodes()
 {
-  const int nCount = 12;
+  const int nCount = 18;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4990,28 +4990,72 @@ static bool TestApplyTradingSmallTurnMapsCodes()
 
   std::vector<TradingSignalCandidate> Candidates;
   TradingSignalCandidate Buy = MakeTestCandidate(1, 3.0f, 20);
+  Buy.nSource = 3;
+  Buy.nPoint = 1;
+  Buy.nCenter = 0;
+  Buy.nBreakout = 0;
   Buy.nSmallTurn = 1;
   TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
+  Sell.nSource = 3;
+  Sell.nPoint = 3;
+  Sell.nCenter = 0;
+  Sell.nBreakout = 1;
   Sell.nSmallTurn = -1;
   TradingSignalCandidate None = MakeTestCandidate(5, 3.0f, 20);
+  None.nSource = 3;
+  None.nPoint = 5;
+  None.nCenter = 0;
+  None.nBreakout = 2;
   TradingSignalCandidate WrongBuy = MakeTestCandidate(7, 3.0f, 20);
+  WrongBuy.nSource = 3;
+  WrongBuy.nPoint = 7;
+  WrongBuy.nCenter = 0;
+  WrongBuy.nBreakout = 3;
   WrongBuy.nSmallTurn = -1;
   TradingSignalCandidate WrongSell = MakeTestCandidate(9, 13.0f, 20);
+  WrongSell.nSource = 3;
+  WrongSell.nPoint = 9;
+  WrongSell.nCenter = 0;
+  WrongSell.nBreakout = 4;
   WrongSell.nSmallTurn = 1;
   TradingSignalCandidate NonThird = MakeTestCandidate(11, 1.0f, 20);
+  NonThird.nSource = 1;
+  NonThird.nPoint = 11;
+  NonThird.nCenter = 0;
+  NonThird.nBreakout = 5;
   NonThird.nSmallTurn = 1;
+  TradingSignalCandidate MissingSource = MakeTestCandidate(13, 3.0f, 20);
+  MissingSource.nPoint = 13;
+  MissingSource.nCenter = 0;
+  MissingSource.nBreakout = 6;
+  MissingSource.nSmallTurn = 1;
+  TradingSignalCandidate MissingBreakout = MakeTestCandidate(15, 3.0f, 20);
+  MissingBreakout.nSource = 3;
+  MissingBreakout.nPoint = 15;
+  MissingBreakout.nCenter = 0;
+  MissingBreakout.nSmallTurn = 1;
+  TradingSignalCandidate MissingCenter = MakeTestCandidate(17, 3.0f, 20);
+  MissingCenter.nSource = 3;
+  MissingCenter.nPoint = 17;
+  MissingCenter.nBreakout = 7;
+  MissingCenter.nSmallTurn = 1;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(None);
   Candidates.push_back(WrongBuy);
   Candidates.push_back(WrongSell);
   Candidates.push_back(NonThird);
+  Candidates.push_back(MissingSource);
+  Candidates.push_back(MissingBreakout);
+  Candidates.push_back(MissingCenter);
 
   ApplyTradingSignalSmallTurn(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
          NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
          NearlyEqual(pOut[9], 0.0f) && NearlyEqual(pOut[11], 0.0f) &&
+         NearlyEqual(pOut[13], 0.0f) && NearlyEqual(pOut[15], 0.0f) &&
+         NearlyEqual(pOut[17], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
@@ -5291,14 +5335,21 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   Buy.bOverlapped = true;
   Buy.nBreakout = 0;
   TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
+  Newborn.nSource = 3;
+  Newborn.nPoint = 3;
+  Newborn.nCenter = 0;
   Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
   Newborn.nSmallTurn = 1;
   Newborn.nReversal = CZSC_REVERSAL_CONSOLIDATION;
   Newborn.nBreakout = 1;
   TradingSignalCandidate Extended = MakeTestCandidate(5, 13.0f, 20);
+  Extended.nSource = 3;
+  Extended.nPoint = 5;
+  Extended.nCenter = 0;
   Extended.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   Extended.nSmallTurn = -1;
   Extended.nReversal = CZSC_REVERSAL_EXTENSION;
+  Extended.nBreakout = 2;
   TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
   MakeStandardDivergence(&WrongDirection, 1);
   WrongDirection.nAbcStructure = -1;
@@ -5310,6 +5361,10 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   Invalid.bOverlapped = true;
   Invalid.nBreakout = 3;
   TradingSignalCandidate WrongSmallTurn = MakeTestCandidate(11, 3.0f, 20);
+  WrongSmallTurn.nSource = 3;
+  WrongSmallTurn.nPoint = 11;
+  WrongSmallTurn.nCenter = 0;
+  WrongSmallTurn.nBreakout = 4;
   WrongSmallTurn.nSmallTurn = -1;
   Candidates.push_back(Buy);
   Candidates.push_back(Newborn);
@@ -5332,8 +5387,10 @@ static bool TestApplyTradingContextFlagsMapsCodes()
                                    CZSC_SIGNAL_CTX_SMALL_TURN |
                                    CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
-                                    CZSC_SIGNAL_CTX_SMALL_TURN);
+                                    CZSC_SIGNAL_CTX_SMALL_TURN |
+                                    CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fWrongDirectionExpected = (float)CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
+  float fWrongSmallTurnExpected = (float)CZSC_SIGNAL_CTX_CENTER_BREAKOUT;
 
   return NearlyEqual(pOut[1], fBuyExpected) &&
          NearlyEqual(pOut[3], fNewbornExpected) &&
@@ -5341,7 +5398,7 @@ static bool TestApplyTradingContextFlagsMapsCodes()
          NearlyEqual(pOut[7], fWrongDirectionExpected) &&
          NearlyEqual(pOut[9], 0.0f) &&
          (BuildTradingSignalContextFlags(Invalid) == 0) &&
-         NearlyEqual(pOut[11], 0.0f) &&
+         NearlyEqual(pOut[11], fWrongSmallTurnExpected) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 

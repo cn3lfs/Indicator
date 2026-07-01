@@ -2465,6 +2465,13 @@ static bool HasMatchingSmallTurn(const TradingSignalCandidate &C)
   {
     return false;
   }
+  if ((C.nSource != SIGNAL_SOURCE_THIRD) ||
+      (C.nBreakout < 0) ||
+      (C.nCenter < 0) ||
+      (C.nPoint < 0))
+  {
+    return false;
+  }
   int nSide = GetTradingSignalSide(C.fSignal);
   return (nSide != 0) && (C.nSmallTurn == nSide);
 }
