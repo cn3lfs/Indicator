@@ -15,7 +15,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
-#include "CzscCore.h"
+#ifndef __CZSC_COMMON_H__
+#define __CZSC_COMMON_H__
 
-// The CZSC core implementation is split under src/ and declared under include/.
-// This file remains as a compatibility anchor for existing project references.
+#include "CzscTypes.h"
+
+// 配置：默认配置复现现状；DecodeConfig 把单个数字码解出四维配置（供通达信传参）
+CzscConfig DefaultConfig();
+CzscConfig DecodeConfig(float fCode);
+
+// 旁路数据：通达信 3 槽不够同时传 H/L/C/V，故用一个注册函数把真实收盘价/成交量存入全局旁路缓存，
+// 其余函数在 nCount 匹配且 Close∈[Low,High] 内容校验通过时自动改用真实 C（否则回落 (H+L)/2）。
+void RegisterAuxData(int nCount, float *pClose, float *pVolume);
+const std::vector<float> *GetValidatedClose(int nCount, const float *pHigh, const float *pLow);
+const std::vector<float> *GetValidatedVolume(int nCount, const float *pHigh, const float *pLow);
+
+#endif

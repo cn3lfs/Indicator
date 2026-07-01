@@ -27,7 +27,7 @@ AS=$(CROSS_PREFIX)as
 FC=$(CROSS_PREFIX)g77
 WINDRES=$(CROSS_PREFIX)windres
 RM=rm -f
-INCLUDE=
+INCLUDE=-Iinclude
 CHARSETFLAGS=-finput-charset=UTF-8
 ASFLAGS=$(INCLUDE) -O2
 CCFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
@@ -38,12 +38,15 @@ DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
 
 # Objectives
 BUILD_DIR=build
-OBJECT1=Main.o CzscCore.o CzscAnalyzer.o
+CORE_OBJECTS=src/CzscCommon.o src/CzscMorphology.o src/CzscCenter.o \
+             src/CzscDynamics.o src/CzscTrading.o src/CzscNestedDivergence.o \
+             src/CzscAnalyzer.o src/CzscTdxExports.o
+OBJECT1=Main.o $(CORE_OBJECTS)
 TARGET1=$(BUILD_DIR)/CZSC.dll
-TEST_OBJECTS=CzscCore.o CzscAnalyzer.o tests/CzscCoreTests.o
+TEST_OBJECTS=$(CORE_OBJECTS) tests/CzscCoreTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
 TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
-SSE_DUMP_OBJECTS=CzscCore.o CzscAnalyzer.o tests/DumpSseResult.o
+SSE_DUMP_OBJECTS=$(CORE_OBJECTS) tests/DumpSseResult.o
 SSE_DUMP_TARGET=tests/dump_sse$(EXEEXT)
 SSE_DUMP_TARGETS=tests/dump_sse tests/dump_sse.exe
 SSE_RESULT=tests/czsc_sse_result.txt
@@ -51,7 +54,8 @@ LEGACY_OBJECTS=CCentroid.o
 LEGACY_DEPENDS=CCentroid.dep
 OBJECTS=$(OBJECT1)
 TARGETS=$(TARGET1)
-DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep)
+ALL_OBJECTS=$(sort $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS))
+DEPENDS=$(sort $(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep))
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
@@ -144,8 +148,8 @@ run: all
 	@$(TARGETS)
 
 clean:
-	@echo [RM] $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS)
-	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS) $(TEST_TARGETS) $(SSE_DUMP_TARGETS)
+	@echo [RM] $(ALL_OBJECTS)
+	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(ALL_OBJECTS) $(TEST_TARGETS) $(SSE_DUMP_TARGETS)
 
 # Standard Procedures
 %.dep : %.s

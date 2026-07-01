@@ -6,8 +6,9 @@
 
 ## 项目是什么
 
-通达信（TDX）缠论可视化插件，编译为 32 位 Windows DLL（`CZSC.dll`）。核心算法在
-`CzscCore.cpp/.h`（可测试、无 Windows 依赖）；`Main.cpp` 把函数按编号注册给通达信。
+通达信（TDX）缠论可视化插件，编译为 32 位 Windows DLL（`CZSC.dll`）。核心算法已拆到
+`include/` + `src/`（可测试、无 Windows 依赖）；`CzscCore.h` 是兼容聚合头，`Main.cpp`
+把函数按编号注册给通达信。
 设计目标是尽量贴近缠师原文的线段、中枢、买卖点等概念。
 
 ## TDX DLL 数据契约（官方规范）
@@ -52,16 +53,16 @@ AssignSegmentEnergy / ComputeMacdHistogram 给线段点附 MACD 柱面积(动力
 MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 ```
 
-买卖点判定（第20/21课，CzscCore.h/cpp）：**一类**针对趋势(≥2同向中枢)末端背驰，且**同一中枢区域只保留
+买卖点判定（第20/21课，`include/CzscTrading.h` / `src/CzscTrading.cpp`）：**一类**针对趋势(≥2同向中枢)末端背驰，且**同一中枢区域只保留
 价格最极端的一个**(每个最后中枢至多一个一买/一卖，避免同一中枢内信号泛滥，同时保留连续趋势里后续中枢
 的区域极值)；**二类**紧随一类(一买后第一个不创新低=二买)；**三类**=中枢被首次离开(突破ZG/ZD)后回试
 不破ZG/ZD(上升中枢→三买、下降中枢→三卖)。
 数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续、优先级、中枢/突破/端点/走势编号等）
-见 `CzscCore.h` 注释。
+见 `include/CzscTypes.h` 与 `include/CzscTrading.h` 注释。
 
 ## 架构：CzscAnalyzer + 缓存 + 配置 + Func30
 
-- **中心化 `CzscAnalyzer`**（`CzscCore.h`）一次算成全部结果（Points/Centers/Structures/Breakouts/
+- **中心化 `CzscAnalyzer`**（声明在 `include/CzscTypes.h`，实现与缓存层在 `src/CzscAnalyzer.cpp`）一次算成全部结果（Points/Centers/Structures/Breakouts/
   Candidates/MaShort/MaLong/Kiss）。两个 Build 入口：`BuildAnalyzerFromSignal`（pIn 家族）与
   `BuildAnalyzerFromPrice`（H/L+config 家族），`Points` 就绪后共用私有 `BuildCentersStage`。
   各 Func 只做**投影**，不再各自重跑流水线。
@@ -96,7 +97,8 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 30 | Func30 | mode 统一入口(配置+输出，一步算全链路；输出21-28为胜出候选上下文/位置/走势/优先级/编号) | 见上「架构」 |
 | 40 | Func40 | 旁路注册真实 C/V(透传 C)，供后续函数启用 | 见上「旁路注册数据契约」 |
 
-新增输出函数时：在 `CzscCore.h` 声明、`CzscCore.cpp` 实现、`Main.cpp` 注册 `{n,&Funcn}`、
+新增输出函数时：在对应 `include/Czsc*.h` 声明、对应 `src/Czsc*.cpp` 实现；TDX 编号入口放
+`include/CzscTdxExports.h` / `src/CzscTdxExports.cpp`，再在 `Main.cpp` 注册 `{n,&Funcn}`、
 `README.md` 补公式、`tests/` 加用例。可配置的分支优先并入 `CzscConfig` 经 `Func20` 暴露。
 
 ## 本机构建与测试（重要：无 make/g++/mingw）
@@ -106,12 +108,16 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 ```bash
 cd D:/github/czsc-tdx
 "/c/Program Files/LLVM/bin/clang++" -O2 -finput-charset=UTF-8 \
-  -o tests/CzscCoreTests.exe CzscCore.cpp CzscAnalyzer.cpp tests/CzscCoreTests.cpp
+  -Iinclude -I. \
+  -o tests/CzscCoreTests.exe \
+  src/CzscCommon.cpp src/CzscMorphology.cpp src/CzscCenter.cpp \
+  src/CzscDynamics.cpp src/CzscTrading.cpp src/CzscNestedDivergence.cpp \
+  src/CzscAnalyzer.cpp src/CzscTdxExports.cpp tests/CzscCoreTests.cpp
 ./tests/CzscCoreTests.exe; echo $?   # exit 0 = 全过
 ```
 
-源码已部分模块化：`CzscAnalyzer.cpp` 持有中心化分析器与缓存层（`CzscCore.cpp` 仍含其余流水线
-与 Func 导出）。新增模块时同步 `Makefile` 的 `OBJECT1`/`TEST_OBJECTS` 与上面的 clang 命令。
+源码已按职责模块化：`include/` 放接口与类型，`src/` 放实现，`CzscCore.h` 只做兼容聚合。
+新增模块时同步 `Makefile` 的 `CORE_OBJECTS` 与上面的 clang 命令。
 
 - `Main.cpp` 因 `FxIndicator.h` 含 windows.h，clang 仅能 `-fsyntax-only` 检查；真正的 DLL 构建
   走 WSL2 MinGW（`make mingw32`，本机 `wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make mingw32'`）。

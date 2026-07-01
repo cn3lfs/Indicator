@@ -15,7 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
-#include "CzscCore.h"
+#ifndef __CZSC_ANALYZER_H__
+#define __CZSC_ANALYZER_H__
 
-// The CZSC core implementation is split under src/ and declared under include/.
-// This file remains as a compatibility anchor for existing project references.
+#include "CzscNestedDivergence.h"
+
+// 中心化分析器的两个构建入口：信号 pIn 家族 / 原始 H/L+config 家族
+void BuildAnalyzerFromSignal(CzscAnalyzer &An, int nCount, float *pIn, float *pHigh, float *pLow);
+void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
+
+// 带缓存的入口：通达信就同一序列依次调多个 Func，首调用计算+缓存、后续命中（单槽+全字节指纹）
+const CzscAnalyzer &GetOrBuildSignalAnalyzer(int nCount, float *pIn, float *pHigh, float *pLow);
+const CzscAnalyzer &GetOrBuildPriceAnalyzer(int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
+
+#endif

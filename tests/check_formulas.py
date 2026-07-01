@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = [ROOT / "README.md", ROOT / "formulas" / "README.md"]
+FUNC30_SOURCES = [ROOT / "src" / "CzscTdxExports.cpp", ROOT / "CzscCore.cpp"]
 FORMULA_REF = re.compile(r"(?:formulas[\\/])?(chan-[A-Za-z0-9_-]+\.txt)")
 FUNC30_REF = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*([0-9]+)\s*\)")
 FUNC30_CALL_WITH_SUFFIX = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*[0-9]+\s*\)\s*(?:#(?P<suffix>[A-Z0-9]+))?")
@@ -254,7 +255,7 @@ def is_valid_config(n_config: int) -> bool:
 def parse_func30_outputs(text: str):
   match = FUNC30_SWITCH.search(text)
   if match is None:
-    return set(), ["unable to locate Func30 switch in CzscCore.cpp"]
+    return set(), ["unable to locate Func30 switch in source"]
 
   outputs = {int(item) for item in CASE_REF.findall(match.group("body"))}
   if not outputs:
@@ -275,11 +276,16 @@ def validate_func30_outputs(outputs):
 
 
 def read_func30_outputs():
-  text = (ROOT / "CzscCore.cpp").read_text(encoding="utf-8")
-  outputs, errors = parse_func30_outputs(text)
-  if errors:
-    return outputs, errors
-  return outputs, validate_func30_outputs(outputs)
+  missing_errors = []
+  for path in FUNC30_SOURCES:
+    if not path.exists():
+      continue
+    text = path.read_text(encoding="utf-8")
+    outputs, errors = parse_func30_outputs(text)
+    if not errors:
+      return outputs, validate_func30_outputs(outputs)
+    missing_errors.extend(f"{path.relative_to(ROOT)}: {error}" for error in errors)
+  return set(), missing_errors or ["unable to locate Func30 switch in source"]
 
 
 def parse_registered_tdx_funcs(text: str):
