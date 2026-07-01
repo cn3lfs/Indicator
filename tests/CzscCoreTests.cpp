@@ -5193,6 +5193,34 @@ static bool TestFunc20DrivesConfig()
   return true;
 }
 
+static bool TestFunc20FeatureSegmentModeMatchesFunc19()
+{
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> Legacy((std::size_t)SSE_DAILY_COUNT);
+  std::vector<float> Configured((std::size_t)SSE_DAILY_COUNT);
+  float fUnused = 0;
+  float fFeatureSegmentCode = 1100;
+
+  Func19(SSE_DAILY_COUNT, &Legacy[0], &High[0], &Low[0], &fUnused);
+  Func20(SSE_DAILY_COUNT, &Configured[0], &High[0], &Low[0], &fFeatureSegmentCode);
+
+  int nNonZero = 0;
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (!NearlyEqual(Legacy[(std::size_t)i], Configured[(std::size_t)i]))
+    {
+      return false;
+    }
+    if (!NearlyEqual(Configured[(std::size_t)i], 0.0f))
+    {
+      nNonZero++;
+    }
+  }
+
+  return nNonZero > 2;
+}
+
 static bool TestFunc20HandlesEmptyInput()
 {
   Func20(0, 0, 0, 0, 0);
@@ -6337,6 +6365,10 @@ int main()
   if (!TestFunc20DrivesConfig())
   {
     return 99;
+  }
+  if (!TestFunc20FeatureSegmentModeMatchesFunc19())
+  {
+    return 166;
   }
   if (!TestFunc20HandlesEmptyInput())
   {
