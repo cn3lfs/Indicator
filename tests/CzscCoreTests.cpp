@@ -5276,12 +5276,64 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
     switch (nOutput)
     {
+      case 10:
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        if ((int)An.MaShort.size() >= SSE_DAILY_COUNT && (int)An.MaLong.size() >= SSE_DAILY_COUNT)
+        {
+          for (int n = 0; n < SSE_DAILY_COUNT; n++)
+          {
+            Expected[(std::size_t)n] = An.MaShort[(std::size_t)n] - An.MaLong[(std::size_t)n];
+          }
+        }
+        break;
+      case 11:
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        if ((int)An.Kiss.size() >= SSE_DAILY_COUNT)
+        {
+          for (int n = 0; n < SSE_DAILY_COUNT; n++)
+          {
+            Expected[(std::size_t)n] = (float)An.Kiss[(std::size_t)n];
+          }
+        }
+        break;
+      case 12:
+      {
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        int nWarn = DetectInstantDivergence(An.Points, SSE_DAILY_COUNT, &High[0], &Low[0]);
+        if (nWarn != 0)
+        {
+          Expected[(std::size_t)(SSE_DAILY_COUNT - 1)] = (float)nWarn;
+        }
+        break;
+      }
+      case 13:
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        if ((int)An.KissVol.size() >= SSE_DAILY_COUNT)
+        {
+          for (int n = 0; n < SSE_DAILY_COUNT; n++)
+          {
+            Expected[(std::size_t)n] = (float)An.KissVol[(std::size_t)n];
+          }
+        }
+        break;
       case 14: ApplyTradingSignalSmallTurn(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 15: ApplyTradingSignalAbcStructure(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 16: ApplyTradingSignalStrictAbcCandidates(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
