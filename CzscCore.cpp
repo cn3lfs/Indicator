@@ -1583,12 +1583,14 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
 
 static int FindOverlappedBreakout(const std::vector<CenterBreakout> &Breakouts,
                                   int nPoint,
+                                  int nCenter,
                                   int nDirection)
 {
   for (std::size_t i = 0; i < Breakouts.size(); i++)
   {
     const CenterBreakout &B = Breakouts[i];
     if (B.bFirstRetest && B.bThirdSignal &&
+        (B.nCenter == nCenter) &&
         (B.nDirection == nDirection) &&
         (B.nRetestPoint == nPoint))
     {
@@ -1854,7 +1856,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
         (Second.nType == CZSC_POINT_BOTTOM) &&
         (Second.fLow > First.fLow))
     {
-      int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, 1);
+      int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, FirstSignal.nCenter, 1);
       DivergenceResult Divergence = (nBreakout >= 0) ?
                                     Breakouts[(std::size_t)nBreakout].Divergence :
                                     MeasureSecondDivergence(Points, nPoint, 1);
@@ -1878,7 +1880,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
              (Second.nType == CZSC_POINT_TOP) &&
              (Second.fHigh < First.fHigh))
     {
-      int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, -1);
+      int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, FirstSignal.nCenter, -1);
       DivergenceResult Divergence = (nBreakout >= 0) ?
                                     Breakouts[(std::size_t)nBreakout].Divergence :
                                     MeasureSecondDivergence(Points, nPoint, -1);
