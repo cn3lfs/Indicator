@@ -1086,6 +1086,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
   C.nSmallTurn = 0;
   C.nAbcStructure = 0;
+  C.nAbcBreakout = -1;
   C.nMacdZeroPullback = 0;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
@@ -2216,7 +2217,8 @@ static bool TestFirstCandidateMarksAbcStructure()
 
   return (pFirst != 0) &&
          (pFirst->nCenter == 1) &&
-         (pFirst->nAbcStructure == 1);
+         (pFirst->nAbcStructure == 1) &&
+         (pFirst->nAbcBreakout == 0);
 }
 
 static bool TestFirstSellCandidateMarksAbcStructure()
@@ -2267,7 +2269,8 @@ static bool TestFirstSellCandidateMarksAbcStructure()
 
   return (pFirst != 0) &&
          (pFirst->nCenter == 1) &&
-         (pFirst->nAbcStructure == -1);
+         (pFirst->nAbcStructure == -1) &&
+         (pFirst->nAbcBreakout == 0);
 }
 
 static bool TestFirstCandidateRequiresValidAbcBreakout()
@@ -2323,7 +2326,7 @@ static bool TestFirstCandidateRequiresValidAbcBreakout()
     std::vector<TradingSignalCandidate> Candidates =
       BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
     const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
-    if ((pFirst == 0) || (pFirst->nAbcStructure != 0))
+    if ((pFirst == 0) || (pFirst->nAbcStructure != 0) || (pFirst->nAbcBreakout != -1))
     {
       return false;
     }
@@ -2380,7 +2383,7 @@ static bool TestFirstCandidateRequiresValidAbcBreakout()
     std::vector<TradingSignalCandidate> Candidates =
       BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
     const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 11.0f);
-    if ((pFirst == 0) || (pFirst->nAbcStructure != 0))
+    if ((pFirst == 0) || (pFirst->nAbcStructure != 0) || (pFirst->nAbcBreakout != -1))
     {
       return false;
     }
@@ -5226,6 +5229,50 @@ static bool TestApplyTradingAbcStructureMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingAbcBreakoutIdMapsCodes()
+{
+  const int nCount = 12;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.nAbcStructure = 1;
+  Buy.nAbcBreakout = 2;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  Sell.nAbcStructure = -1;
+  Sell.nAbcBreakout = 0;
+  TradingSignalCandidate MissingBreakout = MakeTestCandidate(5, 1.0f, 30);
+  MissingBreakout.nAbcStructure = 1;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  WrongDirection.nAbcStructure = -1;
+  WrongDirection.nAbcBreakout = 4;
+  TradingSignalCandidate NonFirst = MakeTestCandidate(9, 3.0f, 30);
+  NonFirst.nAbcStructure = 1;
+  NonFirst.nAbcBreakout = 5;
+  TradingSignalCandidate LowerPriorityAbc = MakeTestCandidate(10, 1.0f, 10);
+  LowerPriorityAbc.nAbcStructure = 1;
+  LowerPriorityAbc.nAbcBreakout = 1;
+  TradingSignalCandidate HigherPriorityNonFirst = MakeTestCandidate(10, 2.0f, 20);
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(MissingBreakout);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(NonFirst);
+  Candidates.push_back(LowerPriorityAbc);
+  Candidates.push_back(HigherPriorityNonFirst);
+
+  ApplyTradingSignalAbcBreakoutId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 3.0f) && NearlyEqual(pOut[3], 1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) && NearlyEqual(pOut[10], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestApplyTradingStrictAbcFiltersFirstSignals()
 {
   const int nCount = 8;
@@ -6620,7 +6667,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6698,6 +6745,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 32: ApplyTradingSignalDivergenceFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 33: ApplyTradingSignalBreakoutLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
       case 34: ApplyTradingSignalBreakoutRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 35: ApplyTradingSignalAbcBreakoutId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -7575,6 +7623,10 @@ int main()
   if (!TestApplyTradingAbcStructureMapsCodes())
   {
     return 131;
+  }
+  if (!TestApplyTradingAbcBreakoutIdMapsCodes())
+  {
+    return 190;
   }
   if (!TestApplyTradingStrictAbcFiltersFirstSignals())
   {

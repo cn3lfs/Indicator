@@ -1633,6 +1633,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
   C.nSmallTurn = 0;
   C.nAbcStructure = 0;
+  C.nAbcBreakout = -1;
   C.nMacdZeroPullback = 0;
   C.bOverlapped = bOverlapped;
   C.Divergence = Divergence;
@@ -1775,11 +1776,13 @@ static void AnnotateAbcDivergenceStructure(std::vector<TradingSignalCandidate> *
       if ((C.fSignal == SIGNAL_FIRST_BUY) && (B.nDirection < 0))
       {
         C.nAbcStructure = 1;
+        C.nAbcBreakout = (int)j;
         break;
       }
       if ((C.fSignal == SIGNAL_FIRST_SELL) && (B.nDirection > 0))
       {
         C.nAbcStructure = -1;
+        C.nAbcBreakout = (int)j;
         break;
       }
     }
@@ -2622,6 +2625,40 @@ void ApplyTradingSignalAbcStructure(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       pOut[C.nIndex] = HasMatchingAbcStructure(C) ? (float)C.nAbcStructure : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 输出第37课ABC结构里c段所包含的三买/三卖突破编号，1基；无ABC确认输出0。
+void ApplyTradingSignalAbcBreakoutId(int nCount,
+                                     float *pOut,
+                                     const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] =
+        (HasMatchingAbcStructure(C) && (C.nAbcBreakout >= 0)) ? (float)(C.nAbcBreakout + 1) : 0.0f;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -4763,6 +4800,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 32: ApplyTradingSignalDivergenceFlags(nCount, pOut, An.Candidates); break; // 背驰要素位图
     case 33: ApplyTradingSignalBreakoutLeavePointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 突破离开端点编号
     case 34: ApplyTradingSignalBreakoutRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 突破回试端点编号
+    case 35: ApplyTradingSignalAbcBreakoutId(nCount, pOut, An.Candidates); break; // ABC关联突破编号
     default: ClearOutput(nCount, pOut); break;
   }
 }

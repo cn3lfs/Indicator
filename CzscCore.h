@@ -275,6 +275,7 @@ struct TradingSignalCandidate
   int   nAfterEffect;       // 见 CzscCenterAftermath（第21课，仅三类）
   int   nSmallTurn;         // 第44课小转大必要条件：三买=1、三卖=-1、无=0
   int   nAbcStructure;      // 第37课a+A+b+B+c结构：一买=1、一卖=-1、无=0
+  int   nAbcBreakout;       // 第37课c段包含的B中枢三买/三卖突破下标（无则 -1）
   int   nMacdZeroPullback;  // 第24/25课B中枢黄白线回拉0轴：一买=1、一卖=-1、无=0
   bool  bOverlapped;        // 二三类买卖点是否重合
   DivergenceResult Divergence;
@@ -420,6 +421,9 @@ void ApplyTradingSignalSmallTurn(int nCount,
 void ApplyTradingSignalAbcStructure(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalAbcBreakoutId(int nCount,
+                                     float *pOut,
+                                     const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalStrictAbcCandidates(int nCount,
                                            float *pOut,
                                            const std::vector<TradingSignalCandidate> &Candidates);
@@ -487,6 +491,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 31 为胜出买卖点 C/A 段平均力度比(百分比)，0=无有效 A 段速度，不占用旧函数编号。
 // Func30 输出 32 为胜出买卖点背驰要素位图，位值见 CzscDivergenceFlag，不占用旧函数编号。
 // Func30 输出 33/34 为胜出买卖点关联突破的离开/回试端点一基编号，0=无关联突破。
+// Func30 输出 35 为一类ABC结构关联的三买/三卖突破一基编号，0=无ABC确认。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
