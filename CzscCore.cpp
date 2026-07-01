@@ -2878,7 +2878,7 @@ void ApplyTradingSignalSpeedRatio(int nCount,
   }
 }
 
-static int BuildDivergenceFlags(const DivergenceResult &D)
+int BuildDivergenceFlags(const DivergenceResult &D)
 {
   int nFlags = 0;
   if (D.bNewExtreme)

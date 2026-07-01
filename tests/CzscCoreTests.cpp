@@ -5468,6 +5468,35 @@ static bool TestApplyTradingDivergenceFlagsMapCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestBuildDivergenceFlagsMapsBits()
+{
+  DivergenceResult D;
+  D.nDirection = 1;
+  D.bNewExtreme = true;
+  D.bWeakSpace = false;
+  D.bWeakSpeed = true;
+  D.bWeakMacd = false;
+  D.bDivergence = true;
+  D.Previous = MeasureStrength(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1),
+                               MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  D.Current = MeasureStrength(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 2),
+                              MakeTestPoint(CZSC_POINT_TOP, 12, 11));
+
+  int nFlags = BuildDivergenceFlags(D);
+  int nExpected = CZSC_DIVERGENCE_NEW_EXTREME |
+                  CZSC_DIVERGENCE_WEAK_SPEED |
+                  CZSC_DIVERGENCE_CONFIRMED;
+  if (nFlags != nExpected)
+  {
+    return false;
+  }
+
+  D.bNewExtreme = false;
+  D.bWeakSpeed = false;
+  D.bDivergence = false;
+  return BuildDivergenceFlags(D) == 0;
+}
+
 static bool TestApplyTradingContextFlagsMapsCodes()
 {
   const int nCount = 12;
@@ -7430,6 +7459,10 @@ int main()
   if (!TestApplyTradingDivergenceFlagsMapCodes())
   {
     return 186;
+  }
+  if (!TestBuildDivergenceFlagsMapsBits())
+  {
+    return 187;
   }
   if (!TestApplyTradingContextFlagsMapsCodes())
   {

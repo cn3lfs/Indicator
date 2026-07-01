@@ -171,32 +171,6 @@ static void PrintContextFlags(FILE *pFile, int nFlags)
   std::fprintf(pFile, "]");
 }
 
-static int BuildDivergenceFlags(const DivergenceResult &D)
-{
-  int nFlags = 0;
-  if (D.bNewExtreme)
-  {
-    nFlags |= CZSC_DIVERGENCE_NEW_EXTREME;
-  }
-  if (D.bWeakSpace)
-  {
-    nFlags |= CZSC_DIVERGENCE_WEAK_SPACE;
-  }
-  if (D.bWeakSpeed)
-  {
-    nFlags |= CZSC_DIVERGENCE_WEAK_SPEED;
-  }
-  if (D.bWeakMacd)
-  {
-    nFlags |= CZSC_DIVERGENCE_WEAK_MACD;
-  }
-  if (D.bDivergence)
-  {
-    nFlags |= CZSC_DIVERGENCE_CONFIRMED;
-  }
-  return nFlags;
-}
-
 static void PrintDivergenceFlags(FILE *pFile, int nFlags)
 {
   std::fprintf(pFile, "  dvg[");
