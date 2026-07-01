@@ -431,6 +431,28 @@ static bool TestRealSseGoldenCentersPresent()
          ContainsSseCenter(Centers, -1, "2020-03-19", "2020-07-09", 2833.02f, 2802.47f);
 }
 
+static bool TestRealSseGoldenSegmentCentersPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  CzscConfig Config = DefaultConfig();
+  Config.nCenterUnit = CZSC_UNIT_SEGMENT;
+  Config.nSegmentMethod = CZSC_SEG_FEATURE;
+  std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, Config);
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() != 5)
+  {
+    return false;
+  }
+
+  return ContainsSseCenter(Centers, 1, "2018-04-11", "2019-01-04", 2703.51f, 2449.20f) &&
+         ContainsSseCenter(Centers, 1, "2019-04-08", "2020-02-04", 3042.93f, 2822.19f) &&
+         ContainsSseCenter(Centers, -1, "2020-04-16", "2021-06-02", 3456.72f, 3344.97f) &&
+         ContainsSseCenter(Centers, -1, "2021-07-28", "2024-02-05", 3315.05f, 3312.72f) &&
+         ContainsSseCenter(Centers, 1, "2024-05-20", "2025-11-14", 3174.27f, 3040.69f);
+}
+
 static bool TestFunc1WritesCompatibleSignal()
 {
   const int nCount = 7;
@@ -4889,6 +4911,10 @@ int main()
   if (!TestRealSseGoldenCentersPresent())
   {
     return 121;
+  }
+  if (!TestRealSseGoldenSegmentCentersPresent())
+  {
+    return 154;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {
