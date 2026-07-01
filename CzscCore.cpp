@@ -2451,6 +2451,25 @@ void ApplyTradingSignalAbcStructure(int nCount,
   }
 }
 
+static int GetFirstSignalDirection(const TradingSignalCandidate &C)
+{
+  if (C.fSignal == SIGNAL_FIRST_BUY)
+  {
+    return 1;
+  }
+  if (C.fSignal == SIGNAL_FIRST_SELL)
+  {
+    return -1;
+  }
+  return 0;
+}
+
+static bool HasMatchingAbcStructure(const TradingSignalCandidate &C)
+{
+  int nSign = GetFirstSignalDirection(C);
+  return (nSign != 0) && (C.nAbcStructure == nSign);
+}
+
 // 与常规买卖点输出相同，但一类买卖点必须满足第37课A-B-C结构标记。
 // 二、三类买卖点不按此条件过滤，保持第三类“首次离开+首次回试”的独立判定。
 void ApplyTradingSignalStrictAbcCandidates(int nCount,
@@ -2477,7 +2496,7 @@ void ApplyTradingSignalStrictAbcCandidates(int nCount,
     {
       continue;
     }
-    if ((C.nSource == SIGNAL_SOURCE_FIRST) && (C.nAbcStructure == 0))
+    if ((C.nSource == SIGNAL_SOURCE_FIRST) && !HasMatchingAbcStructure(C))
     {
       continue;
     }
@@ -2578,20 +2597,8 @@ static bool IsStandardMacdDivergence(const TradingSignalCandidate &C)
   {
     return false;
   }
-  int nSign = 0;
-  if (C.fSignal == SIGNAL_FIRST_BUY)
-  {
-    nSign = 1;
-  }
-  else if (C.fSignal == SIGNAL_FIRST_SELL)
-  {
-    nSign = -1;
-  }
-  else
-  {
-    return false;
-  }
-  if ((C.nAbcStructure != nSign) || (C.nMacdZeroPullback != nSign))
+  int nSign = GetFirstSignalDirection(C);
+  if (!HasMatchingAbcStructure(C) || (C.nMacdZeroPullback != nSign))
   {
     return false;
   }

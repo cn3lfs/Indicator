@@ -3899,7 +3899,7 @@ static bool TestApplyTradingAbcStructureMapsCodes()
 
 static bool TestApplyTradingStrictAbcFiltersFirstSignals()
 {
-  const int nCount = 6;
+  const int nCount = 7;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -3915,15 +3915,20 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
   ConfirmedAbc.nAbcStructure = -1;
   TradingSignalCandidate Third = MakeTestCandidate(3, 3.0f, 20);
   Third.nSource = 3;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(4, 1.0f, 30);
+  WrongDirection.nSource = 1;
+  WrongDirection.nAbcStructure = -1;
   Candidates.push_back(MissingAbc);
   Candidates.push_back(ConfirmedAbc);
   Candidates.push_back(Third);
+  Candidates.push_back(WrongDirection);
 
   ApplyTradingSignalStrictAbcCandidates(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 0.0f) &&
          NearlyEqual(pOut[2], 11.0f) &&
          NearlyEqual(pOut[3], 3.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
