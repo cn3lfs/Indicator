@@ -1385,6 +1385,63 @@ static bool TestCenterBreakoutsDetectThirdSell()
          Breakouts[0].bThirdSignal;
 }
 
+static bool TestCenterBreakoutsAllowBoundaryRetest()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 9));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection <= 0) ||
+        (Breakouts[0].nRetestPoint != 6) ||
+        !Breakouts[0].bFirstRetest ||
+        Breakouts[0].bBackIntoCenter ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 2));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 4));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection >= 0) ||
+        (Breakouts[0].nRetestPoint != 6) ||
+        !Breakouts[0].bFirstRetest ||
+        Breakouts[0].bBackIntoCenter ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestCenterBreakoutsUseFirstRetestOnly()
 {
   std::vector<SegmentPoint> Points;
@@ -6469,6 +6526,10 @@ int main()
   if (!TestCenterBreakoutsDetectThirdSell())
   {
     return 18;
+  }
+  if (!TestCenterBreakoutsAllowBoundaryRetest())
+  {
+    return 178;
   }
   if (!TestCenterBreakoutsUseFirstRetestOnly())
   {
