@@ -99,6 +99,48 @@ static int OneBasedId(int nValue)
   return (nValue >= 0) ? (nValue + 1) : 0;
 }
 
+static void PrintFlag(FILE *pFile, bool *pFirst, int nFlags, int nFlag, const char *pName)
+{
+  if ((pFile == 0) || (pFirst == 0) || ((nFlags & nFlag) == 0))
+  {
+    return;
+  }
+
+  if (!*pFirst)
+  {
+    std::fprintf(pFile, ",");
+  }
+  std::fprintf(pFile, "%s", pName);
+  *pFirst = false;
+}
+
+static void PrintContextFlags(FILE *pFile, int nFlags)
+{
+  std::fprintf(pFile, "  flags[");
+  if (nFlags == 0)
+  {
+    std::fprintf(pFile, "-");
+  }
+  else
+  {
+    bool bFirst = true;
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_STRONG_QUALITY, "强质");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_ABC_STRUCTURE, "ABC");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_MACD_ZERO_PULL, "回零");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_MACD_LINE_WEAK, "黄白弱");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_SMALL_TURN, "小转大");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_STANDARD_DIV, "标准");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN, "新生");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_AFTERMATH_EXTEND, "扩展");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_REVERSAL_TREND, "反趋势");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_REVERSAL_CONS, "盘整");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_REVERSAL_EXTEND, "末中枢扩展");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_OVERLAPPED, "二三重合");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_SIGNAL_CTX_CENTER_BREAKOUT, "首次回试");
+  }
+  std::fprintf(pFile, "]");
+}
+
 static void PrintPoints(FILE *pFile, const char *pTitle, const char *pPrefix,
                         const std::vector<SegmentPoint> &Points)
 {
@@ -162,8 +204,9 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
   for (std::size_t i = 0; i < Candidates.size(); i++)
   {
     const TradingSignalCandidate &C = Candidates[i];
+    int nCtx = BuildTradingSignalContextFlags(C);
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d PID%d TID%d  ctx%d%s\n",
+                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d PID%d TID%d  ctx%d",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -183,8 +226,13 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  OneBasedId(C.nBreakout),
                  OneBasedId(C.nPoint),
                  OneBasedId(C.nTrend),
-                 BuildTradingSignalContextFlags(C),
-                 C.bOverlapped ? "  二三重合" : "");
+                 nCtx);
+    PrintContextFlags(pFile, nCtx);
+    if (C.bOverlapped)
+    {
+      std::fprintf(pFile, "  二三重合");
+    }
+    std::fprintf(pFile, "\n");
   }
 }
 
