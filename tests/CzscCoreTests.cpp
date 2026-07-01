@@ -229,14 +229,17 @@ static bool TestRealSseSegmentsSubsetOfStrokes()
   {
     return false;  // 线段不多于笔
   }
+  std::size_t nStrokePrev = 0;
   for (std::size_t i = 0; i < SegPts.size(); i++)
   {
     bool bOnStroke = false;
+    std::size_t nStrokeIndex = 0;
     for (std::size_t j = 0; j < StrokePts.size(); j++)
     {
       if (StrokePts[j].nIndex == SegPts[i].nIndex)
       {
         bOnStroke = true;
+        nStrokeIndex = j;
         break;
       }
     }
@@ -248,6 +251,11 @@ static bool TestRealSseSegmentsSubsetOfStrokes()
     {
       return false;  // 线段端点顶底交替
     }
+    if ((i > 0) && ((nStrokeIndex - nStrokePrev) < 3))
+    {
+      return false;  // 相邻线段端点之间至少三笔
+    }
+    nStrokePrev = nStrokeIndex;
   }
   return true;
 }
