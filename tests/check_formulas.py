@@ -26,6 +26,16 @@ README_MODE_RULE_SNIPPETS = [
   "配置码四位只能由 `0/1` 组成",
   "非法 mode 会输出全 0",
 ]
+FORMULA_GUIDE_REQUIRED_SNIPPETS = [
+  "选股公式（选股用，默认推荐）",
+  "核心三类：`chan-first-buy.txt`、`chan-second-buy.txt`、`chan-third-buy.txt`",
+  "高级选股公式：`chan-first-buy-standard.txt`、`chan-first-sell-standard.txt`、`chan-first-buy-dynamics.txt`、`chan-first-sell-dynamics.txt`",
+  "小转大与上下文：`chan-small-turn-buy.txt`、`chan-small-turn-sell.txt`、`chan-first-buy-context.txt`、`chan-first-sell-context.txt`",
+  "多级别共振：`chan-multi-buy.txt`",
+  "兼容/细分公式按需导入：",
+  "三买/三卖后续与重合公式按需导入：",
+]
+MAIN_FORMULA_ALLOWED_FUNC30_MODES = {0, 40, 50, 1100000}
 EXPECTED_REGISTERED_FUNCS = set(range(1, 21)) | {30, 40}
 
 EXPECTED_FORMULA_SNIPPETS = {
@@ -335,6 +345,25 @@ def validate_readme_mode_rules(readme_text: str):
   return errors
 
 
+def validate_formula_guide_structure(guide_text: str):
+  errors = []
+  for snippet in FORMULA_GUIDE_REQUIRED_SNIPPETS:
+    if snippet not in guide_text:
+      errors.append(f"formulas/README.md missing release guidance: {snippet}")
+  return errors
+
+
+def validate_main_formula_lightweight(formula_texts):
+  errors = []
+  for name in ("chan-main.txt", "chan-all-buys.txt"):
+    text = strip_tdx_comments(formula_texts.get(name, ""))
+    modes = {int(item) for item in FUNC30_REF.findall(text)}
+    extra = sorted(modes - MAIN_FORMULA_ALLOWED_FUNC30_MODES)
+    if extra:
+      errors.append(f"{name}: main formula should stay lightweight, unexpected Func30 modes: {extra}")
+  return errors
+
+
 def validate_formula_snippets(formula_texts):
   errors = []
   for name, snippets in EXPECTED_FORMULA_SNIPPETS.items():
@@ -468,6 +497,22 @@ def self_test() -> int:
   mode_rule_errors = validate_readme_mode_rules("配置码四位只能由 `0/1` 组成")
   if mode_rule_errors != ["README.md missing Func30 mode rule: 非法 mode 会输出全 0"]:
     print(f"self-test failed: README mode rule missing {mode_rule_errors!r}", file=sys.stderr)
+    return 1
+  guide_errors = validate_formula_guide_structure(
+    "选股公式（选股用，默认推荐）\n"
+    "核心三类：`chan-first-buy.txt`、`chan-second-buy.txt`、`chan-third-buy.txt`\n"
+    "高级选股公式：`chan-first-buy-standard.txt`、`chan-first-sell-standard.txt`、`chan-first-buy-dynamics.txt`、`chan-first-sell-dynamics.txt`\n"
+    "小转大与上下文：`chan-small-turn-buy.txt`、`chan-small-turn-sell.txt`、`chan-first-buy-context.txt`、`chan-first-sell-context.txt`\n"
+    "多级别共振：`chan-multi-buy.txt`\n"
+    "兼容/细分公式按需导入：\n"
+    "三买/三卖后续与重合公式按需导入：\n"
+  )
+  if guide_errors:
+    print(f"self-test failed: formula guide structure {guide_errors!r}", file=sys.stderr)
+    return 1
+  guide_errors = validate_formula_guide_structure("选股公式（选股用，默认推荐）")
+  if not guide_errors:
+    print("self-test failed: formula guide should detect missing sections", file=sys.stderr)
     return 1
 
   snippet_errors = validate_formula_snippets({
@@ -691,6 +736,20 @@ def self_test() -> int:
   if alias_errors != ["chan-main.txt must match chan-all-buys.txt"]:
     print(f"self-test failed: formula alias mismatch {alias_errors!r}", file=sys.stderr)
     return 1
+  main_errors = validate_main_formula_lightweight({
+    "chan-main.txt": "DLL:=TDXDLL1(30,H,L,0);\nBSP:=TDXDLL1(30,H,L,40);\nQLT:=TDXDLL1(30,H,L,50);\n",
+    "chan-all-buys.txt": "SEG:=TDXDLL1(30,H,L,1100000);\n",
+  })
+  if main_errors:
+    print(f"self-test failed: main formula lightweight {main_errors!r}", file=sys.stderr)
+    return 1
+  main_errors = validate_main_formula_lightweight({
+    "chan-main.txt": "DVG:=TDXDLL1(30,H,L,320);\n",
+    "chan-all-buys.txt": "",
+  })
+  if main_errors != ["chan-main.txt: main formula should stay lightweight, unexpected Func30 modes: [320]"]:
+    print(f"self-test failed: main formula heavy output {main_errors!r}", file=sys.stderr)
+    return 1
   aux_errors = validate_aux_order({
     "ok.txt": "XC:=TDXDLL1(40,C,V,0);\nBSP:=TDXDLL1(30,H,L,40);\n",
     "comment_only.txt": "{XC:=TDXDLL1(40,C,V,0);}\nBSP:=TDXDLL1(30,H,L,40);\n",
@@ -732,6 +791,7 @@ def main() -> int:
   readme_entry_errors = validate_readme_entry_docs(readme_text)
   readme_mode_rule_errors = validate_readme_mode_rules(readme_text)
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
+  formula_guide_errors = validate_formula_guide_structure(guide_text)
   registered_func_errors.extend(validate_registered_tdx_funcs(registered_funcs))
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
@@ -770,6 +830,7 @@ def main() -> int:
   })
   formula_snippet_errors = validate_formula_snippets(formula_texts)
   formula_alias_errors = validate_formula_aliases(formula_texts)
+  main_formula_errors = validate_main_formula_lightweight(formula_texts)
 
   debug_text = (ROOT / "formulas" / "chan-debug.txt").read_text(encoding="utf-8")
   expected_debug_comments = [
@@ -796,6 +857,10 @@ def main() -> int:
     "背驰A段终点端点编号：一基",
     "背驰C段起点端点编号：一基",
     "背驰C段终点端点编号：一基",
+    "区间套层级：1一层/2小转大确认",
+    "区间套源高级别背驰段编号：一基",
+    "区间套低级别背驰段起点端点编号：一基",
+    "区间套低级别背驰段终点端点编号：一基",
     "C/A段MACD面积比：小于100为柱面积走弱",
     "C/A段价差力度比：小于100为空间走弱",
     "C/A段平均力度比：小于100为速度走弱",
@@ -827,6 +892,10 @@ def main() -> int:
     "DRAWNUMBER(BSP<>0 AND APE>0,L*0.945,APE)",
     "DRAWNUMBER(BSP<>0 AND CPS>0,H*1.065,CPS)",
     "DRAWNUMBER(BSP<>0 AND CPE>0,L*0.940,CPE)",
+    "DRAWNUMBER(NLV>0,L*0.935,NLV)",
+    "DRAWNUMBER(NLV>0 AND NSR>0,H*1.070,NSR)",
+    "DRAWNUMBER(NLV>0 AND NSP>0,L*0.930,NSP)",
+    "DRAWNUMBER(NLV>0 AND NEP>0,H*1.075,NEP)",
     "DRAWLINE(BSG=1,L,BSG=2,L,0),COLORBLUE",
     "DRAWLINE(BSG=-1,H,BSG=-2,H,0),COLORBLUE",
     "DRAWLINE(NST=1,L,NST=2,L,0),COLORCYAN",
@@ -840,8 +909,9 @@ def main() -> int:
       stale_comments.append(f"chan-debug.txt missing debug line: {line}")
 
   if (missing or empty or undocumented or invalid_modes or stale_comments or
-      aux_order_errors or formula_snippet_errors or formula_alias_errors or func30_errors or
-      func30_doc_errors or readme_entry_errors or readme_mode_rule_errors or
+      aux_order_errors or formula_snippet_errors or formula_alias_errors or main_formula_errors or
+      func30_errors or func30_doc_errors or readme_entry_errors or readme_mode_rule_errors or
+      formula_guide_errors or
       registered_func_errors or tdx_func_errors):
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
@@ -859,6 +929,8 @@ def main() -> int:
       print(f"formula snippet error: {item}", file=sys.stderr)
     for item in formula_alias_errors:
       print(f"formula alias error: {item}", file=sys.stderr)
+    for item in main_formula_errors:
+      print(f"main formula error: {item}", file=sys.stderr)
     for item in func30_errors:
       print(f"Func30 parser error: {item}", file=sys.stderr)
     for item in func30_doc_errors:
@@ -867,6 +939,8 @@ def main() -> int:
       print(f"README entry error: {item}", file=sys.stderr)
     for item in readme_mode_rule_errors:
       print(f"README mode rule error: {item}", file=sys.stderr)
+    for item in formula_guide_errors:
+      print(f"formula guide error: {item}", file=sys.stderr)
     for item in registered_func_errors:
       print(f"TDX registry parser error: {item}", file=sys.stderr)
     for item in tdx_func_errors:

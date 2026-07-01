@@ -38,35 +38,18 @@
 - 画线方法选 **主图叠加**
 - 把 `chan-debug.txt` 的内容复制粘贴进去。`STB` 标记第44课小转大必要条件，三买为 `1`，三卖为 `-1`；`ABC` 标记第37课一类背驰的 A-B-C 结构，一买为 `1`，一卖为 `-1`；`MLW` 标记 MACD 黄白线高度走弱；`MZP` 标记 B 中枢 MACD 回零；`STD` 标记标准趋势背驰确认；`MAR/SPR/VPR` 标记胜出候选 C/A 段 MACD 柱面积比、价差力度比、平均力度比；`DVG` 是背驰要素位图；`CTX` 是胜出买卖点候选的上下文位图，含 `2048` 二三类重合与 `4096` 关联中枢首次离开/回试；`CLF/LCF` 标记胜出候选所属中枢生命周期、相邻中枢生命周期；`POS/MOV/PRI/CEN/BKO/PID/TID/BLP/BRP/ABK/ABL/ABR/STL/STR/STF/SFP/SMP/APS/APE/CPS/CPE` 标记候选相对中枢位置、所属走势类型、优先级、所属中枢编号、突破编号、端点编号、走势编号、突破离开端点编号、回试端点编号、ABC 关联突破编号与其离开/回试端点编号、小转大离开/回试端点编号、小转大关联一类端点编号、二类关联一类/中间反向端点编号、背驰 A/C 段起止端点编号；`NLV/NSR/NSP/NEP` 标记区间套层级、源高级别背驰段编号、低级别背驰段起止端点编号；蓝线 `BSG` 为第27课一类背驰段，青线 `NST` 为第27/61课区间套背驰段
 
-**选股公式**（选股用）：
+**选股公式（选股用，默认推荐）**：
 - 点 **条件选股公式** → **新建**
-- 分别导入 `chan-first-buy.txt`（一买）、`chan-second-buy.txt`（二买）、`chan-third-buy.txt`（三买）
-- 分别导入 `chan-first-sell.txt`（一卖）、`chan-second-sell.txt`（二卖）、`chan-third-sell.txt`（三卖）
+- 核心三类：`chan-first-buy.txt`、`chan-second-buy.txt`、`chan-third-buy.txt`
+- 核心三类卖点：`chan-first-sell.txt`、`chan-second-sell.txt`、`chan-third-sell.txt`
 - 二买/二卖公式默认要求第21课“一类后第二段次级别走势”端点可定位
-- 需要第21课原文位置口径的一买时，另导入 `chan-first-buy-original.txt`（一买 + 中枢下方 + 下跌走势）
-- 需要第21课原文位置口径的一卖时，另导入 `chan-first-sell-original.txt`（一卖 + 中枢上方 + 上涨走势）
-- 需要第37课 A-B-C 结构确认的一买时，另导入 `chan-first-buy-abc.txt`
-- 需要第37课 A-B-C 结构确认的一卖时，另导入 `chan-first-sell-abc.txt`
-- 需要第24/25/37课标准趋势背驰确认且第37课 c 段三买/三卖端点可定位的一买时，另导入 `chan-first-buy-standard.txt`
-- 需要第24/25/37课标准趋势背驰确认且第37课 c 段三买/三卖端点可定位的一卖时，另导入 `chan-first-sell-standard.txt`
-- 需要创新极值、空间/速度/MACD 柱面积均走弱且 A/C 段端点有序的一买时，另导入 `chan-first-buy-dynamics.txt`
-- 需要创新极值、空间/速度/MACD 柱面积均走弱且 A/C 段端点有序的一卖时，另导入 `chan-first-sell-dynamics.txt`
-- 需要第44课小转大必要条件且三买/三卖端点可定位的买点时，另导入 `chan-small-turn-buy.txt`
-- 需要第44课小转大必要条件且三买/三卖端点可定位的卖点时，另导入 `chan-small-turn-sell.txt`
-- 需要用 `CTX` 位图组合强质量、ABC、MACD 回零、黄白线走弱、标准趋势背驰时，另导入 `chan-first-buy-context.txt`
-- 需要用 `CTX` 位图组合强质量、ABC、MACD 回零、黄白线走弱、标准趋势背驰的一卖时，另导入 `chan-first-sell-context.txt`
-- 需要强质量三买且关联中枢首次离开/回试时，另导入 `chan-third-buy-strong.txt`
-- 需要强质量三卖且关联中枢首次离开/回试时，另导入 `chan-third-sell-strong.txt`
-- 需要第20课原文位置口径的三买时，另导入 `chan-third-buy-original.txt`（三买 + 中枢上方 + 首次离开/回试）
-- 需要第20课原文位置口径的三卖时，另导入 `chan-third-sell-original.txt`（三卖 + 中枢下方 + 首次离开/回试）
-- 需要第21课三买后中枢扩张时，另导入 `chan-third-buy-expanded.txt`
-- 需要第21课三卖后中枢扩张时，另导入 `chan-third-sell-expanded.txt`
-- 需要第21课三买后中枢新生时，另导入 `chan-third-buy-newborn.txt`
-- 需要第21课三卖后中枢新生时，另导入 `chan-third-sell-newborn.txt`
-- 需要第21/61课二三类重合买点时，另导入 `chan-overlap-buy.txt`
-- 需要第21/61课二三类重合卖点时，另导入 `chan-overlap-sell.txt`
-- 需要日线二买叠加 30 分钟二/三买共振时，另导入 `chan-multi-buy.txt`
+- 高级选股公式：`chan-first-buy-standard.txt`、`chan-first-sell-standard.txt`、`chan-first-buy-dynamics.txt`、`chan-first-sell-dynamics.txt`
+- 小转大与上下文：`chan-small-turn-buy.txt`、`chan-small-turn-sell.txt`、`chan-first-buy-context.txt`、`chan-first-sell-context.txt`
+- 多级别共振：`chan-multi-buy.txt`
   （该公式会分别注册日线与 30 分钟 C/V，保证两级别动力学输出都优先使用真实收盘价）
+- 兼容/细分公式按需导入：`chan-first-buy-original.txt`、`chan-first-sell-original.txt`、`chan-first-buy-abc.txt`、`chan-first-sell-abc.txt`
+- 三买/三卖细分公式按需导入：`chan-third-buy-strong.txt`、`chan-third-sell-strong.txt`、`chan-third-buy-original.txt`、`chan-third-sell-original.txt`
+- 三买/三卖后续与重合公式按需导入：`chan-third-buy-expanded.txt`、`chan-third-sell-expanded.txt`、`chan-third-buy-newborn.txt`、`chan-third-sell-newborn.txt`、`chan-overlap-buy.txt`、`chan-overlap-sell.txt`
 - 每次粘贴后点确定
 
 ## 第四步：使用

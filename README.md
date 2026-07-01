@@ -76,8 +76,9 @@
 
 1. 将对应的 DLL 复制到通达信安装目录下的 `T0002\dlls` 目录之中；
 2. 在通达信「功能 → 公式系统 → 公式管理器」里把本 dll 加载到 **1 号 dll 插件**（公式中即用 `TDXDLL1(编号,...)` 调用）；
-3. 按 `formulas/README.md` 导入公式包。看盘主图优先用 `formulas/chan-main.txt`；调试用
-   `formulas/chan-debug.txt`；条件选股公式按一买/二买/三买、一卖/二卖/三卖分别导入。
+3. 按 `formulas/README.md` 导入公式包。看盘主图默认只用轻量的 `formulas/chan-main.txt`；人工核对再导入
+   `formulas/chan-debug.txt`；条件选股先导入核心三类和 standard/dynamics/small-turn/context/multi-buy，
+   其它 original、ABC、强三买三卖、后续/重合公式作为兼容细分项按需导入。
 
 发布产物统一放在 **`build/`** 目录。两个 DLL 均已**静态链接** MinGW 运行时（`libgcc`/`libstdc++`），自包含，
 无需在通达信机器另装任何运行库——仅依赖系统自带的 `KERNEL32.dll`/`msvcrt.dll`。导出函数与公式用法两版完全一致。
