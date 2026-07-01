@@ -12,6 +12,15 @@ FUNC40_CALL = re.compile(r"TDXDLL1\s*\(\s*40\s*,\s*C\s*,\s*V\s*,\s*0\s*\)")
 FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\n//=+\n// 输出函数40号", re.S)
 CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
 
+EXPECTED_FORMULA_SNIPPETS = {
+  "chan-third-buy-original.txt": [
+    "POS:=TDXDLL1(30,H,L,220);",
+    "CTX:=TDXDLL1(30,H,L,210);",
+    "BRK:=MOD(INTPART(CTX/4096),2)=1;",
+    "BARSLAST(BSP=3 AND POS=1 AND BRK)<10;",
+  ],
+}
+
 
 def is_valid_config(n_config: int) -> bool:
   for _ in range(4):
@@ -72,6 +81,16 @@ def validate_readme_func30_docs(readme_text: str, outputs):
   return errors
 
 
+def validate_formula_snippets(formula_texts):
+  errors = []
+  for name, snippets in EXPECTED_FORMULA_SNIPPETS.items():
+    text = formula_texts.get(name, "")
+    for snippet in snippets:
+      if snippet not in text:
+        errors.append(f"{name}: missing snippet {snippet}")
+  return errors
+
+
 def self_test() -> int:
   sample = (
     "void Func30(int nCount)\n"
@@ -126,6 +145,18 @@ def self_test() -> int:
   if doc_errors != expected_doc_errors:
     print(f"self-test failed: README output docs {doc_errors!r}", file=sys.stderr)
     return 1
+
+  snippet_errors = validate_formula_snippets({
+    "chan-third-buy-original.txt": "POS:=TDXDLL1(30,H,L,220);\n",
+  })
+  expected_snippet_errors = [
+    "chan-third-buy-original.txt: missing snippet CTX:=TDXDLL1(30,H,L,210);",
+    "chan-third-buy-original.txt: missing snippet BRK:=MOD(INTPART(CTX/4096),2)=1;",
+    "chan-third-buy-original.txt: missing snippet BARSLAST(BSP=3 AND POS=1 AND BRK)<10;",
+  ]
+  if snippet_errors != expected_snippet_errors:
+    print(f"self-test failed: formula snippets {snippet_errors!r}", file=sys.stderr)
+    return 1
   return 0
 
 
@@ -175,20 +206,11 @@ def main() -> int:
     elif first_func40.start() > first_func30.start():
       aux_order_errors.append(f"{path.relative_to(ROOT)}: TDXDLL1(40,C,V,0) must appear before Func30")
 
-  expected_formula_snippets = {
-    "chan-third-buy-original.txt": [
-      "POS:=TDXDLL1(30,H,L,220);",
-      "CTX:=TDXDLL1(30,H,L,210);",
-      "BRK:=MOD(INTPART(CTX/4096),2)=1;",
-      "BARSLAST(BSP=3 AND POS=1 AND BRK)<10;",
-    ],
+  formula_texts = {
+    path.name: path.read_text(encoding="utf-8")
+    for path in formula_files
   }
-  for name, snippets in expected_formula_snippets.items():
-    path = ROOT / "formulas" / name
-    text = path.read_text(encoding="utf-8") if path.exists() else ""
-    for snippet in snippets:
-      if snippet not in text:
-        formula_snippet_errors.append(f"{name}: missing snippet {snippet}")
+  formula_snippet_errors = validate_formula_snippets(formula_texts)
 
   debug_text = (ROOT / "formulas" / "chan-debug.txt").read_text(encoding="utf-8")
   expected_debug_comments = [
