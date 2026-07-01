@@ -395,7 +395,7 @@ static bool TestRealSseNewBiNotFewerThanStrict()
 }
 
 // 真实上证：买卖点结构良好——编码合法；三买/三卖都存在（曾因中枢首尾相连而全无）；
-// 一类经「每趋势一个」去重后不泛滥（8 年日线远少于笔数）
+// 一类经「每中枢区域一个」去重后不泛滥（8 年日线远少于笔数）
 static bool TestRealSseSignalsWellFormed()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
