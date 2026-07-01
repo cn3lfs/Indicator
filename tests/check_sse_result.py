@@ -9,10 +9,12 @@ import tempfile
 CANDIDATE_LINE = re.compile(r"^  [0-9]{4}-[0-9]{2}-[0-9]{2}  ")
 BREAKOUT_FIELD = re.compile(r"突破(?P<breakout>-?[0-9]+)")
 ABC_FIELD = re.compile(r" ABC(?P<abc>-?[0-9]+) ")
+SMALL_TURN_FIELD = re.compile(r" 小转大(?P<small>-?[0-9]+) ")
 DEBUG_IDS = re.compile(
   r"调试CEN(?P<center>[0-9]+) BKO(?P<bko>[0-9]+) "
   r"BLP(?P<blp>[0-9]+) BRP(?P<brp>[0-9]+) "
   r"ABK(?P<abk>[0-9]+) ABL(?P<abl>[0-9]+) ABR(?P<abr>[0-9]+) "
+  r"STL(?P<stl>[0-9]+) STR(?P<str>[0-9]+) "
   r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)"
 )
 BKO_CONTEXT = re.compile(
@@ -39,10 +41,17 @@ def validate_candidate_context(text: str):
     if abc_field is None:
       errors.append(f"line {n_line}: candidate missing ABC field")
       continue
+    small_turn_field = SMALL_TURN_FIELD.search(line)
+    if small_turn_field is None:
+      errors.append(f"line {n_line}: candidate missing small turn field")
+      continue
     n_abc = int(abc_field.group("abc"))
+    n_small_turn = int(small_turn_field.group("small"))
     n_abk = int(debug_ids.group("abk"))
     n_abl = int(debug_ids.group("abl"))
     n_abr = int(debug_ids.group("abr"))
+    n_stl = int(debug_ids.group("stl"))
+    n_str = int(debug_ids.group("str"))
     if n_abc == 0 and n_abk != 0:
       errors.append(f"line {n_line}: ABC0 conflicts with ABK{n_abk}")
     if n_abc != 0 and n_abk <= 0:
@@ -51,9 +60,13 @@ def validate_candidate_context(text: str):
       errors.append(f"line {n_line}: ABK0 conflicts with ABL{n_abl}/ABR{n_abr}")
     if n_abk > 0 and (n_abl <= 0 or n_abr <= 0 or n_abl >= n_abr):
       errors.append(f"line {n_line}: ABK{n_abk} requires ordered positive ABL/ABR")
+    if n_small_turn == 0 and (n_stl != 0 or n_str != 0):
+      errors.append(f"line {n_line}: small turn 0 conflicts with STL{n_stl}/STR{n_str}")
+    if n_small_turn != 0 and (n_stl <= 0 or n_str <= 0 or n_stl >= n_str):
+      errors.append(f"line {n_line}: small turn {n_small_turn} requires ordered positive STL/STR")
     if "bko[-]" in line:
-      if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp")):
-        errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP debug ids")
+      if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp", "stl", "str")):
+        errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP/STL/STR debug ids")
       continue
     breakout_field = BREAKOUT_FIELD.search(line)
     bko_context = BKO_CONTEXT.search(line)
@@ -77,6 +90,8 @@ def validate_candidate_context(text: str):
       errors.append(f"line {n_line}: BLP{n_blp} does not match leave P{n_leave}")
     if n_brp != n_retest:
       errors.append(f"line {n_line}: BRP{n_brp} does not match retest P{n_retest}")
+    if n_small_turn != 0 and (n_stl != n_blp or n_str != n_brp):
+      errors.append(f"line {n_line}: STL/STR must match BLP/BRP for small turn signals")
     if n_retest != n_pid:
       errors.append(f"line {n_line}: retest P{n_retest} does not match PID{n_pid}")
     if n_leave >= n_retest:
