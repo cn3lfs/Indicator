@@ -2418,6 +2418,31 @@ void ApplyTradingSignalSmallTurn(int nCount,
 }
 
 // 第37课a+A+b+B+c：一类背驰的c段至少包含对最后中枢B的三买/三卖。
+static int GetFirstSignalDirection(const TradingSignalCandidate &C)
+{
+  if (C.fSignal == SIGNAL_FIRST_BUY)
+  {
+    return 1;
+  }
+  if (C.fSignal == SIGNAL_FIRST_SELL)
+  {
+    return -1;
+  }
+  return 0;
+}
+
+static bool HasMatchingAbcStructure(const TradingSignalCandidate &C)
+{
+  int nSign = GetFirstSignalDirection(C);
+  return (nSign != 0) && (C.nAbcStructure == nSign);
+}
+
+static bool HasMatchingMacdZeroPullback(const TradingSignalCandidate &C)
+{
+  int nSign = GetFirstSignalDirection(C);
+  return (nSign != 0) && (C.nMacdZeroPullback == nSign);
+}
+
 // 输出 1=一买前具备三卖结构，-1=一卖前具备三买结构，0=无。
 void ApplyTradingSignalAbcStructure(int nCount,
                                     float *pOut,
@@ -2445,29 +2470,10 @@ void ApplyTradingSignalAbcStructure(int nCount,
     }
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
-      pOut[C.nIndex] = (float)C.nAbcStructure;
+      pOut[C.nIndex] = HasMatchingAbcStructure(C) ? (float)C.nAbcStructure : 0.0f;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
-}
-
-static int GetFirstSignalDirection(const TradingSignalCandidate &C)
-{
-  if (C.fSignal == SIGNAL_FIRST_BUY)
-  {
-    return 1;
-  }
-  if (C.fSignal == SIGNAL_FIRST_SELL)
-  {
-    return -1;
-  }
-  return 0;
-}
-
-static bool HasMatchingAbcStructure(const TradingSignalCandidate &C)
-{
-  int nSign = GetFirstSignalDirection(C);
-  return (nSign != 0) && (C.nAbcStructure == nSign);
 }
 
 // 与常规买卖点输出相同，但一类买卖点必须满足第37课A-B-C结构标记。
@@ -2585,7 +2591,7 @@ void ApplyTradingSignalMacdZeroPullback(int nCount,
     }
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
-      pOut[C.nIndex] = (float)C.nMacdZeroPullback;
+      pOut[C.nIndex] = HasMatchingMacdZeroPullback(C) ? (float)C.nMacdZeroPullback : 0.0f;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -2597,8 +2603,7 @@ static bool IsStandardMacdDivergence(const TradingSignalCandidate &C)
   {
     return false;
   }
-  int nSign = GetFirstSignalDirection(C);
-  if (!HasMatchingAbcStructure(C) || (C.nMacdZeroPullback != nSign))
+  if (!HasMatchingAbcStructure(C) || !HasMatchingMacdZeroPullback(C))
   {
     return false;
   }
@@ -2656,11 +2661,11 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_STRONG_QUALITY;
   }
-  if (C.nAbcStructure != 0)
+  if (HasMatchingAbcStructure(C))
   {
     nFlags |= CZSC_SIGNAL_CTX_ABC_STRUCTURE;
   }
-  if (C.nMacdZeroPullback != 0)
+  if (HasMatchingMacdZeroPullback(C))
   {
     nFlags |= CZSC_SIGNAL_CTX_MACD_ZERO_PULL;
   }

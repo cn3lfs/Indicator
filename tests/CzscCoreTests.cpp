@@ -3874,7 +3874,7 @@ static bool TestApplyTradingSmallTurnMapsCodes()
 
 static bool TestApplyTradingAbcStructureMapsCodes()
 {
-  const int nCount = 6;
+  const int nCount = 8;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -3887,14 +3887,18 @@ static bool TestApplyTradingAbcStructureMapsCodes()
   TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
   Sell.nAbcStructure = -1;
   TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  WrongDirection.nAbcStructure = -1;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(None);
+  Candidates.push_back(WrongDirection);
 
   ApplyTradingSignalAbcStructure(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
-         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
 }
 
 static bool TestApplyTradingStrictAbcFiltersFirstSignals()
@@ -3971,7 +3975,7 @@ static bool TestApplyTradingMacdLineWeaknessMapsCodes()
 
 static bool TestApplyTradingMacdZeroPullbackMapsCodes()
 {
-  const int nCount = 6;
+  const int nCount = 8;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -3984,15 +3988,19 @@ static bool TestApplyTradingMacdZeroPullbackMapsCodes()
   TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
   Sell.nMacdZeroPullback = -1;
   TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  WrongDirection.nMacdZeroPullback = -1;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(None);
+  Candidates.push_back(WrongDirection);
 
   ApplyTradingSignalMacdZeroPullback(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) &&
          NearlyEqual(pOut[3], -1.0f) &&
          NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
