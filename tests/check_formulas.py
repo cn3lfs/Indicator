@@ -13,6 +13,11 @@ FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\
 CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
 
 EXPECTED_FORMULA_SNIPPETS = {
+  "chan-overlap-buy.txt": [
+    "CTX:=TDXDLL1(30,H,L,210);",
+    "OVL:=MOD(INTPART(CTX/2048),2)=1;",
+    "BARSLAST((BSP=2 OR BSP=3) AND OVL)<10;",
+  ],
   "chan-third-buy-original.txt": [
     "POS:=TDXDLL1(30,H,L,220);",
     "CTX:=TDXDLL1(30,H,L,210);",
@@ -147,6 +152,11 @@ def self_test() -> int:
     return 1
 
   snippet_errors = validate_formula_snippets({
+    "chan-overlap-buy.txt": (
+      "CTX:=TDXDLL1(30,H,L,210);\n"
+      "OVL:=MOD(INTPART(CTX/2048),2)=1;\n"
+      "BARSLAST((BSP=2 OR BSP=3) AND OVL)<10;\n"
+    ),
     "chan-third-buy-original.txt": "POS:=TDXDLL1(30,H,L,220);\n",
   })
   expected_snippet_errors = [
