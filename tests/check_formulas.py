@@ -22,6 +22,10 @@ README_REQUIRED_SNIPPETS = [
   "formulas/chan-main.txt",
   "formulas/chan-debug.txt",
 ]
+README_MODE_RULE_SNIPPETS = [
+  "配置码四位只能由 `0/1` 组成",
+  "非法 mode 会输出全 0",
+]
 
 EXPECTED_FORMULA_SNIPPETS = {
   "chan-main.txt": [
@@ -244,6 +248,14 @@ def validate_readme_entry_docs(readme_text: str):
   return errors
 
 
+def validate_readme_mode_rules(readme_text: str):
+  errors = []
+  for snippet in README_MODE_RULE_SNIPPETS:
+    if snippet not in readme_text:
+      errors.append(f"README.md missing Func30 mode rule: {snippet}")
+  return errors
+
+
 def validate_formula_snippets(formula_texts):
   errors = []
   for name, snippets in EXPECTED_FORMULA_SNIPPETS.items():
@@ -347,6 +359,14 @@ def self_test() -> int:
   entry_errors = validate_readme_entry_docs("formulas/README.md formulas/chan-main.txt")
   if entry_errors != ["README.md missing formula pack entry: formulas/chan-debug.txt"]:
     print(f"self-test failed: README entry missing {entry_errors!r}", file=sys.stderr)
+    return 1
+  mode_rule_errors = validate_readme_mode_rules("配置码四位只能由 `0/1` 组成 非法 mode 会输出全 0")
+  if mode_rule_errors:
+    print(f"self-test failed: README mode rules {mode_rule_errors!r}", file=sys.stderr)
+    return 1
+  mode_rule_errors = validate_readme_mode_rules("配置码四位只能由 `0/1` 组成")
+  if mode_rule_errors != ["README.md missing Func30 mode rule: 非法 mode 会输出全 0"]:
+    print(f"self-test failed: README mode rule missing {mode_rule_errors!r}", file=sys.stderr)
     return 1
 
   snippet_errors = validate_formula_snippets({
@@ -537,6 +557,7 @@ def main() -> int:
   readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
   func30_doc_errors = validate_readme_func30_docs(readme_text, func30_outputs)
   readme_entry_errors = validate_readme_entry_docs(readme_text)
+  readme_mode_rule_errors = validate_readme_mode_rules(readme_text)
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
@@ -610,7 +631,8 @@ def main() -> int:
 
   if (missing or empty or undocumented or invalid_modes or stale_comments or
       aux_order_errors or formula_snippet_errors or formula_alias_errors or func30_errors or
-      func30_doc_errors or readme_entry_errors or registered_func_errors or tdx_func_errors):
+      func30_doc_errors or readme_entry_errors or readme_mode_rule_errors or
+      registered_func_errors or tdx_func_errors):
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -633,6 +655,8 @@ def main() -> int:
       print(f"Func30 documentation error: {item}", file=sys.stderr)
     for item in readme_entry_errors:
       print(f"README entry error: {item}", file=sys.stderr)
+    for item in readme_mode_rule_errors:
+      print(f"README mode rule error: {item}", file=sys.stderr)
     for item in registered_func_errors:
       print(f"TDX registry parser error: {item}", file=sys.stderr)
     for item in tdx_func_errors:
