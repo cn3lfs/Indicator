@@ -3166,6 +3166,58 @@ static bool TestApplyTradingPriorityMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingCenterIdMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nCenter = 4;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nCenter = 7;
+  TradingSignalCandidate Unknown = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Unknown);
+
+  ApplyTradingSignalCenterId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 8.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingBreakoutIdMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nBreakout = 1;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nBreakout = 5;
+  TradingSignalCandidate None = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(None);
+
+  ApplyTradingSignalBreakoutId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 6.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestApplyTradingSmallTurnMapsCodes()
 {
   const int nCount = 6;
@@ -4249,7 +4301,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21, 22, 23, 24};
+  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -4265,6 +4317,8 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 22: ApplyTradingSignalCenterPosition(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 23: ApplyTradingSignalMovementType(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 24: ApplyTradingSignalPriority(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 25: ApplyTradingSignalCenterId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 26: ApplyTradingSignalBreakoutId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -4931,6 +4985,14 @@ int main()
   if (!TestApplyTradingPriorityMapsCodes())
   {
     return 146;
+  }
+  if (!TestApplyTradingCenterIdMapsCodes())
+  {
+    return 147;
+  }
+  if (!TestApplyTradingBreakoutIdMapsCodes())
+  {
+    return 148;
   }
   if (!TestApplyTradingSmallTurnMapsCodes())
   {
