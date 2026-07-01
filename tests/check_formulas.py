@@ -60,6 +60,15 @@ def validate_func30_mode(n_mode: int, outputs):
   return ""
 
 
+def validate_readme_func30_docs(readme_text: str, outputs):
+  errors = []
+  for n_output in sorted(n for n in outputs if n >= 14):
+    marker = f"30 号输出 {n_output}"
+    if marker not in readme_text:
+      errors.append(f"README.md missing Func30 output doc: {marker}")
+  return errors
+
+
 def self_test() -> int:
   sample = (
     "void Func30(int nCount)\n"
@@ -102,6 +111,11 @@ def self_test() -> int:
     if actual != expected:
       print(f"self-test failed: mode validation {actual!r} != {expected!r}", file=sys.stderr)
       return 1
+
+  doc_errors = validate_readme_func30_docs("30 号输出 14\n30 号输出 16\n", {0, 13, 14, 15, 16})
+  if doc_errors != ["README.md missing Func30 output doc: 30 号输出 15"]:
+    print(f"self-test failed: README output docs {doc_errors!r}", file=sys.stderr)
+    return 1
   return 0
 
 
@@ -114,6 +128,8 @@ def main() -> int:
   aux_order_errors = []
   func30_errors = []
   func30_outputs, func30_errors = read_func30_outputs()
+  readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
+  func30_doc_errors = validate_readme_func30_docs(readme_text, func30_outputs)
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
@@ -176,7 +192,8 @@ def main() -> int:
     if line not in debug_text:
       stale_comments.append(f"chan-debug.txt missing debug line: {line}")
 
-  if missing or empty or undocumented or invalid_modes or stale_comments or aux_order_errors or func30_errors:
+  if (missing or empty or undocumented or invalid_modes or stale_comments or
+      aux_order_errors or func30_errors or func30_doc_errors):
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -191,6 +208,8 @@ def main() -> int:
       print(f"aux order error: {item}", file=sys.stderr)
     for item in func30_errors:
       print(f"Func30 parser error: {item}", file=sys.stderr)
+    for item in func30_doc_errors:
+      print(f"Func30 documentation error: {item}", file=sys.stderr)
     return 1
   return 0
 
