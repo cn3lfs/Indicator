@@ -4639,6 +4639,35 @@ static bool TestClassifyCenterRelationExtensionAtFullExtentBoundary()
   return true;
 }
 
+static bool TestClassifyCenterLifecycleExtension()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 12, 4);
+  Center Next = MakeTestCenterFull(16, 28, 8, 6, 10, 3);
+
+  return ClassifyCenterLifecycle(Prev, Next) == CZSC_CENTER_LIFECYCLE_EXTENSION;
+}
+
+static bool TestClassifyCenterLifecycleExpansion()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 12, 4);
+  Center Next = MakeTestCenterFull(16, 28, 15, 10, 16, 8);
+
+  return (ClassifyCenterRelation(Prev, Next) == CZSC_CENTER_RELATION_EXTENSION) &&
+         (ClassifyCenterLifecycle(Prev, Next) == CZSC_CENTER_LIFECYCLE_EXPANSION);
+}
+
+static bool TestClassifyCenterLifecycleNewborn()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 10, 4);
+  Center Up = MakeTestCenterFull(16, 28, 14, 12, 15, 11);
+  Center Down = MakeTestCenterFull(32, 44, 2, 1, 3, 0);
+
+  return (ClassifyCenterRelation(Prev, Up) == CZSC_CENTER_RELATION_UP) &&
+         (ClassifyCenterLifecycle(Prev, Up) == CZSC_CENTER_LIFECYCLE_NEWBORN_UP) &&
+         (ClassifyCenterRelation(Prev, Down) == CZSC_CENTER_RELATION_DOWN) &&
+         (ClassifyCenterLifecycle(Prev, Down) == CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN);
+}
+
 static bool TestWriteCenterRelationSignalMarks()
 {
   const int nCount = 20;
@@ -4672,6 +4701,52 @@ static bool TestWriteCenterRelationSignalMarks()
       fExpected = 2;   // 中枢扩展
     }
 
+    if (!NearlyEqual(pOut[i], fExpected))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestWriteCenterLifecycleSignalMarks()
+{
+  const int nCount = 30;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 4, 9, 5, 12, 4));
+  Centers.push_back(MakeTestCenterFull(5, 9, 8, 6, 10, 3));       // [ZD,ZG] 重叠 → 延伸
+  Centers.push_back(MakeTestCenterFull(10, 14, 15, 10, 16, 8));   // 全幅重叠 → 扩展
+  Centers.push_back(MakeTestCenterFull(15, 19, 25, 21, 26, 20));  // 全幅上移 → 上涨新生
+  Centers.push_back(MakeTestCenterFull(20, 24, 10, 5, 12, 4));    // 全幅下移 → 下跌新生
+
+  WriteCenterLifecycleSignal(nCount, pOut, Centers);
+
+  for (int i = 0; i < nCount; i++)
+  {
+    float fExpected = 0;
+    if (i == 5)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_EXTENSION;
+    }
+    else if (i == 10)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_EXPANSION;
+    }
+    else if (i == 15)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_NEWBORN_UP;
+    }
+    else if (i == 20)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN;
+    }
     if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
@@ -7050,7 +7125,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -7140,6 +7215,8 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 44: ApplyTradingSignalDivergencePreviousEndPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 45: ApplyTradingSignalDivergenceCurrentStartPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 46: ApplyTradingSignalDivergenceCurrentEndPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 47: ApplyTradingSignalCenterLifecycle(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Centers); break;
+      case 48: WriteCenterLifecycleSignal(SSE_DAILY_COUNT, &Expected[0], An.Centers); break;
       default: return false;
     }
 
@@ -7997,9 +8074,25 @@ int main()
   {
     return 173;
   }
+  if (!TestClassifyCenterLifecycleExtension())
+  {
+    return 196;
+  }
+  if (!TestClassifyCenterLifecycleExpansion())
+  {
+    return 197;
+  }
+  if (!TestClassifyCenterLifecycleNewborn())
+  {
+    return 198;
+  }
   if (!TestWriteCenterRelationSignalMarks())
   {
     return 67;
+  }
+  if (!TestWriteCenterLifecycleSignalMarks())
+  {
+    return 199;
   }
   if (!TestFunc11WritesCenterRelation())
   {

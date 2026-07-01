@@ -61,6 +61,15 @@ enum CzscCenterRelation
   CZSC_CENTER_RELATION_UP        = 1,   // 后DD > 前GG：上涨及其延续
 };
 
+enum CzscCenterLifecycle
+{
+  CZSC_CENTER_LIFECYCLE_UNKNOWN      = 0,   // 后续中枢尚未形成
+  CZSC_CENTER_LIFECYCLE_EXTENSION    = 1,   // [ZD,ZG] 重叠：同级中枢延伸
+  CZSC_CENTER_LIFECYCLE_EXPANSION    = 2,   // 全幅 GG/DD 重叠：形成高级别中枢
+  CZSC_CENTER_LIFECYCLE_NEWBORN_UP   = 3,   // 全幅不重叠：上涨趋势新生
+  CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN = -3,  // 全幅不重叠：下跌趋势新生
+};
+
 enum CzscReversalStrength
 {
   CZSC_REVERSAL_EXTENSION     = -1,  // 情况一：最后中枢级别扩展（最弱反弹）
@@ -351,6 +360,7 @@ const std::vector<float> *GetValidatedVolume(int nCount, const float *pHigh, con
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points);
 std::vector<TrendStructure> BuildTrendStructures(const std::vector<Center> &Centers);
 int ClassifyCenterRelation(const Center &Prev, const Center &Next);
+int ClassifyCenterLifecycle(const Center &Prev, const Center &Next);
 int ClassifyCenterAftermath(const std::vector<Center> &Centers, int nCenter, float fSignal);
 int ClassifyReversalStrength(const std::vector<SegmentPoint> &Points,
                              const std::vector<Center> &Centers,
@@ -495,6 +505,10 @@ void ApplyTradingSignalDivergenceCurrentEndPointId(int nCount,
 void ApplyTradingSignalContextFlags(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalCenterLifecycle(int nCount,
+                                       float *pOut,
+                                       const std::vector<TradingSignalCandidate> &Candidates,
+                                       const std::vector<Center> &Centers);
 void WriteNestedDivergenceSignal(int nCount,
                                  float *pOut,
                                  const std::vector<SegmentPoint> &HighPoints,
@@ -503,6 +517,7 @@ void WriteNestedDivergenceSignal(int nCount,
                                  const std::vector<TradingSignalCandidate> &LowCandidates);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
+void WriteCenterLifecycleSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
 // 顶底扫描与化简（早期版本的笔识别，保留供通达信公式使用）
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
@@ -542,6 +557,8 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 42 为小转大必要条件关联的小级别一类买卖点端点一基编号，0=无小转大确认。
 // Func30 输出 43/44 为胜出买卖点背驰 A 段起点/终点一基编号，0=无 A 段端点。
 // Func30 输出 45/46 为胜出买卖点背驰 C 段起点/终点一基编号，0=无 C 段端点。
+// Func30 输出 47 为胜出买卖点所属中枢生命周期，0未知/1延伸/2扩展/3上涨新生/-3下跌新生。
+// Func30 输出 48 为相邻中枢生命周期关系，在后中枢起点标记，编码同输出47。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

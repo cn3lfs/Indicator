@@ -1012,6 +1012,32 @@ int ClassifyCenterRelation(const Center &Prev, const Center &Next)
   return CZSC_CENTER_RELATION_EXTENSION;
 }
 
+// 中枢生命周期上下文（第18/20课）：
+// [ZD,ZG] 重叠 → 同级延伸；核心区间不重叠但 GG/DD 全幅重叠 → 高级别扩展；
+// GG/DD 全幅不重叠 → 同向趋势中新中枢新生。
+int ClassifyCenterLifecycle(const Center &Prev, const Center &Next)
+{
+  if (IntervalsOverlap(Prev.fLow, Prev.fHigh, Next.fLow, Next.fHigh))
+  {
+    return CZSC_CENTER_LIFECYCLE_EXTENSION;
+  }
+
+  int nRelation = ClassifyCenterRelation(Prev, Next);
+  if (nRelation == CZSC_CENTER_RELATION_EXTENSION)
+  {
+    return CZSC_CENTER_LIFECYCLE_EXPANSION;
+  }
+  if (nRelation == CZSC_CENTER_RELATION_UP)
+  {
+    return CZSC_CENTER_LIFECYCLE_NEWBORN_UP;
+  }
+  if (nRelation == CZSC_CENTER_RELATION_DOWN)
+  {
+    return CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN;
+  }
+  return CZSC_CENTER_LIFECYCLE_UNKNOWN;
+}
+
 // 三类买卖点后续（第21课/第53课）：离开中枢后若与后一个中枢形成高级别中枢则为「中枢扩张」，
 // 若形成同向新中枢则为「中枢新生（趋势）」。后续中枢尚未形成或方向相反则未知。
 int ClassifyCenterAftermath(const std::vector<Center> &Centers, int nCenter, float fSignal)
@@ -2407,6 +2433,48 @@ void ApplyTradingSignalCenterId(int nCount,
       pOut[C.nIndex] = (C.nCenter >= 0) ? (float)(C.nCenter + 1) : 0.0f;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
+  }
+}
+
+// 按优先级取胜，导出胜出信号所属中枢与后续中枢的生命周期关系。
+void ApplyTradingSignalCenterLifecycle(int nCount,
+                                       float *pOut,
+                                       const std::vector<TradingSignalCandidate> &Candidates,
+                                       const std::vector<Center> &Centers)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority < Priorities[(std::size_t)C.nIndex])
+    {
+      continue;
+    }
+
+    int nLifecycle = CZSC_CENTER_LIFECYCLE_UNKNOWN;
+    if ((C.nCenter >= 0) && ((std::size_t)C.nCenter + 1 < Centers.size()))
+    {
+      nLifecycle = ClassifyCenterLifecycle(Centers[(std::size_t)C.nCenter],
+                                           Centers[(std::size_t)C.nCenter + 1]);
+    }
+    pOut[C.nIndex] = (float)nLifecycle;
+    Priorities[(std::size_t)C.nIndex] = C.nPriority;
   }
 }
 
@@ -4281,6 +4349,22 @@ void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center
   }
 }
 
+// 相邻中枢生命周期（第18/20课）：在后中枢起点处标记。
+void WriteCenterLifecycleSignal(int nCount, float *pOut, const std::vector<Center> &Centers)
+{
+  ClearOutput(nCount, pOut);
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    int nMark = Centers[i].nStart;
+    if ((nMark < 0) || (nMark >= nCount))
+    {
+      continue;
+    }
+
+    pOut[nMark] = (float)ClassifyCenterLifecycle(Centers[i - 1], Centers[i]);
+  }
+}
+
 //=============================================================================
 // 数学函数部分
 //=============================================================================
@@ -5336,6 +5420,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 44: ApplyTradingSignalDivergencePreviousEndPointId(nCount, pOut, An.Candidates); break; // 背驰A段终点端点编号
     case 45: ApplyTradingSignalDivergenceCurrentStartPointId(nCount, pOut, An.Candidates); break; // 背驰C段起点端点编号
     case 46: ApplyTradingSignalDivergenceCurrentEndPointId(nCount, pOut, An.Candidates); break; // 背驰C段终点端点编号
+    case 47: ApplyTradingSignalCenterLifecycle(nCount, pOut, An.Candidates, An.Centers); break; // 胜出候选所属中枢生命周期
+    case 48: WriteCenterLifecycleSignal(nCount, pOut, An.Centers); break; // 相邻中枢生命周期关系
     default: ClearOutput(nCount, pOut); break;
   }
 }

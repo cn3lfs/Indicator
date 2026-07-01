@@ -136,6 +136,15 @@ static const char *CenterRelationName(int nRelation)
   return "未知";
 }
 
+static const char *CenterLifecycleName(int nLifecycle)
+{
+  if (nLifecycle == CZSC_CENTER_LIFECYCLE_EXTENSION) return "延伸";
+  if (nLifecycle == CZSC_CENTER_LIFECYCLE_EXPANSION) return "扩展";
+  if (nLifecycle == CZSC_CENTER_LIFECYCLE_NEWBORN_UP) return "上涨新生";
+  if (nLifecycle == CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN) return "下跌新生";
+  return "未知";
+}
+
 static const char *MovementName(int nMovement)
 {
   if (nMovement == CZSC_MOVEMENT_UP) return "上涨";
@@ -364,7 +373,43 @@ static void PrintCenterRelations(FILE *pFile, const char *pTitle, const char *pP
   }
 }
 
+static void PrintCenterLifecycles(FILE *pFile, const char *pTitle, const char *pPrefix,
+                                  const std::vector<Center> &Centers)
+{
+  std::fprintf(pFile, "\n========== %s(%u) ==========\n", pTitle,
+               (Centers.size() > 0) ? (unsigned)(Centers.size() - 1) : 0u);
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    int nLifecycle = ClassifyCenterLifecycle(Centers[i - 1], Centers[i]);
+    std::fprintf(pFile, "%s%02u->%s%02u  %s(%d)  前ZG%.0f ZD%.0f GG%.0f DD%.0f  后ZG%.0f ZD%.0f GG%.0f DD%.0f\n",
+                 pPrefix,
+                 (unsigned)(i - 1),
+                 pPrefix,
+                 (unsigned)i,
+                 CenterLifecycleName(nLifecycle),
+                 nLifecycle,
+                 Centers[i - 1].fHigh,
+                 Centers[i - 1].fLow,
+                 Centers[i - 1].fTop,
+                 Centers[i - 1].fBottom,
+                 Centers[i].fHigh,
+                 Centers[i].fLow,
+                 Centers[i].fTop,
+                 Centers[i].fBottom);
+  }
+}
+
+static int CandidateCenterLifecycle(const std::vector<Center> &Centers, int nCenter)
+{
+  if ((nCenter < 0) || ((std::size_t)nCenter + 1 >= Centers.size()))
+  {
+    return CZSC_CENTER_LIFECYCLE_UNKNOWN;
+  }
+  return ClassifyCenterLifecycle(Centers[(std::size_t)nCenter], Centers[(std::size_t)nCenter + 1]);
+}
+
 static void PrintCandidates(FILE *pFile, const char *pTitle,
+                            const std::vector<Center> &Centers,
                             const std::vector<SegmentPoint> &Points,
                             const std::vector<CenterBreakout> &Breakouts,
                             const std::vector<TradingSignalCandidate> &Candidates)
@@ -374,8 +419,9 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
   {
     const TradingSignalCandidate &C = Candidates[i];
     int nCtx = BuildTradingSignalContextFlags(C);
+    int nLifecycle = CandidateCenterLifecycle(Centers, C.nCenter);
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d ABK%d ABL%d ABR%d STL%d STR%d STF%d SFP%d SMP%d APS%d APE%d CPS%d CPE%d PID%d TID%d  ctx%d",
+                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  生命周期%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d ABK%d ABL%d ABR%d STL%d STR%d STF%d SFP%d SMP%d APS%d APE%d CPS%d CPE%d PID%d TID%d  ctx%d",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -388,6 +434,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  CenterPositionName(C.nCenterPosition),
                  ScopedReversalName(C.fSignal, C.nReversal),
                  ScopedAftermathName(C.fSignal, C.nAfterEffect),
+                 CenterLifecycleName(nLifecycle),
                  ScopedSmallTurn(C.fSignal, C.nSmallTurn),
                  ScopedFirstSignalValue(C.fSignal, C.nAbcStructure),
                  ScopedFirstSignalValue(C.fSignal, C.nMacdZeroPullback),
@@ -570,12 +617,14 @@ int main(int argc, char **argv)
   PrintCenters(pFile, "线段中枢", "SZ", SegmentAn.Centers);
   PrintCenterRelations(pFile, "笔中枢关系", "BZ", StrokeAn.Centers);
   PrintCenterRelations(pFile, "线段中枢关系", "SZ", SegmentAn.Centers);
+  PrintCenterLifecycles(pFile, "笔中枢生命周期", "BZ", StrokeAn.Centers);
+  PrintCenterLifecycles(pFile, "线段中枢生命周期", "SZ", SegmentAn.Centers);
   PrintCandidateSummary(pFile, "买卖点(笔中枢)", StrokeAn.Candidates);
   PrintCandidateSummary(pFile, "买卖点(线段中枢)", SegmentAn.Candidates);
   PrintCandidates(pFile, "买卖点(笔中枢)",
-                  StrokeAn.Points, StrokeAn.Breakouts, StrokeAn.Candidates);
+                  StrokeAn.Centers, StrokeAn.Points, StrokeAn.Breakouts, StrokeAn.Candidates);
   PrintCandidates(pFile, "买卖点(线段中枢)",
-                  SegmentAn.Points, SegmentAn.Breakouts, SegmentAn.Candidates);
+                  SegmentAn.Centers, SegmentAn.Points, SegmentAn.Breakouts, SegmentAn.Candidates);
   PrintPoints(pFile, "笔端点", "B", StrokeAn.Points);
 
   if (pFile != stdout)
