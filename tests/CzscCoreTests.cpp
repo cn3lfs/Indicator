@@ -7178,6 +7178,85 @@ static bool TestAuxCloseAffectsEnergy()
   return !NearlyEqual(eA, eB);  // 真实收盘价改变了 MACD 面积
 }
 
+static bool TestFunc30AuxCloseInvalidatesPriceCache()
+{
+  RegisterAuxData(0, 0, 0);
+
+  const int n = 30;
+  float pHigh[n];
+  float pLow[n];
+  float close[n];
+  float badClose[n];
+  float pOut[n];
+  float fMode = 100;  // Func30 输出10：短长均线差
+  for (int i = 0; i < n; i++)
+  {
+    pLow[i] = 10;
+    pHigh[i] = 20;
+    close[i] = 10.0f + 10.0f * ((float)i / (float)(n - 1));
+    badClose[i] = close[i];
+    pOut[i] = -1;
+  }
+  badClose[15] = 99;  // 内容校验失败，须回落到 (H+L)/2
+
+  Func30(n, pOut, pHigh, pLow, &fMode);
+  float fProxy = pOut[n - 1];
+
+  RegisterAuxData(n, close, 0);
+  Func30(n, pOut, pHigh, pLow, &fMode);
+  float fReal = pOut[n - 1];
+
+  RegisterAuxData(n, badClose, 0);
+  Func30(n, pOut, pHigh, pLow, &fMode);
+  float fFallback = pOut[n - 1];
+
+  RegisterAuxData(0, 0, 0);
+  return NearlyEqual(fProxy, 0.0f) &&
+         (fReal > 0.1f) &&
+         NearlyEqual(fFallback, fProxy);
+}
+
+static bool TestSignalCacheInvalidatesOnAuxClose()
+{
+  RegisterAuxData(0, 0, 0);
+
+  const int n = 30;
+  float pIn[n];
+  float pHigh[n];
+  float pLow[n];
+  float close[n];
+  for (int i = 0; i < n; i++)
+  {
+    pIn[i] = 0;
+    pLow[i] = 10;
+    pHigh[i] = 20;
+    close[i] = 10.0f + 10.0f * ((float)i / (float)(n - 1));
+  }
+  pIn[5] = -1;
+  pIn[25] = 1;
+
+  const CzscAnalyzer &Proxy = GetOrBuildSignalAnalyzer(n, pIn, pHigh, pLow);
+  if (Proxy.Points.size() != 2)
+  {
+    RegisterAuxData(0, 0, 0);
+    return false;
+  }
+  float fProxyEnergy = Proxy.Points[1].fEnergy - Proxy.Points[0].fEnergy;
+
+  RegisterAuxData(n, close, 0);
+  const CzscAnalyzer &Real = GetOrBuildSignalAnalyzer(n, pIn, pHigh, pLow);
+  if (Real.Points.size() != 2)
+  {
+    RegisterAuxData(0, 0, 0);
+    return false;
+  }
+  float fRealEnergy = Real.Points[1].fEnergy - Real.Points[0].fEnergy;
+
+  RegisterAuxData(0, 0, 0);
+  return NearlyEqual(fProxyEnergy, 0.0f) &&
+         !NearlyEqual(fRealEnergy, fProxyEnergy);
+}
+
 static bool TestFunc40Registers()
 {
   RegisterAuxData(0, 0, 0);
@@ -8045,6 +8124,14 @@ int main()
   if (!TestAuxCloseAffectsEnergy())
   {
     return 107;
+  }
+  if (!TestFunc30AuxCloseInvalidatesPriceCache())
+  {
+    return 194;
+  }
+  if (!TestSignalCacheInvalidatesOnAuxClose())
+  {
+    return 195;
   }
   if (!TestFunc40Registers())
   {
