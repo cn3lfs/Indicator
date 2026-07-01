@@ -224,6 +224,10 @@ struct StrengthMetrics
 struct DivergenceResult
 {
   int             nDirection;
+  int             nPreviousStartPoint; // A 段起点端点下标（无则 -1）
+  int             nPreviousEndPoint;   // A 段终点端点下标（无则 -1）
+  int             nCurrentStartPoint;  // C 段起点端点下标（无则 -1）
+  int             nCurrentEndPoint;    // C 段终点端点下标（无则 -1）
   bool            bNewExtreme;   // 是否创新高/新低（趋势背驰必需，盘整背驰不需要）
   bool            bWeakSpace;
   bool            bWeakSpeed;
@@ -476,6 +480,18 @@ void ApplyTradingSignalSpeedRatio(int nCount,
 void ApplyTradingSignalDivergenceFlags(int nCount,
                                        float *pOut,
                                        const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalDivergencePreviousStartPointId(int nCount,
+                                                      float *pOut,
+                                                      const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalDivergencePreviousEndPointId(int nCount,
+                                                    float *pOut,
+                                                    const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalDivergenceCurrentStartPointId(int nCount,
+                                                     float *pOut,
+                                                     const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalDivergenceCurrentEndPointId(int nCount,
+                                                   float *pOut,
+                                                   const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalContextFlags(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
@@ -524,6 +540,8 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 38/39 为小转大必要条件关联突破的离开/回试端点一基编号，0=无小转大确认。
 // Func30 输出 40/41 为第二类买卖点关联的一类端点/中间反向端点一基编号，0=无二类确认。
 // Func30 输出 42 为小转大必要条件关联的小级别一类买卖点端点一基编号，0=无小转大确认。
+// Func30 输出 43/44 为胜出买卖点背驰 A 段起点/终点一基编号，0=无 A 段端点。
+// Func30 输出 45/46 为胜出买卖点背驰 C 段起点/终点一基编号，0=无 C 段端点。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

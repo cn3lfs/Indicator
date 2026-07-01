@@ -1093,6 +1093,10 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nMacdZeroPullback = 0;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
+  C.Divergence.nPreviousStartPoint = -1;
+  C.Divergence.nPreviousEndPoint = -1;
+  C.Divergence.nCurrentStartPoint = -1;
+  C.Divergence.nCurrentEndPoint = -1;
   C.Divergence.bNewExtreme = false;
   C.Divergence.bWeakSpace = false;
   C.Divergence.bWeakSpeed = false;
@@ -1116,6 +1120,10 @@ static CenterBreakout MakeTestBreakout(int nDirection, int nRetestPoint)
   B.bThirdSignal = true;
   B.bConsolidationDivergence = false;
   B.Divergence.nDirection = nDirection;
+  B.Divergence.nPreviousStartPoint = -1;
+  B.Divergence.nPreviousEndPoint = -1;
+  B.Divergence.nCurrentStartPoint = -1;
+  B.Divergence.nCurrentEndPoint = -1;
   B.Divergence.bNewExtreme = false;
   B.Divergence.bWeakSpace = false;
   B.Divergence.bWeakSpeed = false;
@@ -5892,6 +5900,82 @@ static bool TestApplyTradingDivergenceFlagsMapCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingDivergencePointIdsMapCodes()
+{
+  const int nCount = 12;
+  float pPrevStart[nCount];
+  float pPrevEnd[nCount];
+  float pCurrStart[nCount];
+  float pCurrEnd[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pPrevStart[i] = -1;
+    pPrevEnd[i] = -1;
+    pCurrStart[i] = -1;
+    pCurrEnd[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.nPreviousStartPoint = 0;
+  Buy.Divergence.nPreviousEndPoint = 1;
+  Buy.Divergence.nCurrentStartPoint = 2;
+  Buy.Divergence.nCurrentEndPoint = 3;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.nPreviousStartPoint = 8;
+  Low.Divergence.nPreviousEndPoint = 9;
+  Low.Divergence.nCurrentStartPoint = 10;
+  Low.Divergence.nCurrentEndPoint = 11;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.nPreviousStartPoint = 4;
+  High.Divergence.nPreviousEndPoint = 5;
+  High.Divergence.nCurrentStartPoint = 6;
+  High.Divergence.nCurrentEndPoint = 7;
+  TradingSignalCandidate Missing = MakeTestCandidate(5, 11.0f, 30);
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.nPreviousStartPoint = 0;
+  Invalid.Divergence.nPreviousEndPoint = 1;
+  Invalid.Divergence.nCurrentStartPoint = 2;
+  Invalid.Divergence.nCurrentEndPoint = 3;
+  TradingSignalCandidate Shadowed = MakeTestCandidate(9, 1.0f, 10);
+  Shadowed.Divergence.nPreviousStartPoint = 0;
+  Shadowed.Divergence.nPreviousEndPoint = 1;
+  Shadowed.Divergence.nCurrentStartPoint = 2;
+  Shadowed.Divergence.nCurrentEndPoint = 3;
+  TradingSignalCandidate EmptyWinner = MakeTestCandidate(9, 2.0f, 20);
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Missing);
+  Candidates.push_back(Invalid);
+  Candidates.push_back(Shadowed);
+  Candidates.push_back(EmptyWinner);
+
+  ApplyTradingSignalDivergencePreviousStartPointId(nCount, pPrevStart, Candidates);
+  ApplyTradingSignalDivergencePreviousEndPointId(nCount, pPrevEnd, Candidates);
+  ApplyTradingSignalDivergenceCurrentStartPointId(nCount, pCurrStart, Candidates);
+  ApplyTradingSignalDivergenceCurrentEndPointId(nCount, pCurrEnd, Candidates);
+
+  return NearlyEqual(pPrevStart[1], 1.0f) &&
+         NearlyEqual(pPrevEnd[1], 2.0f) &&
+         NearlyEqual(pCurrStart[1], 3.0f) &&
+         NearlyEqual(pCurrEnd[1], 4.0f) &&
+         NearlyEqual(pPrevStart[3], 5.0f) &&
+         NearlyEqual(pPrevEnd[3], 6.0f) &&
+         NearlyEqual(pCurrStart[3], 7.0f) &&
+         NearlyEqual(pCurrEnd[3], 8.0f) &&
+         NearlyEqual(pPrevStart[5], 0.0f) &&
+         NearlyEqual(pPrevEnd[5], 0.0f) &&
+         NearlyEqual(pCurrStart[5], 0.0f) &&
+         NearlyEqual(pCurrEnd[5], 0.0f) &&
+         NearlyEqual(pPrevStart[7], 0.0f) &&
+         NearlyEqual(pCurrEnd[7], 0.0f) &&
+         NearlyEqual(pPrevStart[9], 0.0f) &&
+         NearlyEqual(pCurrEnd[9], 0.0f) &&
+         NearlyEqual(pPrevStart[0], 0.0f) &&
+         NearlyEqual(pCurrEnd[0], 0.0f);
+}
+
 static bool TestBuildDivergenceFlagsMapsBits()
 {
   DivergenceResult D;
@@ -6910,7 +6994,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6996,6 +7080,10 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 40: ApplyTradingSignalSecondBasePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 41: ApplyTradingSignalSecondTurnPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 42: ApplyTradingSignalSmallTurnBasePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 43: ApplyTradingSignalDivergencePreviousStartPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 44: ApplyTradingSignalDivergencePreviousEndPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 45: ApplyTradingSignalDivergenceCurrentStartPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 46: ApplyTradingSignalDivergenceCurrentEndPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -7996,6 +8084,10 @@ int main()
   if (!TestApplyTradingDivergenceFlagsMapCodes())
   {
     return 186;
+  }
+  if (!TestApplyTradingDivergencePointIdsMapCodes())
+  {
+    return 196;
   }
   if (!TestBuildDivergenceFlagsMapsBits())
   {

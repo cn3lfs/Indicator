@@ -909,6 +909,10 @@ DivergenceResult MeasureDivergence(const SegmentPoint &PrevStart,
 {
   DivergenceResult Result;
   Result.nDirection = nDirection;
+  Result.nPreviousStartPoint = -1;
+  Result.nPreviousEndPoint = -1;
+  Result.nCurrentStartPoint = -1;
+  Result.nCurrentEndPoint = -1;
   Result.Previous = MeasureStrength(PrevStart, PrevEnd);
   Result.Current = MeasureStrength(CurrentStart, CurrentEnd);
   Result.bWeakSpace = Result.Current.fSpace < Result.Previous.fSpace;
@@ -947,6 +951,10 @@ static DivergenceResult MakeEmptyDivergence(int nDirection)
 {
   DivergenceResult Result;
   Result.nDirection = nDirection;
+  Result.nPreviousStartPoint = -1;
+  Result.nPreviousEndPoint = -1;
+  Result.nCurrentStartPoint = -1;
+  Result.nCurrentEndPoint = -1;
   Result.bNewExtreme = false;
   Result.bWeakSpace = false;
   Result.bWeakSpeed = false;
@@ -955,6 +963,22 @@ static DivergenceResult MakeEmptyDivergence(int nDirection)
   Result.Previous = MakeEmptyStrength();
   Result.Current = MakeEmptyStrength();
   return Result;
+}
+
+static void SetDivergencePointIds(DivergenceResult *pResult,
+                                  int nPreviousStartPoint,
+                                  int nPreviousEndPoint,
+                                  int nCurrentStartPoint,
+                                  int nCurrentEndPoint)
+{
+  if (pResult == 0)
+  {
+    return;
+  }
+  pResult->nPreviousStartPoint = nPreviousStartPoint;
+  pResult->nPreviousEndPoint = nPreviousEndPoint;
+  pResult->nCurrentStartPoint = nCurrentStartPoint;
+  pResult->nCurrentEndPoint = nCurrentEndPoint;
 }
 
 // 由两端点代表价判断一段走势的方向（+1 上、-1 下、0 平）
@@ -1232,6 +1256,7 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
   }
 
   DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, -1);
+  SetDivergencePointIds(&Divergence, (int)nPrevMove, (int)nPrevMove + 1, (int)nPoint - 1, (int)nPoint);
   if (pDivergence != 0)
   {
     *pDivergence = Divergence;
@@ -1302,6 +1327,7 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
   }
 
   DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, 1);
+  SetDivergencePointIds(&Divergence, (int)nPrevMove, (int)nPrevMove + 1, (int)nPoint - 1, (int)nPoint);
   if (pDivergence != 0)
   {
     *pDivergence = Divergence;
@@ -1357,7 +1383,9 @@ static DivergenceResult MeasureConsolidationDivergence(const std::vector<Segment
     return Empty;
   }
 
-  return MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, nDirection);
+  DivergenceResult Result = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, nDirection);
+  SetDivergencePointIds(&Result, (int)nPrevMove, (int)nPrevMove + 1, (int)nLeavePoint - 1, (int)nLeavePoint);
+  return Result;
 }
 
 static CenterBreakout MakeCenterBreakout(const std::vector<SegmentPoint> &Points,
@@ -1887,6 +1915,11 @@ static DivergenceResult MeasureSecondDivergence(const std::vector<SegmentPoint> 
 
   Result.Previous = MeasureStrength(Points[nFirstPoint - 1], Points[nFirstPoint]);
   Result.Current = MeasureStrength(Points[nFirstPoint + 1], Points[nFirstPoint + 2]);
+  SetDivergencePointIds(&Result,
+                        (int)nFirstPoint - 1,
+                        (int)nFirstPoint,
+                        (int)nFirstPoint + 1,
+                        (int)nFirstPoint + 2);
   Result.bWeakSpace = Result.Current.fSpace < Result.Previous.fSpace;
   Result.bWeakSpeed = Result.Current.fSpeed < Result.Previous.fSpeed;
   Result.bWeakMacd = (Result.Current.fMacdArea > 0) &&
@@ -3257,6 +3290,84 @@ void ApplyTradingSignalDivergenceFlags(int nCount,
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
+}
+
+static int GetDivergencePointId(const DivergenceResult &D, int nWhich)
+{
+  switch (nWhich)
+  {
+    case 0: return D.nPreviousStartPoint;
+    case 1: return D.nPreviousEndPoint;
+    case 2: return D.nCurrentStartPoint;
+    case 3: return D.nCurrentEndPoint;
+    default: return -1;
+  }
+}
+
+static void ApplyTradingSignalDivergencePointId(int nCount,
+                                                float *pOut,
+                                                const std::vector<TradingSignalCandidate> &Candidates,
+                                                int nWhich)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      int nPoint = GetDivergencePointId(C.Divergence, nWhich);
+      pOut[C.nIndex] = (nPoint >= 0) ? (float)(nPoint + 1) : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 输出胜出候选背驰 A 段起点端点编号，1基；无可复核端点输出0。
+void ApplyTradingSignalDivergencePreviousStartPointId(int nCount,
+                                                      float *pOut,
+                                                      const std::vector<TradingSignalCandidate> &Candidates)
+{
+  ApplyTradingSignalDivergencePointId(nCount, pOut, Candidates, 0);
+}
+
+// 输出胜出候选背驰 A 段终点端点编号，1基；无可复核端点输出0。
+void ApplyTradingSignalDivergencePreviousEndPointId(int nCount,
+                                                    float *pOut,
+                                                    const std::vector<TradingSignalCandidate> &Candidates)
+{
+  ApplyTradingSignalDivergencePointId(nCount, pOut, Candidates, 1);
+}
+
+// 输出胜出候选背驰 C 段起点端点编号，1基；无可复核端点输出0。
+void ApplyTradingSignalDivergenceCurrentStartPointId(int nCount,
+                                                     float *pOut,
+                                                     const std::vector<TradingSignalCandidate> &Candidates)
+{
+  ApplyTradingSignalDivergencePointId(nCount, pOut, Candidates, 2);
+}
+
+// 输出胜出候选背驰 C 段终点端点编号，1基；无可复核端点输出0。
+void ApplyTradingSignalDivergenceCurrentEndPointId(int nCount,
+                                                   float *pOut,
+                                                   const std::vector<TradingSignalCandidate> &Candidates)
+{
+  ApplyTradingSignalDivergencePointId(nCount, pOut, Candidates, 3);
 }
 
 int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
@@ -5035,6 +5146,10 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 40: ApplyTradingSignalSecondBasePointId(nCount, pOut, An.Candidates); break; // 二类关联一类端点编号
     case 41: ApplyTradingSignalSecondTurnPointId(nCount, pOut, An.Candidates); break; // 二类中间反向端点编号
     case 42: ApplyTradingSignalSmallTurnBasePointId(nCount, pOut, An.Candidates); break; // 小转大关联一类端点编号
+    case 43: ApplyTradingSignalDivergencePreviousStartPointId(nCount, pOut, An.Candidates); break; // 背驰A段起点端点编号
+    case 44: ApplyTradingSignalDivergencePreviousEndPointId(nCount, pOut, An.Candidates); break; // 背驰A段终点端点编号
+    case 45: ApplyTradingSignalDivergenceCurrentStartPointId(nCount, pOut, An.Candidates); break; // 背驰C段起点端点编号
+    case 46: ApplyTradingSignalDivergenceCurrentEndPointId(nCount, pOut, An.Candidates); break; // 背驰C段终点端点编号
     default: ClearOutput(nCount, pOut); break;
   }
 }

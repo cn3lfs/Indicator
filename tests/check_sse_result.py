@@ -17,6 +17,8 @@ DEBUG_IDS = re.compile(
   r"STL(?P<stl>[0-9]+) STR(?P<str>[0-9]+) "
   r"STF(?P<stf>[0-9]+) "
   r"SFP(?P<sfp>[0-9]+) SMP(?P<smp>[0-9]+) "
+  r"APS(?P<aps>[0-9]+) APE(?P<ape>[0-9]+) "
+  r"CPS(?P<cps>[0-9]+) CPE(?P<cpe>[0-9]+) "
   r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)"
 )
 BKO_CONTEXT = re.compile(
@@ -57,6 +59,10 @@ def validate_candidate_context(text: str):
     n_stf = int(debug_ids.group("stf"))
     n_sfp = int(debug_ids.group("sfp"))
     n_smp = int(debug_ids.group("smp"))
+    n_aps = int(debug_ids.group("aps"))
+    n_ape = int(debug_ids.group("ape"))
+    n_cps = int(debug_ids.group("cps"))
+    n_cpe = int(debug_ids.group("cpe"))
     n_pid = int(debug_ids.group("pid"))
     is_second_signal = ("  二买  " in line) or ("  二卖  " in line)
     if n_abc == 0 and n_abk != 0:
@@ -75,6 +81,9 @@ def validate_candidate_context(text: str):
       errors.append(f"line {n_line}: non-second signal conflicts with SFP{n_sfp}/SMP{n_smp}")
     if is_second_signal and (n_sfp <= 0 or n_smp <= n_sfp or n_pid <= n_smp):
       errors.append(f"line {n_line}: second signal requires ordered SFP/SMP/PID")
+    if any(item != 0 for item in (n_aps, n_ape, n_cps, n_cpe)):
+      if not (0 < n_aps < n_ape < n_cps < n_cpe):
+        errors.append(f"line {n_line}: divergence endpoints require ordered positive APS/APE/CPS/CPE")
     if "bko[-]" in line:
       if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp", "stl", "str", "stf")):
         errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP/STL/STR/STF debug ids")
