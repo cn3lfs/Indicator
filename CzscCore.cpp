@@ -3518,6 +3518,43 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   return nFlags;
 }
 
+int BuildTradingSignalDivergenceSemantic(const TradingSignalCandidate &C)
+{
+  if (!IsTradingSignal(C.fSignal))
+  {
+    return CZSC_DIVERGENCE_SEM_NONE;
+  }
+
+  if (HasMatchingSmallTurn(C))
+  {
+    return CZSC_DIVERGENCE_SEM_SMALL_TURN;
+  }
+
+  if ((C.nSource == SIGNAL_SOURCE_FIRST) && IsFirstSignal(C.fSignal))
+  {
+    int nSignalDirection = GetFirstSignalDirection(C);
+    if ((nSignalDirection != 0) &&
+        (C.nTrend >= 0) &&
+        (C.nMovementType == -nSignalDirection) &&
+        (C.Divergence.nDirection == -nSignalDirection) &&
+        C.Divergence.bNewExtreme &&
+        C.Divergence.bDivergence)
+    {
+      return CZSC_DIVERGENCE_SEM_TREND;
+    }
+    return CZSC_DIVERGENCE_SEM_NONE;
+  }
+
+  if (((C.nSource == SIGNAL_SOURCE_SECOND) || (C.nSource == SIGNAL_SOURCE_THIRD)) &&
+      (IsSecondSignal(C.fSignal) || IsThirdSignal(C.fSignal)) &&
+      C.Divergence.bDivergence)
+  {
+    return CZSC_DIVERGENCE_SEM_CONSOLIDATION;
+  }
+
+  return CZSC_DIVERGENCE_SEM_NONE;
+}
+
 // 胜出买卖点候选上下文位图：把质量、ABC、MACD、小转大、转折/后续等离散诊断压成一列，
 // 方便通达信公式用一个 DLL 输出做组合筛选；同柱仍按候选优先级取胜。
 void ApplyTradingSignalContextFlags(int nCount,
@@ -3547,6 +3584,39 @@ void ApplyTradingSignalContextFlags(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       pOut[C.nIndex] = (float)BuildTradingSignalContextFlags(C);
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 胜出买卖点候选背驰语义：1=趋势背驰，2=盘整背驰，3=小转大必要条件。
+void ApplyTradingSignalDivergenceSemantic(int nCount,
+                                          float *pOut,
+                                          const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)BuildTradingSignalDivergenceSemantic(C);
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -5627,6 +5697,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       }
       break;
     }
+    case 53: ApplyTradingSignalDivergenceSemantic(nCount, pOut, An.Candidates); break; // 胜出候选背驰语义
     default: ClearOutput(nCount, pOut); break;
   }
 }

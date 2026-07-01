@@ -111,6 +111,14 @@ enum CzscDivergenceFlag
   CZSC_DIVERGENCE_CONFIRMED   = 16,
 };
 
+enum CzscDivergenceSemantic
+{
+  CZSC_DIVERGENCE_SEM_NONE          = 0,
+  CZSC_DIVERGENCE_SEM_TREND         = 1,  // 趋势背驰：一类买卖点，C段创新极值
+  CZSC_DIVERGENCE_SEM_CONSOLIDATION = 2,  // 盘整背驰：二/三类买卖点的回抽背驰
+  CZSC_DIVERGENCE_SEM_SMALL_TURN    = 3,  // 小转大：小级别背驰后出现同向三买/三卖必要条件
+};
+
 // 均线吻分类（第11课）：短长均线靠近/相交处的反抗强度，递增
 enum CzscKissType
 {
@@ -400,6 +408,7 @@ int DetectInstantDivergence(const std::vector<SegmentPoint> &Points,
                             const float *pHigh,
                             const float *pLow);
 int BuildTradingSignalContextFlags(const TradingSignalCandidate &C);
+int BuildTradingSignalDivergenceSemantic(const TradingSignalCandidate &C);
 int BuildDivergenceFlags(const DivergenceResult &D);
 
 // 把候选/中枢结果按优先级写入通达信输出数组（信号、质量、背驰-转折、三买后续、中枢关系）
@@ -517,6 +526,9 @@ void ApplyTradingSignalDivergenceCurrentEndPointId(int nCount,
 void ApplyTradingSignalContextFlags(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalDivergenceSemantic(int nCount,
+                                          float *pOut,
+                                          const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalCenterLifecycle(int nCount,
                                        float *pOut,
                                        const std::vector<TradingSignalCandidate> &Candidates,
@@ -591,6 +603,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 49 为区间套层级，1=一层区间套，2=低级别小转大必要条件成立。
 // Func30 输出 50 为区间套源高级别背驰段一基编号，0=无。
 // Func30 输出 51/52 为区间套低级别背驰段起点/终点端点一基编号，0=无。
+// Func30 输出 53 为胜出候选背驰语义，0无/1趋势背驰/2盘整背驰/3小转大必要条件。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

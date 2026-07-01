@@ -6260,6 +6260,77 @@ static bool TestApplyTradingContextFlagsUsesWinningPriority()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingDivergenceSemanticMapsCodes()
+{
+  const int nCount = 9;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Trend = MakeTestCandidate(1, 1.0f, 30);
+  MakeStandardDivergence(&Trend, 1);
+  TradingSignalCandidate Consolidation = MakeTestCandidate(3, 2.0f, 10);
+  Consolidation.nSource = 2;
+  Consolidation.nBreakout = 0;
+  Consolidation.Divergence.bDivergence = true;
+  TradingSignalCandidate SmallTurn = MakeTestCandidate(5, 3.0f, 20);
+  SmallTurn.nSource = 3;
+  SmallTurn.nPoint = 5;
+  SmallTurn.nCenter = 0;
+  SmallTurn.nBreakout = 1;
+  SmallTurn.nSmallTurn = 1;
+  SmallTurn.Divergence.bDivergence = true;
+  TradingSignalCandidate MissingExtreme = MakeTestCandidate(7, 1.0f, 30);
+  MakeStandardDivergence(&MissingExtreme, 1);
+  MissingExtreme.Divergence.bNewExtreme = false;
+  TradingSignalCandidate Invalid = MakeTestCandidate(8, 99.0f, 30);
+  Invalid.Divergence.bDivergence = true;
+
+  Candidates.push_back(Trend);
+  Candidates.push_back(Consolidation);
+  Candidates.push_back(SmallTurn);
+  Candidates.push_back(MissingExtreme);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalDivergenceSemantic(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], (float)CZSC_DIVERGENCE_SEM_TREND) &&
+         NearlyEqual(pOut[3], (float)CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         NearlyEqual(pOut[5], (float)CZSC_DIVERGENCE_SEM_SMALL_TURN) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[8], 0.0f) &&
+         (BuildTradingSignalDivergenceSemantic(Invalid) == CZSC_DIVERGENCE_SEM_NONE) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingDivergenceSemanticUsesWinningPriority()
+{
+  const int nCount = 4;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 1.0f, 10);
+  MakeStandardDivergence(&Low, 1);
+  TradingSignalCandidate High = MakeTestCandidate(2, 12.0f, 20);
+  High.nSource = 2;
+  High.nBreakout = 0;
+  High.Divergence.bDivergence = true;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+
+  ApplyTradingSignalDivergenceSemantic(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], (float)CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestNestedDivergenceMarksLowerSegmentInsideHigher()
 {
   const int nCount = 61;
@@ -7239,7 +7310,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -7364,6 +7435,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
         }
         break;
       }
+      case 53: ApplyTradingSignalDivergenceSemantic(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -8396,6 +8468,14 @@ int main()
   if (!TestApplyTradingContextFlagsUsesWinningPriority())
   {
     return 142;
+  }
+  if (!TestApplyTradingDivergenceSemanticMapsCodes())
+  {
+    return 197;
+  }
+  if (!TestApplyTradingDivergenceSemanticUsesWinningPriority())
+  {
+    return 198;
   }
   if (!TestNestedDivergenceMarksLowerSegmentInsideHigher())
   {
