@@ -1584,7 +1584,8 @@ static bool TestThirdCandidateKeepsBreakoutDivergence()
          pThird->Divergence.bWeakSpace &&
          pThird->Divergence.bDivergence &&
          (pThird->nQuality == CZSC_SIGNAL_QUALITY_STRONG) &&
-         (pThird->nCenterPosition == CZSC_CENTER_POSITION_ABOVE);
+         (pThird->nCenterPosition == CZSC_CENTER_POSITION_ABOVE) &&
+         (pThird->nSmallTurn == 0);
 }
 
 static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
