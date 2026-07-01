@@ -234,6 +234,42 @@ static void PrintStrengthRatios(FILE *pFile, const DivergenceResult &D)
                PercentRatio(D.Current.fMacdArea, D.Previous.fMacdArea));
 }
 
+static const char *PointDateAt(const std::vector<SegmentPoint> &Points, int nPoint)
+{
+  if ((nPoint < 0) || ((std::size_t)nPoint >= Points.size()))
+  {
+    return "unknown";
+  }
+  return DateAt(Points[(std::size_t)nPoint].nIndex);
+}
+
+static void PrintBreakoutContext(FILE *pFile,
+                                 const std::vector<SegmentPoint> &Points,
+                                 const std::vector<CenterBreakout> &Breakouts,
+                                 int nBreakout)
+{
+  if (pFile == 0)
+  {
+    return;
+  }
+  if ((nBreakout < 0) || ((std::size_t)nBreakout >= Breakouts.size()))
+  {
+    std::fprintf(pFile, "  bko[-]");
+    return;
+  }
+
+  const CenterBreakout &B = Breakouts[(std::size_t)nBreakout];
+  std::fprintf(pFile,
+               "  bko[离P%d/%s 回P%d/%s 首%d 回中%d 三%d]",
+               OneBasedId(B.nLeavePoint),
+               PointDateAt(Points, B.nLeavePoint),
+               OneBasedId(B.nRetestPoint),
+               PointDateAt(Points, B.nRetestPoint),
+               B.bFirstRetest ? 1 : 0,
+               B.bBackIntoCenter ? 1 : 0,
+               B.bThirdSignal ? 1 : 0);
+}
+
 static void PrintPoints(FILE *pFile, const char *pTitle, const char *pPrefix,
                         const std::vector<SegmentPoint> &Points)
 {
@@ -291,6 +327,8 @@ static void PrintCenterRelations(FILE *pFile, const char *pTitle, const char *pP
 }
 
 static void PrintCandidates(FILE *pFile, const char *pTitle,
+                            const std::vector<SegmentPoint> &Points,
+                            const std::vector<CenterBreakout> &Breakouts,
                             const std::vector<TradingSignalCandidate> &Candidates)
 {
   std::fprintf(pFile, "\n========== %s(%u, 带候选上下文) ==========\n", pTitle, (unsigned)Candidates.size());
@@ -323,6 +361,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
     PrintStrengthPair(pFile, C.Divergence);
     PrintStrengthRatios(pFile, C.Divergence);
     PrintDivergenceFlags(pFile, BuildDivergenceFlags(C.Divergence));
+    PrintBreakoutContext(pFile, Points, Breakouts, C.nBreakout);
     PrintContextFlags(pFile, nCtx);
     if (C.bOverlapped)
     {
@@ -481,8 +520,10 @@ int main(int argc, char **argv)
   PrintCenterRelations(pFile, "线段中枢关系", "SZ", SegmentAn.Centers);
   PrintCandidateSummary(pFile, "买卖点(笔中枢)", StrokeAn.Candidates);
   PrintCandidateSummary(pFile, "买卖点(线段中枢)", SegmentAn.Candidates);
-  PrintCandidates(pFile, "买卖点(笔中枢)", StrokeAn.Candidates);
-  PrintCandidates(pFile, "买卖点(线段中枢)", SegmentAn.Candidates);
+  PrintCandidates(pFile, "买卖点(笔中枢)",
+                  StrokeAn.Points, StrokeAn.Breakouts, StrokeAn.Candidates);
+  PrintCandidates(pFile, "买卖点(线段中枢)",
+                  SegmentAn.Points, SegmentAn.Breakouts, SegmentAn.Candidates);
   PrintPoints(pFile, "笔端点", "B", StrokeAn.Points);
 
   if (pFile != stdout)
