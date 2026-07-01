@@ -948,6 +948,115 @@ static bool TestRealSseGoldenSegmentCentersPresent()
          ContainsSseCenter(Centers, -1, "2020-09-25", "2023-06-26", 3418.95f, 3312.72f);
 }
 
+struct CenterLifecycleCounts
+{
+  int nExtension;
+  int nExpansion;
+  int nNewbornUp;
+  int nNewbornDown;
+  int nUnknown;
+};
+
+static CenterLifecycleCounts CountCenterLifecycles(const std::vector<Center> &Centers)
+{
+  CenterLifecycleCounts Counts = {0, 0, 0, 0, 0};
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    int nLifecycle = ClassifyCenterLifecycle(Centers[i - 1], Centers[i]);
+    if (nLifecycle == CZSC_CENTER_LIFECYCLE_EXTENSION)
+    {
+      Counts.nExtension++;
+    }
+    else if (nLifecycle == CZSC_CENTER_LIFECYCLE_EXPANSION)
+    {
+      Counts.nExpansion++;
+    }
+    else if (nLifecycle == CZSC_CENTER_LIFECYCLE_NEWBORN_UP)
+    {
+      Counts.nNewbornUp++;
+    }
+    else if (nLifecycle == CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN)
+    {
+      Counts.nNewbornDown++;
+    }
+    else
+    {
+      Counts.nUnknown++;
+    }
+  }
+  return Counts;
+}
+
+static bool TestRealSseRecursiveCenterLifecycleCounts()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  CenterLifecycleCounts StrokeCounts = CountCenterLifecycles(StrokeAn.Centers);
+  CenterLifecycleCounts SegmentCounts = CountCenterLifecycles(SegmentAn.Centers);
+
+  return (StrokeAn.Centers.size() == 18) &&
+         (StrokeCounts.nExtension == 1) &&
+         (StrokeCounts.nExpansion == 16) &&
+         (StrokeCounts.nNewbornUp == 0) &&
+         (StrokeCounts.nNewbornDown == 0) &&
+         (StrokeCounts.nUnknown == 0) &&
+         (SegmentAn.Centers.size() == 2) &&
+         (SegmentCounts.nExtension == 0) &&
+         (SegmentCounts.nExpansion == 1) &&
+         (SegmentCounts.nNewbornUp == 0) &&
+         (SegmentCounts.nNewbornDown == 0) &&
+         (SegmentCounts.nUnknown == 0);
+}
+
+static bool TestRecentSseRecursiveCenterLifecycleCounts()
+{
+  int nStart = FindSseDateIndex("2024-01-02");
+  int nEnd = FindSseDateIndex("2026-06-26");
+  if ((nStart < 0) || (nEnd < nStart))
+  {
+    return false;
+  }
+
+  int nCount = nEnd - nStart + 1;
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH + nStart);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW + nStart);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, nCount, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, nCount, pH, pL, SegmentConfig);
+
+  CenterLifecycleCounts StrokeCounts = CountCenterLifecycles(StrokeAn.Centers);
+  CenterLifecycleCounts SegmentCounts = CountCenterLifecycles(SegmentAn.Centers);
+
+  return (StrokeAn.Centers.size() == 6) &&
+         (StrokeCounts.nExtension == 1) &&
+         (StrokeCounts.nExpansion == 4) &&
+         (StrokeCounts.nNewbornUp == 0) &&
+         (StrokeCounts.nNewbornDown == 0) &&
+         (StrokeCounts.nUnknown == 0) &&
+         SegmentAn.Centers.empty() &&
+         (SegmentCounts.nExtension == 0) &&
+         (SegmentCounts.nExpansion == 0) &&
+         (SegmentCounts.nNewbornUp == 0) &&
+         (SegmentCounts.nNewbornDown == 0) &&
+         (SegmentCounts.nUnknown == 0);
+}
+
 static bool TestRealSseGoldenCandidatesPresent()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
@@ -8001,6 +8110,14 @@ int main()
   if (!TestRealSseGoldenSegmentCentersPresent())
   {
     return 154;
+  }
+  if (!TestRealSseRecursiveCenterLifecycleCounts())
+  {
+    return 203;
+  }
+  if (!TestRecentSseRecursiveCenterLifecycleCounts())
+  {
+    return 204;
   }
   if (!TestRealSseGoldenCandidatesPresent())
   {
