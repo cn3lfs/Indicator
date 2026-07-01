@@ -4158,9 +4158,14 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   TradingSignalCandidate Extended = MakeTestCandidate(5, 13.0f, 20);
   Extended.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   Extended.nReversal = CZSC_REVERSAL_EXTENSION;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  MakeStandardDivergence(&WrongDirection, 1);
+  WrongDirection.nAbcStructure = -1;
+  WrongDirection.nMacdZeroPullback = -1;
   Candidates.push_back(Buy);
   Candidates.push_back(Newborn);
   Candidates.push_back(Extended);
+  Candidates.push_back(WrongDirection);
 
   ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
 
@@ -4178,10 +4183,12 @@ static bool TestApplyTradingContextFlagsMapsCodes()
                                    CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
                                     CZSC_SIGNAL_CTX_REVERSAL_EXTEND);
+  float fWrongDirectionExpected = (float)CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
 
   return NearlyEqual(pOut[1], fBuyExpected) &&
          NearlyEqual(pOut[3], fNewbornExpected) &&
          NearlyEqual(pOut[5], fExtendedExpected) &&
+         NearlyEqual(pOut[7], fWrongDirectionExpected) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
