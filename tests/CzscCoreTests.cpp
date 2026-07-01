@@ -1084,6 +1084,8 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nCenterPosition = CZSC_CENTER_POSITION_UNKNOWN;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
+  C.nSecondBasePoint = -1;
+  C.nSecondTurnPoint = -1;
   C.nSmallTurn = 0;
   C.nAbcStructure = 0;
   C.nAbcBreakout = -1;
@@ -2881,6 +2883,9 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
          pThird->bOverlapped &&
          (pThird->nSmallTurn == 1) &&
          (pSecond->nBreakout == 0) &&
+         (pSecond->nSecondBasePoint == 8) &&
+         (pSecond->nSecondTurnPoint == 9) &&
+         (pSecond->nPoint == 10) &&
          (pSecond->Divergence.nDirection == 1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          (pSecond->nCenterPosition == CZSC_CENTER_POSITION_ABOVE) &&
@@ -2962,6 +2967,9 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
          pThird->bOverlapped &&
          (pThird->nSmallTurn == -1) &&
          (pSecond->nBreakout == 0) &&
+         (pSecond->nSecondBasePoint == 8) &&
+         (pSecond->nSecondTurnPoint == 9) &&
+         (pSecond->nPoint == 10) &&
          (pSecond->Divergence.nDirection == -1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          (pSecond->nCenterPosition == CZSC_CENTER_POSITION_BELOW) &&
@@ -5116,6 +5124,77 @@ static bool TestApplyTradingTrendIdMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingSecondContextPointIdsMapCodes()
+{
+  const int nCount = 14;
+  float pBase[nCount];
+  float pTurn[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pBase[i] = -1;
+    pTurn[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(3, 2.0f, 10);
+  Buy.nSource = 2;
+  Buy.nPoint = 6;
+  Buy.nSecondBasePoint = 4;
+  Buy.nSecondTurnPoint = 5;
+  TradingSignalCandidate Sell = MakeTestCandidate(5, 12.0f, 10);
+  Sell.nSource = 2;
+  Sell.nPoint = 9;
+  Sell.nSecondBasePoint = 7;
+  Sell.nSecondTurnPoint = 8;
+  TradingSignalCandidate MissingBase = MakeTestCandidate(7, 2.0f, 10);
+  MissingBase.nSource = 2;
+  MissingBase.nPoint = 10;
+  MissingBase.nSecondTurnPoint = 9;
+  TradingSignalCandidate WrongOrder = MakeTestCandidate(9, 2.0f, 10);
+  WrongOrder.nSource = 2;
+  WrongOrder.nPoint = 12;
+  WrongOrder.nSecondBasePoint = 11;
+  WrongOrder.nSecondTurnPoint = 10;
+  TradingSignalCandidate NonSecond = MakeTestCandidate(11, 3.0f, 20);
+  NonSecond.nSource = 3;
+  NonSecond.nPoint = 13;
+  NonSecond.nSecondBasePoint = 10;
+  NonSecond.nSecondTurnPoint = 12;
+  TradingSignalCandidate LowerPrioritySecond = MakeTestCandidate(12, 2.0f, 10);
+  LowerPrioritySecond.nSource = 2;
+  LowerPrioritySecond.nPoint = 6;
+  LowerPrioritySecond.nSecondBasePoint = 4;
+  LowerPrioritySecond.nSecondTurnPoint = 5;
+  TradingSignalCandidate HigherPriorityThird = MakeTestCandidate(12, 3.0f, 20);
+  HigherPriorityThird.nSource = 3;
+  HigherPriorityThird.nPoint = 6;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(MissingBase);
+  Candidates.push_back(WrongOrder);
+  Candidates.push_back(NonSecond);
+  Candidates.push_back(LowerPrioritySecond);
+  Candidates.push_back(HigherPriorityThird);
+
+  ApplyTradingSignalSecondBasePointId(nCount, pBase, Candidates);
+  ApplyTradingSignalSecondTurnPointId(nCount, pTurn, Candidates);
+
+  return NearlyEqual(pBase[3], 5.0f) &&
+         NearlyEqual(pTurn[3], 6.0f) &&
+         NearlyEqual(pBase[5], 8.0f) &&
+         NearlyEqual(pTurn[5], 9.0f) &&
+         NearlyEqual(pBase[7], 0.0f) &&
+         NearlyEqual(pTurn[7], 0.0f) &&
+         NearlyEqual(pBase[9], 0.0f) &&
+         NearlyEqual(pTurn[9], 0.0f) &&
+         NearlyEqual(pBase[11], 0.0f) &&
+         NearlyEqual(pTurn[11], 0.0f) &&
+         NearlyEqual(pBase[12], 0.0f) &&
+         NearlyEqual(pTurn[12], 0.0f) &&
+         NearlyEqual(pBase[0], 0.0f) &&
+         NearlyEqual(pTurn[0], 0.0f);
+}
+
 static bool TestApplyTradingSmallTurnMapsCodes()
 {
   const int nCount = 18;
@@ -6808,7 +6887,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6891,6 +6970,8 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 37: ApplyTradingSignalAbcBreakoutRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
       case 38: ApplyTradingSignalSmallTurnLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
       case 39: ApplyTradingSignalSmallTurnRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 40: ApplyTradingSignalSecondBasePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 41: ApplyTradingSignalSecondTurnPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -7760,6 +7841,10 @@ int main()
   if (!TestApplyTradingTrendIdMapsCodes())
   {
     return 150;
+  }
+  if (!TestApplyTradingSecondContextPointIdsMapCodes())
+  {
+    return 193;
   }
   if (!TestApplyTradingSmallTurnMapsCodes())
   {

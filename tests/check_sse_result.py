@@ -15,6 +15,7 @@ DEBUG_IDS = re.compile(
   r"BLP(?P<blp>[0-9]+) BRP(?P<brp>[0-9]+) "
   r"ABK(?P<abk>[0-9]+) ABL(?P<abl>[0-9]+) ABR(?P<abr>[0-9]+) "
   r"STL(?P<stl>[0-9]+) STR(?P<str>[0-9]+) "
+  r"SFP(?P<sfp>[0-9]+) SMP(?P<smp>[0-9]+) "
   r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)"
 )
 BKO_CONTEXT = re.compile(
@@ -52,6 +53,10 @@ def validate_candidate_context(text: str):
     n_abr = int(debug_ids.group("abr"))
     n_stl = int(debug_ids.group("stl"))
     n_str = int(debug_ids.group("str"))
+    n_sfp = int(debug_ids.group("sfp"))
+    n_smp = int(debug_ids.group("smp"))
+    n_pid = int(debug_ids.group("pid"))
+    is_second_signal = ("  二买  " in line) or ("  二卖  " in line)
     if n_abc == 0 and n_abk != 0:
       errors.append(f"line {n_line}: ABC0 conflicts with ABK{n_abk}")
     if n_abc != 0 and n_abk <= 0:
@@ -64,6 +69,10 @@ def validate_candidate_context(text: str):
       errors.append(f"line {n_line}: small turn 0 conflicts with STL{n_stl}/STR{n_str}")
     if n_small_turn != 0 and (n_stl <= 0 or n_str <= 0 or n_stl >= n_str):
       errors.append(f"line {n_line}: small turn {n_small_turn} requires ordered positive STL/STR")
+    if not is_second_signal and (n_sfp != 0 or n_smp != 0):
+      errors.append(f"line {n_line}: non-second signal conflicts with SFP{n_sfp}/SMP{n_smp}")
+    if is_second_signal and (n_sfp <= 0 or n_smp <= n_sfp or n_pid <= n_smp):
+      errors.append(f"line {n_line}: second signal requires ordered SFP/SMP/PID")
     if "bko[-]" in line:
       if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp", "stl", "str")):
         errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP/STL/STR debug ids")
@@ -81,7 +90,6 @@ def validate_candidate_context(text: str):
     n_bko = int(debug_ids.group("bko"))
     n_blp = int(debug_ids.group("blp"))
     n_brp = int(debug_ids.group("brp"))
-    n_pid = int(debug_ids.group("pid"))
     n_leave = int(bko_context.group("leave"))
     n_retest = int(bko_context.group("retest"))
     if n_breakout >= 0 and n_bko != n_breakout + 1:

@@ -46,6 +46,11 @@ static bool IsFirstSignal(float fSignal)
   return (fSignal == SIGNAL_FIRST_BUY) || (fSignal == SIGNAL_FIRST_SELL);
 }
 
+static bool IsSecondSignal(float fSignal)
+{
+  return (fSignal == SIGNAL_SECOND_BUY) || (fSignal == SIGNAL_SECOND_SELL);
+}
+
 static bool IsThirdSignal(float fSignal)
 {
   return (fSignal == SIGNAL_THIRD_BUY) || (fSignal == SIGNAL_THIRD_SELL);
@@ -1631,6 +1636,8 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nCenterPosition = nCenterPosition;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
+  C.nSecondBasePoint = -1;
+  C.nSecondTurnPoint = -1;
   C.nSmallTurn = 0;
   C.nAbcStructure = 0;
   C.nAbcBreakout = -1;
@@ -1935,6 +1942,8 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
                                                         ClassifyCenterPosition(Points, Centers, nSecondPoint, nCenter),
                                                         nBreakout >= 0,
                                                         Divergence));
+      pCandidates->back().nSecondBasePoint = FirstSignal.nPoint;
+      pCandidates->back().nSecondTurnPoint = (int)nPoint + 1;
     }
     else if ((FirstSignal.fSignal == SIGNAL_FIRST_SELL) &&
              (Turn.nType == CZSC_POINT_BOTTOM) &&
@@ -1959,6 +1968,8 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
                                                         ClassifyCenterPosition(Points, Centers, nSecondPoint, nCenter),
                                                         nBreakout >= 0,
                                                         Divergence));
+      pCandidates->back().nSecondBasePoint = FirstSignal.nPoint;
+      pCandidates->back().nSecondTurnPoint = (int)nPoint + 1;
     }
   }
 }
@@ -2518,6 +2529,69 @@ void ApplyTradingSignalTrendId(int nCount,
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
+}
+
+static bool HasSecondSignalContext(const TradingSignalCandidate &C)
+{
+  return IsSecondSignal(C.fSignal) &&
+         (C.nSource == SIGNAL_SOURCE_SECOND) &&
+         (C.nSecondBasePoint >= 0) &&
+         (C.nSecondTurnPoint > C.nSecondBasePoint) &&
+         (C.nPoint > C.nSecondTurnPoint);
+}
+
+static void ApplyTradingSignalSecondContextPointId(int nCount,
+                                                   float *pOut,
+                                                   const std::vector<TradingSignalCandidate> &Candidates,
+                                                   bool bBasePoint)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      int nPoint = -1;
+      if (HasSecondSignalContext(C))
+      {
+        nPoint = bBasePoint ? C.nSecondBasePoint : C.nSecondTurnPoint;
+      }
+      pOut[C.nIndex] = (nPoint >= 0) ? (float)(nPoint + 1) : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 输出第二类买卖点关联的一类端点编号，1基；无二类确认输出0。
+void ApplyTradingSignalSecondBasePointId(int nCount,
+                                         float *pOut,
+                                         const std::vector<TradingSignalCandidate> &Candidates)
+{
+  ApplyTradingSignalSecondContextPointId(nCount, pOut, Candidates, true);
+}
+
+// 输出第二类买卖点中间反向端点编号，1基；无二类确认输出0。
+void ApplyTradingSignalSecondTurnPointId(int nCount,
+                                         float *pOut,
+                                         const std::vector<TradingSignalCandidate> &Candidates)
+{
+  ApplyTradingSignalSecondContextPointId(nCount, pOut, Candidates, false);
 }
 
 static bool HasMatchingSmallTurn(const TradingSignalCandidate &C)
@@ -4921,6 +4995,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 37: ApplyTradingSignalAbcBreakoutRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // ABC关联突破回试端点编号
     case 38: ApplyTradingSignalSmallTurnLeavePointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 小转大突破离开端点编号
     case 39: ApplyTradingSignalSmallTurnRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 小转大突破回试端点编号
+    case 40: ApplyTradingSignalSecondBasePointId(nCount, pOut, An.Candidates); break; // 二类关联一类端点编号
+    case 41: ApplyTradingSignalSecondTurnPointId(nCount, pOut, An.Candidates); break; // 二类中间反向端点编号
     default: ClearOutput(nCount, pOut); break;
   }
 }

@@ -93,7 +93,10 @@ EXPECTED_FORMULA_SNIPPETS = {
   ],
   "chan-second-buy.txt": [
     "BSP:=TDXDLL1(30,H,L,40);",
-    "BARSLAST(BSP=2)<10;",
+    "PID:=TDXDLL1(30,H,L,270);",
+    "SFP:=TDXDLL1(30,H,L,400);",
+    "SMP:=TDXDLL1(30,H,L,410);",
+    "BARSLAST(BSP=2 AND SFP>0 AND SMP>SFP AND PID>SMP)<10;",
   ],
   "chan-third-buy.txt": [
     "BSP:=TDXDLL1(30,H,L,40);",
@@ -127,7 +130,10 @@ EXPECTED_FORMULA_SNIPPETS = {
   ],
   "chan-second-sell.txt": [
     "BSP:=TDXDLL1(30,H,L,40);",
-    "BARSLAST(BSP=12)<10;",
+    "PID:=TDXDLL1(30,H,L,270);",
+    "SFP:=TDXDLL1(30,H,L,400);",
+    "SMP:=TDXDLL1(30,H,L,410);",
+    "BARSLAST(BSP=12 AND SFP>0 AND SMP>SFP AND PID>SMP)<10;",
   ],
   "chan-third-sell.txt": [
     "BSP:=TDXDLL1(30,H,L,40);",
@@ -506,7 +512,10 @@ def self_test() -> int:
     ),
     "chan-second-buy.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
-      "BARSLAST(BSP=2)<10;\n"
+      "PID:=TDXDLL1(30,H,L,270);\n"
+      "SFP:=TDXDLL1(30,H,L,400);\n"
+      "SMP:=TDXDLL1(30,H,L,410);\n"
+      "BARSLAST(BSP=2 AND SFP>0 AND SMP>SFP AND PID>SMP)<10;\n"
     ),
     "chan-third-buy.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
@@ -540,7 +549,10 @@ def self_test() -> int:
     ),
     "chan-second-sell.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
-      "BARSLAST(BSP=12)<10;\n"
+      "PID:=TDXDLL1(30,H,L,270);\n"
+      "SFP:=TDXDLL1(30,H,L,400);\n"
+      "SMP:=TDXDLL1(30,H,L,410);\n"
+      "BARSLAST(BSP=12 AND SFP>0 AND SMP>SFP AND PID>SMP)<10;\n"
     ),
     "chan-third-sell.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
@@ -736,6 +748,8 @@ def main() -> int:
     "ABC关联突破回试端点编号：一基",
     "小转大突破离开端点编号：一基",
     "小转大突破回试端点编号：一基",
+    "二类关联一类端点编号：一基",
+    "二类中间反向端点编号：一基",
     "C/A段MACD面积比：小于100为柱面积走弱",
     "C/A段价差力度比：小于100为空间走弱",
     "C/A段平均力度比：小于100为速度走弱",
@@ -760,6 +774,8 @@ def main() -> int:
     "DRAWNUMBER(BSP<>0 AND ABR>0,L*0.960,ABR)",
     "DRAWNUMBER(BSP<>0 AND STL>0,H*1.045,STL)",
     "DRAWNUMBER(BSP<>0 AND STR>0,L*0.955,STR)",
+    "DRAWNUMBER(BSP<>0 AND SFP>0,H*1.050,SFP)",
+    "DRAWNUMBER(BSP<>0 AND SMP>0,L*0.950,SMP)",
     "DRAWLINE(BSG=1,L,BSG=2,L,0),COLORBLUE",
     "DRAWLINE(BSG=-1,H,BSG=-2,H,0),COLORBLUE",
     "DRAWLINE(NST=1,L,NST=2,L,0),COLORCYAN",

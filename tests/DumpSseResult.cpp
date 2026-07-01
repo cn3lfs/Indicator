@@ -60,6 +60,11 @@ static bool IsFirstSignal(float fSignal)
   return (fSignal == 1.0f) || (fSignal == 11.0f);
 }
 
+static bool IsSecondSignal(float fSignal)
+{
+  return (fSignal == 2.0f) || (fSignal == 12.0f);
+}
+
 static bool IsThirdSignal(float fSignal)
 {
   return (fSignal == 3.0f) || (fSignal == 13.0f);
@@ -106,6 +111,11 @@ static int ScopedSmallTurn(float fSignal, int nSmallTurn)
 static int ScopedSmallTurnPointId(float fSignal, int nSmallTurn, int nPoint)
 {
   return (ScopedSmallTurn(fSignal, nSmallTurn) != 0) ? nPoint : 0;
+}
+
+static int ScopedSecondSignalPointId(float fSignal, int nPoint)
+{
+  return (IsSecondSignal(fSignal) && (nPoint >= 0)) ? nPoint + 1 : 0;
 }
 
 static int ScopedFirstSignalValue(float fSignal, int nValue)
@@ -360,7 +370,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
     const TradingSignalCandidate &C = Candidates[i];
     int nCtx = BuildTradingSignalContextFlags(C);
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d ABK%d ABL%d ABR%d STL%d STR%d PID%d TID%d  ctx%d",
+                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d ABK%d ABL%d ABR%d STL%d STR%d SFP%d SMP%d PID%d TID%d  ctx%d",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -385,6 +395,8 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  ScopedFirstSignalValue(C.fSignal, BreakoutRetestPointId(Breakouts, C.nAbcBreakout)),
                  ScopedSmallTurnPointId(C.fSignal, C.nSmallTurn, BreakoutLeavePointId(Breakouts, C.nBreakout)),
                  ScopedSmallTurnPointId(C.fSignal, C.nSmallTurn, BreakoutRetestPointId(Breakouts, C.nBreakout)),
+                 ScopedSecondSignalPointId(C.fSignal, C.nSecondBasePoint),
+                 ScopedSecondSignalPointId(C.fSignal, C.nSecondTurnPoint),
                  OneBasedId(C.nPoint),
                  OneBasedId(C.nTrend),
                  nCtx);
