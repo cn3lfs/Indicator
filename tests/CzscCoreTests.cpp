@@ -3051,6 +3051,45 @@ static bool TestCentersUseThreeOverlappingSegments()
   {
     return false;
   }
+  if (Centers[0].nDirection != 1)
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static bool TestCentersTrackEntryDirection()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
+
+    std::vector<Center> Centers = BuildCenters(Points);
+    if ((Centers.size() != 1) || (Centers[0].nDirection != 1))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 2));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 6));
+
+    std::vector<Center> Centers = BuildCenters(Points);
+    if ((Centers.size() != 1) || (Centers[0].nDirection != -1))
+    {
+      return false;
+    }
+  }
 
   return true;
 }
@@ -6574,6 +6613,10 @@ int main()
   if (!TestCentersUseThreeOverlappingSegments())
   {
     return 36;
+  }
+  if (!TestCentersTrackEntryDirection())
+  {
+    return 177;
   }
   if (!TestCenterExtendsWithOverlappingSegment())
   {
