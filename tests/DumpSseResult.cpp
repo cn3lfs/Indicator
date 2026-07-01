@@ -171,6 +171,27 @@ static void PrintContextFlags(FILE *pFile, int nFlags)
   std::fprintf(pFile, "]");
 }
 
+static void PrintStrengthPair(FILE *pFile, const DivergenceResult &D)
+{
+  if (pFile == 0)
+  {
+    return;
+  }
+
+  std::fprintf(pFile,
+               "  A[价%.1f 速%.3f MACD%.1f DIF%.2f DEA%.2f] C[价%.1f 速%.3f MACD%.1f DIF%.2f DEA%.2f]",
+               D.Previous.fSpace,
+               D.Previous.fSpeed,
+               D.Previous.fMacdArea,
+               D.Previous.fDifHeight,
+               D.Previous.fDeaHeight,
+               D.Current.fSpace,
+               D.Current.fSpeed,
+               D.Current.fMacdArea,
+               D.Current.fDifHeight,
+               D.Current.fDeaHeight);
+}
+
 static void PrintPoints(FILE *pFile, const char *pTitle, const char *pPrefix,
                         const std::vector<SegmentPoint> &Points)
 {
@@ -257,6 +278,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  OneBasedId(C.nPoint),
                  OneBasedId(C.nTrend),
                  nCtx);
+    PrintStrengthPair(pFile, C.Divergence);
     PrintContextFlags(pFile, nCtx);
     if (C.bOverlapped)
     {
