@@ -2541,6 +2541,31 @@ static bool TestThirdCandidateKeepsBreakoutDivergence()
          (pThird->nSmallTurn == 0);
 }
 
+static bool TestThirdCandidateRequiresBreakoutDirection()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 10.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 6));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(0, 6));
+  Breakouts.back().nCenter = 0;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  return !HasSignalCandidate(Candidates, 24, 3.0f) &&
+         !HasSignalCandidate(Candidates, 24, 13.0f);
+}
+
 static bool TestThirdCandidateUsesOnlyCompletedTrendStructure()
 {
   std::vector<SegmentPoint> Points;
@@ -6745,6 +6770,10 @@ int main()
   if (!TestThirdCandidateKeepsBreakoutDivergence())
   {
     return 31;
+  }
+  if (!TestThirdCandidateRequiresBreakoutDirection())
+  {
+    return 181;
   }
   if (!TestThirdCandidateUsesOnlyCompletedTrendStructure())
   {
