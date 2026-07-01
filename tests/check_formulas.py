@@ -13,6 +13,7 @@ FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\
 TDXDLL_REF = re.compile(r"TDXDLL1\s*\(\s*([0-9]+)\s*,")
 REGISTERED_FUNC_REF = re.compile(r"\{\s*([0-9]+)\s*,\s*&Func[0-9]+\s*\}")
 CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
+TDX_COMMENT = re.compile(r"\{.*?\}", re.S)
 FORMULA_ALIASES = [
   ("chan-main.txt", "chan-all-buys.txt"),
 ]
@@ -179,6 +180,10 @@ def parse_func30_outputs(text: str):
   return outputs, []
 
 
+def strip_tdx_comments(text: str):
+  return TDX_COMMENT.sub("", text)
+
+
 def validate_func30_outputs(outputs):
   expected = set(range(0, max(outputs) + 1))
   missing = sorted(expected - outputs)
@@ -260,10 +265,11 @@ def validate_formula_aliases(formula_texts):
 def validate_aux_order(formula_texts):
   errors = []
   for name, text in formula_texts.items():
-    first_func30 = FUNC30_CALL.search(text)
+    active_text = strip_tdx_comments(text)
+    first_func30 = FUNC30_CALL.search(active_text)
     if first_func30 is None:
       continue
-    first_func40 = FUNC40_CALL.search(text)
+    first_func40 = FUNC40_CALL.search(active_text)
     if first_func40 is None:
       errors.append(f"{name}: missing TDXDLL1(40,C,V,0) before Func30")
     elif first_func40.start() > first_func30.start():
@@ -499,11 +505,13 @@ def self_test() -> int:
     return 1
   aux_errors = validate_aux_order({
     "ok.txt": "XC:=TDXDLL1(40,C,V,0);\nBSP:=TDXDLL1(30,H,L,40);\n",
+    "comment_only.txt": "{XC:=TDXDLL1(40,C,V,0);}\nBSP:=TDXDLL1(30,H,L,40);\n",
     "missing.txt": "BSP:=TDXDLL1(30,H,L,40);\n",
     "late.txt": "BSP:=TDXDLL1(30,H,L,40);\nXC:=TDXDLL1(40,C,V,0);\n",
     "plain.txt": "CLOSE>0;\n",
   })
   expected_aux_errors = [
+    "comment_only.txt: missing TDXDLL1(40,C,V,0) before Func30",
     "missing.txt: missing TDXDLL1(40,C,V,0) before Func30",
     "late.txt: TDXDLL1(40,C,V,0) must appear before Func30",
   ]
@@ -546,11 +554,12 @@ def main() -> int:
 
   for doc in DOCS + formula_files:
     text = doc.read_text(encoding="utf-8")
-    for match in TDXDLL_REF.finditer(text):
+    scan_text = strip_tdx_comments(text) if doc.parent == (ROOT / "formulas") else text
+    for match in TDXDLL_REF.finditer(scan_text):
       n_func = int(match.group(1))
       if n_func not in registered_funcs:
         tdx_func_errors.append(f"{doc.relative_to(ROOT)} -> {n_func}")
-    for match in FUNC30_REF.finditer(text):
+    for match in FUNC30_REF.finditer(scan_text):
       n_mode = int(match.group(1))
       error = validate_func30_mode(n_mode, func30_outputs)
       if error:
