@@ -26,6 +26,7 @@ README_MODE_RULE_SNIPPETS = [
   "配置码四位只能由 `0/1` 组成",
   "非法 mode 会输出全 0",
 ]
+EXPECTED_REGISTERED_FUNCS = set(range(1, 21)) | {30, 40}
 
 EXPECTED_FORMULA_SNIPPETS = {
   "chan-main.txt": [
@@ -211,6 +212,17 @@ def parse_registered_tdx_funcs(text: str):
   return funcs, []
 
 
+def validate_registered_tdx_funcs(funcs):
+  errors = []
+  missing = sorted(EXPECTED_REGISTERED_FUNCS - funcs)
+  extra = sorted(funcs - EXPECTED_REGISTERED_FUNCS)
+  if missing:
+    errors.append(f"Main.cpp missing registered TDX functions: {missing}")
+  if extra:
+    errors.append(f"Main.cpp has unexpected registered TDX functions: {extra}")
+  return errors
+
+
 def read_registered_tdx_funcs():
   text = (ROOT / "Main.cpp").read_text(encoding="utf-8")
   return parse_registered_tdx_funcs(text)
@@ -323,6 +335,18 @@ def self_test() -> int:
   funcs, errors = parse_registered_tdx_funcs("{1, &Func1},\n{30, &Func30},\n{40, &Func40},\n")
   if errors or funcs != {1, 30, 40}:
     print(f"self-test failed: parse registered functions {funcs!r} {errors!r}", file=sys.stderr)
+    return 1
+  registry_errors = validate_registered_tdx_funcs(EXPECTED_REGISTERED_FUNCS)
+  if registry_errors:
+    print(f"self-test failed: registered function validation {registry_errors!r}", file=sys.stderr)
+    return 1
+  registry_errors = validate_registered_tdx_funcs(set(range(1, 20)) | {30, 40, 50})
+  expected_registry_errors = [
+    "Main.cpp missing registered TDX functions: [20]",
+    "Main.cpp has unexpected registered TDX functions: [50]",
+  ]
+  if registry_errors != expected_registry_errors:
+    print(f"self-test failed: registered function mismatch {registry_errors!r}", file=sys.stderr)
     return 1
   funcs, errors = parse_registered_tdx_funcs("static PluginTCalcFuncInfo Info[] = {{0, NULL}};")
   if not errors:
@@ -559,6 +583,7 @@ def main() -> int:
   readme_entry_errors = validate_readme_entry_docs(readme_text)
   readme_mode_rule_errors = validate_readme_mode_rules(readme_text)
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
+  registered_func_errors.extend(validate_registered_tdx_funcs(registered_funcs))
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
     text = doc.read_text(encoding="utf-8")
