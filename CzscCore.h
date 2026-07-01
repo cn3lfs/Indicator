@@ -301,7 +301,7 @@ std::vector<int> ClassifyMaKissesWithVolume(const std::vector<float> &Short, con
 void ComputeShortLongMa(int nCount, float *pHigh, float *pLow,
                         std::vector<float> *pShort, std::vector<float> *pLong);
 
-// 配置：默认配置复现现状；DecodeConfig 把单个数字码解出三维配置（供通达信传参）
+// 配置：默认配置复现现状；DecodeConfig 把单个数字码解出四维配置（供通达信传参）
 CzscConfig DefaultConfig();
 CzscConfig DecodeConfig(float fCode);
 
