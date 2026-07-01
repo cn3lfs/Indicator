@@ -2011,6 +2011,7 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   float pHigh[nCount];
   float pLow[nCount];
   float pOut[nCount];
+  float pCtx[nCount];
 
   for (int i = 0; i < nCount; i++)
   {
@@ -2018,6 +2019,7 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
     pHigh[i] = 0;
     pLow[i] = 0;
     pOut[i] = -1;
+    pCtx[i] = -1;
   }
 
   pIn[0] = -1;
@@ -2068,16 +2070,19 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 2.0f);
   const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 3.0f);
   ApplyTradingSignalCandidates(nCount, pOut, Candidates);
+  ApplyTradingSignalContextFlags(nCount, pCtx, Candidates);
 
   return (pSecond != 0) &&
          (pThird != 0) &&
          pSecond->bOverlapped &&
+         pThird->bOverlapped &&
          (pThird->nSmallTurn == 1) &&
          (pSecond->nBreakout == 0) &&
          (pSecond->Divergence.nDirection == 1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          (pSecond->nCenterPosition == CZSC_CENTER_POSITION_ABOVE) &&
-         NearlyEqual(pOut[40], 3.0f);
+         NearlyEqual(pOut[40], 3.0f) &&
+         (((int)pCtx[40] & CZSC_SIGNAL_CTX_OVERLAPPED) != 0);
 }
 
 static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
@@ -2087,6 +2092,7 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   float pHigh[nCount];
   float pLow[nCount];
   float pOut[nCount];
+  float pCtx[nCount];
 
   for (int i = 0; i < nCount; i++)
   {
@@ -2094,6 +2100,7 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
     pHigh[i] = 0;
     pLow[i] = 0;
     pOut[i] = -1;
+    pCtx[i] = -1;
   }
 
   pIn[0] = 1;
@@ -2144,16 +2151,19 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 12.0f);
   const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 13.0f);
   ApplyTradingSignalCandidates(nCount, pOut, Candidates);
+  ApplyTradingSignalContextFlags(nCount, pCtx, Candidates);
 
   return (pSecond != 0) &&
          (pThird != 0) &&
          pSecond->bOverlapped &&
+         pThird->bOverlapped &&
          (pThird->nSmallTurn == -1) &&
          (pSecond->nBreakout == 0) &&
          (pSecond->Divergence.nDirection == -1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          (pSecond->nCenterPosition == CZSC_CENTER_POSITION_BELOW) &&
-         NearlyEqual(pOut[40], 13.0f);
+         NearlyEqual(pOut[40], 13.0f) &&
+         (((int)pCtx[40] & CZSC_SIGNAL_CTX_OVERLAPPED) != 0);
 }
 
 static bool TestSecondThirdOverlapRequiresFirstCenter()

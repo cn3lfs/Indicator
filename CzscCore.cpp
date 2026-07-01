@@ -1923,6 +1923,18 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
     }
 
     float fSignal = (B.nDirection > 0) ? SIGNAL_THIRD_BUY : SIGNAL_THIRD_SELL;
+    bool bOverlapped = false;
+    for (std::size_t j = 0; j < pCandidates->size(); j++)
+    {
+      const TradingSignalCandidate &Second = (*pCandidates)[j];
+      if ((Second.nSource == SIGNAL_SOURCE_SECOND) &&
+          (Second.nBreakout == (int)i) &&
+          (Second.nIndex == Points[B.nRetestPoint].nIndex))
+      {
+        bOverlapped = true;
+        break;
+      }
+    }
     int nTrend = FindCompletedTrendByCenter(Structures,
                                             B.nCenter,
                                             Points[B.nRetestPoint].nIndex);
@@ -1937,7 +1949,7 @@ static void AppendThirdSignalCandidates(std::vector<TradingSignalCandidate> *pCa
                                                       nTrend,
                                                       nMovementType,
                                                       ClassifyCenterPosition(Points, Centers, B.nRetestPoint, B.nCenter),
-                                                      false,
+                                                      bOverlapped,
                                                       B.Divergence));
     pCandidates->back().nAfterEffect = ClassifyCenterAftermath(Centers, B.nCenter, fSignal);
   }
