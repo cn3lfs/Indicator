@@ -338,10 +338,10 @@ static bool TestRealSseDiagnosticCounts()
   return (Strokes.size() == 157) &&
          (StrokeAn.Points.size() == 158) &&
          (SegmentAn.Points.size() == 31) &&
-         (StrokeAn.Centers.size() == 30) &&
-         (SegmentAn.Centers.size() == 5) &&
-         (StrokeAn.Candidates.size() == 11) &&
-         (SegmentAn.Candidates.size() == 2);
+         (StrokeAn.Centers.size() == 18) &&
+         (SegmentAn.Centers.size() == 4) &&
+         (StrokeAn.Candidates.size() == 17) &&
+         (SegmentAn.Candidates.size() == 4);
 }
 
 static bool TestRealSsePricePointsStayOnStrictStrokeEndpoints()
@@ -524,11 +524,11 @@ static bool TestRealSseGoldenCentersPresent()
   }
 
   return ContainsSseCenter(Centers, 1, "2018-02-26", "2018-07-06", 3128.72f, 3091.46f) &&
-         ContainsSseCenter(Centers, 1, "2018-07-12", "2018-11-12", 2676.48f, 2653.11f) &&
-         ContainsSseCenter(Centers, 1, "2018-11-19", "2019-01-04", 2645.84f, 2555.32f) &&
-         ContainsSseCenter(Centers, 1, "2019-03-07", "2019-04-08", 3125.02f, 2987.77f) &&
-         ContainsSseCenter(Centers, -1, "2019-05-10", "2019-06-06", 2922.91f, 2838.38f) &&
-         ContainsSseCenter(Centers, -1, "2020-03-19", "2020-07-09", 2833.02f, 2802.47f);
+         ContainsSseCenter(Centers, 1, "2018-07-12", "2018-11-30", 2676.48f, 2653.11f) &&
+         ContainsSseCenter(Centers, -1, "2019-01-04", "2019-05-10", 3125.02f, 2987.77f) &&
+         ContainsSseCenter(Centers, 1, "2019-05-17", "2020-03-19", 2922.91f, 2891.54f) &&
+         ContainsSseCenter(Centers, 1, "2020-04-10", "2020-07-09", 2833.02f, 2802.47f) &&
+         ContainsSseCenter(Centers, -1, "2020-07-27", "2021-01-25", 3350.59f, 3325.17f);
 }
 
 static bool TestRealSseCentersDoNotShareEndpoints()
@@ -558,16 +558,15 @@ static bool TestRealSseGoldenSegmentCentersPresent()
   std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, Config);
   std::vector<Center> Centers = BuildCenters(Points);
 
-  if (Centers.size() != 5)
+  if (Centers.size() != 4)
   {
     return false;
   }
 
-  return ContainsSseCenter(Centers, 1, "2018-04-11", "2019-01-04", 2703.51f, 2449.20f) &&
-         ContainsSseCenter(Centers, 1, "2019-04-08", "2020-02-04", 3042.93f, 2822.19f) &&
-         ContainsSseCenter(Centers, -1, "2020-04-16", "2021-06-02", 3456.72f, 3344.97f) &&
-         ContainsSseCenter(Centers, -1, "2021-07-28", "2024-02-05", 3315.05f, 3312.72f) &&
-         ContainsSseCenter(Centers, 1, "2024-05-20", "2025-11-14", 3174.27f, 3040.69f);
+  return ContainsSseCenter(Centers, 1, "2018-04-11", "2019-04-08", 2703.51f, 2449.20f) &&
+         ContainsSseCenter(Centers, -1, "2019-06-06", "2020-08-18", 3042.93f, 2822.19f) &&
+         ContainsSseCenter(Centers, -1, "2020-09-25", "2023-06-26", 3418.95f, 3344.97f) &&
+         ContainsSseCenter(Centers, 1, "2023-08-04", "2025-11-14", 3174.27f, 3040.69f);
 }
 
 static bool TestRealSseGoldenCandidatesPresent()
@@ -586,21 +585,29 @@ static bool TestRealSseGoldenCandidatesPresent()
 
   static const SseCandidateExpectation StrokeExpected[] = {
     {"2018-07-12", 13.0f, 1, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 9, 0, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2020-07-27", 3.0f, 1, 8, 7, CZSC_MOVEMENT_CONSOLIDATION, 48, 8, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2021-01-29", 3.0f, 2, 10, 9, CZSC_MOVEMENT_CONSOLIDATION, 58, 10, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
-    {"2021-06-18", 3.0f, 1, 12, 11, CZSC_MOVEMENT_CONSOLIDATION, 68, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2022-04-07", 13.0f, 2, 15, 14, CZSC_MOVEMENT_CONSOLIDATION, 83, 15, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
-    {"2022-10-18", 13.0f, 1, 17, 16, CZSC_MOVEMENT_CONSOLIDATION, 93, 17, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2024-01-02", 13.0f, 1, 21, 20, CZSC_MOVEMENT_CONSOLIDATION, 117, 21, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2024-10-16", 3.0f, 1, 23, 22, CZSC_MOVEMENT_CONSOLIDATION, 126, 23, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2025-05-27", 3.0f, 2, 25, 24, CZSC_MOVEMENT_CONSOLIDATION, 138, 25, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
-    {"2025-09-04", 3.0f, 1, 26, 25, CZSC_MOVEMENT_CONSOLIDATION, 142, 26, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2025-11-05", 3.0f, 2, 27, 26, CZSC_MOVEMENT_CONSOLIDATION, 146, 27, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233}
+    {"2018-12-13", 13.0f, 2, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 17, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
+    {"2019-05-17", 13.0f, 1, 2, 2, CZSC_MOVEMENT_CONSOLIDATION, 25, 2, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2020-04-10", 13.0f, 1, 3, 3, CZSC_MOVEMENT_CONSOLIDATION, 43, 3, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2020-07-27", 3.0f, 1, 4, 4, CZSC_MOVEMENT_CONSOLIDATION, 48, 4, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2021-01-29", 3.0f, 2, 5, 5, CZSC_MOVEMENT_CONSOLIDATION, 58, 5, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2021-06-18", 3.0f, 1, 6, 6, CZSC_MOVEMENT_CONSOLIDATION, 68, 6, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2022-03-03", 13.0f, 1, 7, 7, CZSC_MOVEMENT_CONSOLIDATION, 81, 7, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2022-10-18", 13.0f, 1, 8, 8, CZSC_MOVEMENT_CONSOLIDATION, 93, 8, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2023-02-17", 3.0f, 2, 9, 9, CZSC_MOVEMENT_CONSOLIDATION, 100, 9, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
+    {"2023-09-04", 13.0f, 1, 10, 10, CZSC_MOVEMENT_CONSOLIDATION, 113, 10, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-03-28", 3.0f, 1, 11, 11, CZSC_MOVEMENT_CONSOLIDATION, 120, 11, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-10-16", 3.0f, 1, 12, 12, CZSC_MOVEMENT_CONSOLIDATION, 126, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-04-24", 13.0f, 2, 13, 13, CZSC_MOVEMENT_CONSOLIDATION, 135, 13, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2025-09-04", 3.0f, 1, 14, 14, CZSC_MOVEMENT_CONSOLIDATION, 142, 14, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-11-05", 3.0f, 2, 15, 15, CZSC_MOVEMENT_CONSOLIDATION, 146, 15, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2026-02-03", 3.0f, 1, 16, 16, CZSC_MOVEMENT_CONSOLIDATION, 152, 16, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224}
   };
 
   static const SseCandidateExpectation SegmentExpected[] = {
-    {"2024-05-20", 13.0f, 1, 3, 3, CZSC_MOVEMENT_CONSOLIDATION, 25, 3, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2025-12-16", 3.0f, 2, 4, 4, CZSC_MOVEMENT_CONSOLIDATION, 30, 4, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 4105}
+    {"2019-06-06", 3.0f, 1, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 6, 0, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2020-09-25", 3.0f, 1, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 12, 1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2023-08-04", 13.0f, 1, 2, 2, CZSC_MOVEMENT_CONSOLIDATION, 23, 2, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-12-16", 3.0f, 2, 3, 3, CZSC_MOVEMENT_CONSOLIDATION, 30, 3, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 4105}
   };
 
   return ContainsAllSseCandidates(StrokeAn.Candidates,
@@ -2231,6 +2238,30 @@ static bool TestCenterExtendsWithOverlappingSegment()
   return true;
 }
 
+static bool TestCenterExtendsWithCrossingSegment()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 4));
+
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() != 1)
+  {
+    return false;
+  }
+  return (Centers[0].nEnd == 24) &&
+         NearlyEqual(Centers[0].fHigh, 9.0f) &&
+         NearlyEqual(Centers[0].fLow, 5.0f) &&
+         NearlyEqual(Centers[0].fTop, 20.0f) &&
+         NearlyEqual(Centers[0].fBottom, 4.0f);
+}
+
 static bool TestCentersSplitWhenOverlapBreaks()
 {
   // 第一个中枢在低位带[5,9]成形后，向上离开且首次回试不进中枢 → 中枢结束；
@@ -2580,8 +2611,8 @@ static bool TestFunc5WritesSecondSellAfterFirstSell()
   pHigh[32] = 13.2f;
   pLow[32] = 13.2f;
   pIn[36] = -1;
-  pHigh[36] = 11;
-  pLow[36] = 11;
+  pHigh[36] = 12.6f;
+  pLow[36] = 12.6f;
   pIn[40] = 1;
   pHigh[40] = 13.1f;
   pLow[40] = 13.1f;
@@ -5305,6 +5336,10 @@ int main()
   if (!TestCenterExtendsWithOverlappingSegment())
   {
     return 37;
+  }
+  if (!TestCenterExtendsWithCrossingSegment())
+  {
+    return 159;
   }
   if (!TestCentersSplitWhenOverlapBreaks())
   {

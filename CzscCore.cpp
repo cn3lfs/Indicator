@@ -490,17 +490,11 @@ static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::
 }
 
 // 若新一段与中枢重叠则延伸：ZG/ZD 随重叠收缩、GG/DD 随全幅扩张、终点后移；否则中枢结束。
-// 若段的高低同时超出 ZG 和 ZD（穿越整个中枢区间），视为离开而非延伸。
+// 第20课中心定理一按 [dn, gn] 与 [ZD, ZG] 是否重叠判定延伸；穿越整个区间仍属于重叠。
 static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
 {
   if ((pCenter == 0) ||
       !IntervalsOverlap(pCenter->fLow, pCenter->fHigh, Interval.fLow, Interval.fHigh))
-  {
-    return false;
-  }
-
-  // 穿越中枢：段跨过整个 ZG/ZD → 离开而非延伸
-  if ((Interval.fHigh > pCenter->fHigh) && (Interval.fLow < pCenter->fLow))
   {
     return false;
   }
@@ -3203,8 +3197,7 @@ std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh
 
 // 扫描端点序列构造同级中枢（第17/20课）：连续三段走势有重叠即形成一个候选中枢。
 // 中枢成形后以 ExtendCenter 吸收后续与 ZG/ZD 重叠的段来延伸（第20课中枢延伸）。
-// 延伸完毕后，若候选与上一个已确认中枢的 ZG/ZD 区间重叠则视为扩展/升级，不作为
-// 新的同级中枢输出；只有 ZG/ZD 不重叠才确认成下一个同级中枢（上涨/下跌趋势延伸）。
+// 每个完成中枢都输出；相邻中枢的上涨/下跌/扩展关系由 ClassifyCenterRelation 单独标注。
 // 方向由进入段定：前一点为底则进入段向上，前一点为顶则进入段向下。
 std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
 {
