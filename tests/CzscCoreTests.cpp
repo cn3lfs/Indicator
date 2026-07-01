@@ -5068,7 +5068,7 @@ static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
 
 static bool TestApplyTradingStandardDivergenceMapsCodes()
 {
-  const int nCount = 22;
+  const int nCount = 24;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -5107,6 +5107,9 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   TradingSignalCandidate NonFirstSource = MakeTestCandidate(21, 1.0f, 30);
   MakeStandardDivergence(&NonFirstSource, 1);
   NonFirstSource.nSource = 2;
+  TradingSignalCandidate MissingNewExtreme = MakeTestCandidate(23, 1.0f, 30);
+  MakeStandardDivergence(&MissingNewExtreme, 1);
+  MissingNewExtreme.Divergence.bNewExtreme = false;
 
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
@@ -5119,6 +5122,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   Candidates.push_back(MissingBaseDivergence);
   Candidates.push_back(WrongDivergenceDirection);
   Candidates.push_back(NonFirstSource);
+  Candidates.push_back(MissingNewExtreme);
 
   ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
 
@@ -5133,6 +5137,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
          NearlyEqual(pOut[17], 0.0f) &&
          NearlyEqual(pOut[19], 0.0f) &&
          NearlyEqual(pOut[21], 0.0f) &&
+         NearlyEqual(pOut[23], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
