@@ -374,6 +374,12 @@ void ApplyTradingSignalReversal(int nCount,
 void ApplyTradingSignalAftermath(int nCount,
                                  float *pOut,
                                  const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalCenterPosition(int nCount,
+                                      float *pOut,
+                                      const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalMovementType(int nCount,
+                                    float *pOut,
+                                    const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalSmallTurn(int nCount,
                                  float *pOut,
                                  const std::vector<TradingSignalCandidate> &Candidates);
@@ -423,6 +429,8 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 19 为B中枢MACD黄白线回拉0轴标记（买=1、卖=-1），不占用旧函数编号。
 // Func30 输出 20 为标准趋势背驰确认标记（买=1、卖=-1），不占用旧函数编号。
 // Func30 输出 21 为胜出买卖点候选上下文位图，位值见 CzscSignalContextFlag。
+// Func30 输出 22 为胜出买卖点相对中枢位置（-1下/0内/1上/2未知），不占用旧函数编号。
+// Func30 输出 23 为胜出买卖点所属走势类型（-1下跌/0盘整/1上涨），不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

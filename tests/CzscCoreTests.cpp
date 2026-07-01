@@ -3087,6 +3087,61 @@ static bool TestApplyTradingAftermathMapsCodes()
          NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingCenterPositionMapsCodes()
+{
+  const int nCount = 6;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -9;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Below = MakeTestCandidate(1, 1.0f, 20);
+  Below.nCenterPosition = CZSC_CENTER_POSITION_BELOW;
+  TradingSignalCandidate Inside = MakeTestCandidate(3, 2.0f, 20);
+  Inside.nCenterPosition = CZSC_CENTER_POSITION_INSIDE;
+  TradingSignalCandidate Above = MakeTestCandidate(5, 3.0f, 20);
+  Above.nCenterPosition = CZSC_CENTER_POSITION_ABOVE;
+  Candidates.push_back(Below);
+  Candidates.push_back(Inside);
+  Candidates.push_back(Above);
+
+  ApplyTradingSignalCenterPosition(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], -1.0f) &&
+         NearlyEqual(pOut[3], 0.0f) &&
+         NearlyEqual(pOut[5], 1.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingMovementTypeMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -9;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 1.0f, 10);
+  Low.nMovementType = CZSC_MOVEMENT_UP;
+  TradingSignalCandidate High = MakeTestCandidate(2, 2.0f, 20);
+  High.nMovementType = CZSC_MOVEMENT_DOWN;
+  TradingSignalCandidate Flat = MakeTestCandidate(4, 3.0f, 20);
+  Flat.nMovementType = CZSC_MOVEMENT_CONSOLIDATION;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Flat);
+
+  ApplyTradingSignalMovementType(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], -1.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestApplyTradingSmallTurnMapsCodes()
 {
   const int nCount = 6;
@@ -4163,7 +4218,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21};
+  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21, 22, 23};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -4176,6 +4231,8 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 19: ApplyTradingSignalMacdZeroPullback(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 20: ApplyTradingSignalStandardDivergence(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 21: ApplyTradingSignalContextFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 22: ApplyTradingSignalCenterPosition(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 23: ApplyTradingSignalMovementType(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -4830,6 +4887,14 @@ int main()
   if (!TestApplyTradingAftermathMapsCodes())
   {
     return 80;
+  }
+  if (!TestApplyTradingCenterPositionMapsCodes())
+  {
+    return 144;
+  }
+  if (!TestApplyTradingMovementTypeMapsCodes())
+  {
+    return 145;
   }
   if (!TestApplyTradingSmallTurnMapsCodes())
   {

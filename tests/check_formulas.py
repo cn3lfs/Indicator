@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = [ROOT / "README.md", ROOT / "formulas" / "README.md"]
 FORMULA_REF = re.compile(r"(?:formulas[\\/])?(chan-[A-Za-z0-9_-]+\.txt)")
 FUNC30_REF = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*([0-9]+)\s*\)")
-FUNC30_OUTPUTS = set(range(0, 22))
+FUNC30_OUTPUTS = set(range(0, 24))
 
 
 def is_valid_config(n_config: int) -> bool:

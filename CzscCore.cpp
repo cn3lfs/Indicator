@@ -2144,6 +2144,72 @@ void ApplyTradingSignalAftermath(int nCount,
   }
 }
 
+// 按优先级取胜，导出胜出信号相对所属中枢的位置：-1=下方、0=内部、1=上方、2=未知。
+void ApplyTradingSignalCenterPosition(int nCount,
+                                      float *pOut,
+                                      const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)C.nCenterPosition;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 按优先级取胜，导出胜出信号所属走势类型：-1=下跌、0=盘整、1=上涨。
+void ApplyTradingSignalMovementType(int nCount,
+                                    float *pOut,
+                                    const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)C.nMovementType;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 // 第44课小转大必要条件：小级别底/顶背驰后，最后中枢出现三买/三卖才可能引发大级别转折。
 // 输出 1=底背驰后的三买必要条件成立，-1=顶背驰后的三卖必要条件成立，0=无。
 void ApplyTradingSignalSmallTurn(int nCount,
@@ -4122,6 +4188,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 19: ApplyTradingSignalMacdZeroPullback(nCount, pOut, An.Candidates); break; // B中枢MACD黄白线回拉0轴
     case 20: ApplyTradingSignalStandardDivergence(nCount, pOut, An.Candidates); break; // 标准趋势背驰确认
     case 21: ApplyTradingSignalContextFlags(nCount, pOut, An.Candidates); break; // 胜出候选上下文位图
+    case 22: ApplyTradingSignalCenterPosition(nCount, pOut, An.Candidates); break; // 胜出候选相对中枢位置
+    case 23: ApplyTradingSignalMovementType(nCount, pOut, An.Candidates); break; // 胜出候选所属走势类型
     default: ClearOutput(nCount, pOut); break;
   }
 }
