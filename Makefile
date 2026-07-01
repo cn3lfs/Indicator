@@ -102,6 +102,7 @@ test-build: $(TEST_TARGET)
 
 formula-test:
 	@echo [TF] formulas
+	@python3 tests/check_formulas.py --self-test
 	@python3 tests/check_formulas.py
 
 sse-result: clean $(SSE_DUMP_TARGET)

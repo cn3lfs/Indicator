@@ -9,7 +9,8 @@ FORMULA_REF = re.compile(r"(?:formulas[\\/])?(chan-[A-Za-z0-9_-]+\.txt)")
 FUNC30_REF = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*([0-9]+)\s*\)")
 FUNC30_CALL = re.compile(r"TDXDLL1\s*\(\s*30\s*,")
 FUNC40_CALL = re.compile(r"TDXDLL1\s*\(\s*40\s*,\s*C\s*,\s*V\s*,\s*0\s*\)")
-FUNC30_OUTPUTS = set(range(0, 29))
+FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\n//=+\n// 输出函数40号", re.S)
+CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
 
 
 def is_valid_config(n_config: int) -> bool:
@@ -20,6 +21,90 @@ def is_valid_config(n_config: int) -> bool:
   return n_config == 0
 
 
+def parse_func30_outputs(text: str):
+  match = FUNC30_SWITCH.search(text)
+  if match is None:
+    return set(), ["unable to locate Func30 switch in CzscCore.cpp"]
+
+  outputs = {int(item) for item in CASE_REF.findall(match.group("body"))}
+  if not outputs:
+    return outputs, ["unable to parse Func30 case labels"]
+  return outputs, []
+
+
+def validate_func30_outputs(outputs):
+  expected = set(range(0, max(outputs) + 1))
+  missing = sorted(expected - outputs)
+  if missing:
+    return [f"Func30 output cases are not contiguous, missing: {missing}"]
+  return []
+
+
+def read_func30_outputs():
+  text = (ROOT / "CzscCore.cpp").read_text(encoding="utf-8")
+  outputs, errors = parse_func30_outputs(text)
+  if errors:
+    return outputs, errors
+  return outputs, validate_func30_outputs(outputs)
+
+
+def validate_func30_mode(n_mode: int, outputs):
+  n_output = (n_mode % 1000) // 10
+  n_config = n_mode // 1000
+  if (n_mode % 10) != 0:
+    return "mode must end with 0"
+  if n_output not in outputs:
+    return f"unknown output {n_output}"
+  if not is_valid_config(n_config):
+    return f"invalid config {n_config}"
+  return ""
+
+
+def self_test() -> int:
+  sample = (
+    "void Func30(int nCount)\n"
+    "{\n"
+    "  switch (nCount)\n"
+    "  {\n"
+    "    case 0: break;\n"
+    "    case 1: break;\n"
+    "    case 2: break;\n"
+    "  }\n"
+    "}\n"
+    "\n"
+    "//=============================================================================\n"
+    "// 输出函数40号\n"
+  )
+  outputs, errors = parse_func30_outputs(sample)
+  if errors or outputs != {0, 1, 2}:
+    print("self-test failed: parse contiguous cases", file=sys.stderr)
+    return 1
+
+  gapped = sample.replace("case 1: break;\n", "")
+  outputs, errors = parse_func30_outputs(gapped)
+  if errors or not validate_func30_outputs(outputs):
+    print("self-test failed: detect missing case", file=sys.stderr)
+    return 1
+
+  outputs, errors = parse_func30_outputs("void Func29() {}")
+  if not errors:
+    print("self-test failed: detect missing Func30", file=sys.stderr)
+    return 1
+
+  outputs = {0, 1}
+  checks = [
+    (validate_func30_mode(11, outputs), "mode must end with 0"),
+    (validate_func30_mode(90, outputs), "unknown output 9"),
+    (validate_func30_mode(2000, outputs), "invalid config 2"),
+    (validate_func30_mode(1010, outputs), ""),
+  ]
+  for actual, expected in checks:
+    if actual != expected:
+      print(f"self-test failed: mode validation {actual!r} != {expected!r}", file=sys.stderr)
+      return 1
+  return 0
+
+
 def main() -> int:
   missing = []
   empty = []
@@ -27,6 +112,8 @@ def main() -> int:
   invalid_modes = []
   stale_comments = []
   aux_order_errors = []
+  func30_errors = []
+  func30_outputs, func30_errors = read_func30_outputs()
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
@@ -46,14 +133,9 @@ def main() -> int:
     text = doc.read_text(encoding="utf-8")
     for match in FUNC30_REF.finditer(text):
       n_mode = int(match.group(1))
-      n_output = (n_mode % 1000) // 10
-      n_config = n_mode // 1000
-      if (n_mode % 10) != 0:
-        invalid_modes.append(f"{doc.relative_to(ROOT)} -> {n_mode}: mode must end with 0")
-      elif n_output not in FUNC30_OUTPUTS:
-        invalid_modes.append(f"{doc.relative_to(ROOT)} -> {n_mode}: unknown output {n_output}")
-      elif not is_valid_config(n_config):
-        invalid_modes.append(f"{doc.relative_to(ROOT)} -> {n_mode}: invalid config {n_config}")
+      error = validate_func30_mode(n_mode, func30_outputs)
+      if error:
+        invalid_modes.append(f"{doc.relative_to(ROOT)} -> {n_mode}: {error}")
 
   for path in formula_files:
     text = path.read_text(encoding="utf-8")
@@ -82,7 +164,7 @@ def main() -> int:
     if comment not in debug_text:
       stale_comments.append(f"chan-debug.txt missing comment: {comment}")
 
-  if missing or empty or undocumented or invalid_modes or stale_comments or aux_order_errors:
+  if missing or empty or undocumented or invalid_modes or stale_comments or aux_order_errors or func30_errors:
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -95,9 +177,13 @@ def main() -> int:
       print(f"stale formula comment: {item}", file=sys.stderr)
     for item in aux_order_errors:
       print(f"aux order error: {item}", file=sys.stderr)
+    for item in func30_errors:
+      print(f"Func30 parser error: {item}", file=sys.stderr)
     return 1
   return 0
 
 
 if __name__ == "__main__":
+  if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
+    raise SystemExit(self_test())
   raise SystemExit(main())
