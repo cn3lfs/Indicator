@@ -13,8 +13,19 @@ FUNC30_SWITCH = re.compile(r"void\s+Func30\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}\s*\
 TDXDLL_REF = re.compile(r"TDXDLL1\s*\(\s*([0-9]+)\s*,")
 REGISTERED_FUNC_REF = re.compile(r"\{\s*([0-9]+)\s*,\s*&Func[0-9]+\s*\}")
 CASE_REF = re.compile(r"\bcase\s+([0-9]+)\s*:")
+FORMULA_ALIASES = [
+  ("chan-main.txt", "chan-all-buys.txt"),
+]
 
 EXPECTED_FORMULA_SNIPPETS = {
+  "chan-main.txt": [
+    "DLL:=TDXDLL1(30,H,L,0);",
+    "SEG:=TDXDLL1(30,H,L,1100000);",
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "QLT:=TDXDLL1(30,H,L,50);",
+    "DRAWTEXT(BSP=1,LOW,'一买'),COLORWHITE;",
+    "DRAWTEXT(BSP=11,HIGH,'一卖'),COLORGREEN;",
+  ],
   "chan-first-buy-abc.txt": [
     "ABX:=TDXDLL1(30,H,L,160);",
     "BARSLAST(ABX=1)<10;",
@@ -205,6 +216,14 @@ def validate_formula_snippets(formula_texts):
   return errors
 
 
+def validate_formula_aliases(formula_texts):
+  errors = []
+  for primary, alias in FORMULA_ALIASES:
+    if formula_texts.get(primary, "") != formula_texts.get(alias, ""):
+      errors.append(f"{primary} must match {alias}")
+  return errors
+
+
 def self_test() -> int:
   sample = (
     "void Func30(int nCount)\n"
@@ -270,6 +289,14 @@ def self_test() -> int:
     return 1
 
   snippet_errors = validate_formula_snippets({
+    "chan-main.txt": (
+      "DLL:=TDXDLL1(30,H,L,0);\n"
+      "SEG:=TDXDLL1(30,H,L,1100000);\n"
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "QLT:=TDXDLL1(30,H,L,50);\n"
+      "DRAWTEXT(BSP=1,LOW,'一买'),COLORWHITE;\n"
+      "DRAWTEXT(BSP=11,HIGH,'一卖'),COLORGREEN;\n"
+    ),
     "chan-first-buy-abc.txt": (
       "ABX:=TDXDLL1(30,H,L,160);\n"
       "BARSLAST(ABX=1)<10;\n"
@@ -380,6 +407,21 @@ def self_test() -> int:
   if snippet_errors != expected_snippet_errors:
     print(f"self-test failed: formula snippets {snippet_errors!r}", file=sys.stderr)
     return 1
+
+  alias_errors = validate_formula_aliases({
+    "chan-main.txt": "same",
+    "chan-all-buys.txt": "same",
+  })
+  if alias_errors:
+    print(f"self-test failed: formula aliases {alias_errors!r}", file=sys.stderr)
+    return 1
+  alias_errors = validate_formula_aliases({
+    "chan-main.txt": "new",
+    "chan-all-buys.txt": "old",
+  })
+  if alias_errors != ["chan-main.txt must match chan-all-buys.txt"]:
+    print(f"self-test failed: formula alias mismatch {alias_errors!r}", file=sys.stderr)
+    return 1
   return 0
 
 
@@ -391,6 +433,7 @@ def main() -> int:
   stale_comments = []
   aux_order_errors = []
   formula_snippet_errors = []
+  formula_alias_errors = []
   func30_errors = []
   func30_outputs, func30_errors = read_func30_outputs()
   registered_funcs, registered_func_errors = read_registered_tdx_funcs()
@@ -440,6 +483,7 @@ def main() -> int:
     for path in formula_files
   }
   formula_snippet_errors = validate_formula_snippets(formula_texts)
+  formula_alias_errors = validate_formula_aliases(formula_texts)
 
   debug_text = (ROOT / "formulas" / "chan-debug.txt").read_text(encoding="utf-8")
   expected_debug_comments = [
@@ -474,7 +518,7 @@ def main() -> int:
       stale_comments.append(f"chan-debug.txt missing debug line: {line}")
 
   if (missing or empty or undocumented or invalid_modes or stale_comments or
-      aux_order_errors or formula_snippet_errors or func30_errors or
+      aux_order_errors or formula_snippet_errors or formula_alias_errors or func30_errors or
       func30_doc_errors or registered_func_errors or tdx_func_errors):
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
@@ -490,6 +534,8 @@ def main() -> int:
       print(f"aux order error: {item}", file=sys.stderr)
     for item in formula_snippet_errors:
       print(f"formula snippet error: {item}", file=sys.stderr)
+    for item in formula_alias_errors:
+      print(f"formula alias error: {item}", file=sys.stderr)
     for item in func30_errors:
       print(f"Func30 parser error: {item}", file=sys.stderr)
     for item in func30_doc_errors:
