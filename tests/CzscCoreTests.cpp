@@ -4606,7 +4606,13 @@ static bool TestCenterAftermathNewborn()
   std::vector<Center> Centers;
   Centers.push_back(MakeTestCenterFull(0, 12, 9, 5, 10, 4));     // GG=10
   Centers.push_back(MakeTestCenterFull(16, 28, 14, 12, 16, 12)); // DD=12 > 10 → 上涨新生
-  return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_NEWBORN;
+
+  if (ClassifyCenterAftermath(Centers, 0, 3.0f) != CZSC_CENTER_AFTERMATH_NEWBORN)
+  {
+    return false;
+  }
+  // 三卖 + 上涨(反向) → 未知
+  return ClassifyCenterAftermath(Centers, 0, 13.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN;
 }
 
 static bool TestCenterAftermathUnknownNoNext()
