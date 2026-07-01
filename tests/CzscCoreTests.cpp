@@ -86,6 +86,57 @@ static bool TestMergedBarsTrackExtremeIndexes()
   return true;
 }
 
+static MergedBar MakeTestMergedBar(int nStart, int nEnd,
+                                   int nHighIndex, int nLowIndex,
+                                   float fHigh, float fLow)
+{
+  MergedBar Bar;
+  Bar.nStart = nStart;
+  Bar.nEnd = nEnd;
+  Bar.nHighIndex = nHighIndex;
+  Bar.nLowIndex = nLowIndex;
+  Bar.fHigh = fHigh;
+  Bar.fLow = fLow;
+  return Bar;
+}
+
+static bool TestFractalsUseMergedExtremeIndexes()
+{
+  {
+    std::vector<MergedBar> Bars;
+    Bars.push_back(MakeTestMergedBar(0, 0, 0, 0, 9, 4));
+    Bars.push_back(MakeTestMergedBar(1, 2, 1, 2, 12, 8));
+    Bars.push_back(MakeTestMergedBar(3, 3, 3, 3, 10, 7));
+
+    std::vector<Fractal> Fractals = BuildFractals(Bars);
+    if ((Fractals.size() != 1) ||
+        (Fractals[0].nType != CZSC_POINT_TOP) ||
+        (Fractals[0].nIndex != 1) ||
+        (Fractals[0].nMergedIndex != 1))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<MergedBar> Bars;
+    Bars.push_back(MakeTestMergedBar(0, 0, 0, 0, 12, 10));
+    Bars.push_back(MakeTestMergedBar(1, 2, 1, 2, 9, 4));
+    Bars.push_back(MakeTestMergedBar(3, 3, 3, 3, 10, 7));
+
+    std::vector<Fractal> Fractals = BuildFractals(Bars);
+    if ((Fractals.size() != 1) ||
+        (Fractals[0].nType != CZSC_POINT_BOTTOM) ||
+        (Fractals[0].nIndex != 2) ||
+        (Fractals[0].nMergedIndex != 1))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFractalsAndStrokes()
 {
   const int nCount = 7;
@@ -5458,6 +5509,10 @@ int main()
   if (!TestMergedBarsTrackExtremeIndexes())
   {
     return 122;
+  }
+  if (!TestFractalsUseMergedExtremeIndexes())
+  {
+    return 123;
   }
   if (!TestFractalsAndStrokes())
   {
