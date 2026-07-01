@@ -4724,6 +4724,8 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
   TradingSignalCandidate WrongDirection = MakeTestCandidate(4, 1.0f, 30);
   WrongDirection.nSource = 1;
   WrongDirection.nAbcStructure = -1;
+  TradingSignalCandidate Second = MakeTestCandidate(5, 2.0f, 10);
+  Second.nSource = 2;
   TradingSignalCandidate MismatchedSource = MakeTestCandidate(6, 1.0f, 30);
   MismatchedSource.nSource = 2;
   MismatchedSource.nAbcStructure = 0;
@@ -4731,6 +4733,7 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
   Candidates.push_back(ConfirmedAbc);
   Candidates.push_back(Third);
   Candidates.push_back(WrongDirection);
+  Candidates.push_back(Second);
   Candidates.push_back(MismatchedSource);
 
   ApplyTradingSignalStrictAbcCandidates(nCount, pOut, Candidates);
@@ -4739,6 +4742,7 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
          NearlyEqual(pOut[2], 11.0f) &&
          NearlyEqual(pOut[3], 3.0f) &&
          NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[5], 2.0f) &&
          NearlyEqual(pOut[6], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
