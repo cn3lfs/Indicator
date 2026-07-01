@@ -14,7 +14,7 @@ def validate_candidate_context(text: str):
   for n_line, line in enumerate(text.splitlines(), start=1):
     if CANDIDATE_LINE.search(line) is None:
       continue
-    for snippet in (" A[价", " C[价", " flags["):
+    for snippet in (" A[价", " C[价", " 比[价", " dvg[", " flags["):
       if snippet not in line:
         errors.append(f"line {n_line}: candidate missing {snippet.strip()}")
   return errors

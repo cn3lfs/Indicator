@@ -171,6 +171,60 @@ static void PrintContextFlags(FILE *pFile, int nFlags)
   std::fprintf(pFile, "]");
 }
 
+static int BuildDivergenceFlags(const DivergenceResult &D)
+{
+  int nFlags = 0;
+  if (D.bNewExtreme)
+  {
+    nFlags |= CZSC_DIVERGENCE_NEW_EXTREME;
+  }
+  if (D.bWeakSpace)
+  {
+    nFlags |= CZSC_DIVERGENCE_WEAK_SPACE;
+  }
+  if (D.bWeakSpeed)
+  {
+    nFlags |= CZSC_DIVERGENCE_WEAK_SPEED;
+  }
+  if (D.bWeakMacd)
+  {
+    nFlags |= CZSC_DIVERGENCE_WEAK_MACD;
+  }
+  if (D.bDivergence)
+  {
+    nFlags |= CZSC_DIVERGENCE_CONFIRMED;
+  }
+  return nFlags;
+}
+
+static void PrintDivergenceFlags(FILE *pFile, int nFlags)
+{
+  std::fprintf(pFile, "  dvg[");
+  if (nFlags == 0)
+  {
+    std::fprintf(pFile, "-");
+  }
+  else
+  {
+    bool bFirst = true;
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_DIVERGENCE_NEW_EXTREME, "创新");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_DIVERGENCE_WEAK_SPACE, "空间弱");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_DIVERGENCE_WEAK_SPEED, "速度弱");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_DIVERGENCE_WEAK_MACD, "柱弱");
+    PrintFlag(pFile, &bFirst, nFlags, CZSC_DIVERGENCE_CONFIRMED, "成立");
+  }
+  std::fprintf(pFile, "]");
+}
+
+static float PercentRatio(float fCurrent, float fPrevious)
+{
+  if (fPrevious <= 0)
+  {
+    return 0.0f;
+  }
+  return fCurrent / fPrevious * 100.0f;
+}
+
 static void PrintStrengthPair(FILE *pFile, const DivergenceResult &D)
 {
   if (pFile == 0)
@@ -190,6 +244,20 @@ static void PrintStrengthPair(FILE *pFile, const DivergenceResult &D)
                D.Current.fMacdArea,
                D.Current.fDifHeight,
                D.Current.fDeaHeight);
+}
+
+static void PrintStrengthRatios(FILE *pFile, const DivergenceResult &D)
+{
+  if (pFile == 0)
+  {
+    return;
+  }
+
+  std::fprintf(pFile,
+               "  比[价%.1f%% 速%.1f%% MACD%.1f%%]",
+               PercentRatio(D.Current.fSpace, D.Previous.fSpace),
+               PercentRatio(D.Current.fSpeed, D.Previous.fSpeed),
+               PercentRatio(D.Current.fMacdArea, D.Previous.fMacdArea));
 }
 
 static void PrintPoints(FILE *pFile, const char *pTitle, const char *pPrefix,
@@ -279,6 +347,8 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  OneBasedId(C.nTrend),
                  nCtx);
     PrintStrengthPair(pFile, C.Divergence);
+    PrintStrengthRatios(pFile, C.Divergence);
+    PrintDivergenceFlags(pFile, BuildDivergenceFlags(C.Divergence));
     PrintContextFlags(pFile, nCtx);
     if (C.bOverlapped)
     {

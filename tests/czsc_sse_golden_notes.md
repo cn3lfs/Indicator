@@ -30,6 +30,9 @@ Current manually reviewed line-segment center anchors. These are generated with
 Current manually reviewed trading-signal anchors. These lock the generated
 candidate date, signal type, quality, center/point/breakout ids, position,
 movement type, aftermath, and context flags in C++ tests.
+The generated `czsc_sse_result.txt` candidate lines also include raw A/C
+strengths, C/A percent ratios, and divergence condition flags for manual
+P4动力学核对; those numeric diagnostics are generated, not edited here.
 
 | unit | date | signal | quality | center | movement | point | breakout | position | aftermath | ctx |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
