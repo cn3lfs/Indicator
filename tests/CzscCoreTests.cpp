@@ -3566,7 +3566,7 @@ static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
 
 static bool TestApplyTradingStandardDivergenceMapsCodes()
 {
-  const int nCount = 8;
+  const int nCount = 12;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -3581,14 +3581,22 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   TradingSignalCandidate MissingAbc = MakeTestCandidate(5, 1.0f, 30);
   MakeStandardDivergence(&MissingAbc, 1);
   MissingAbc.nAbcStructure = 0;
-  TradingSignalCandidate MissingMacdArea = MakeTestCandidate(7, 1.0f, 30);
+  TradingSignalCandidate MissingZeroPull = MakeTestCandidate(7, 1.0f, 30);
+  MakeStandardDivergence(&MissingZeroPull, 1);
+  MissingZeroPull.nMacdZeroPullback = 0;
+  TradingSignalCandidate MissingMacdArea = MakeTestCandidate(9, 1.0f, 30);
   MakeStandardDivergence(&MissingMacdArea, 1);
   MissingMacdArea.Divergence.bWeakMacd = false;
+  TradingSignalCandidate MissingLineWeak = MakeTestCandidate(11, 1.0f, 30);
+  MakeStandardDivergence(&MissingLineWeak, 1);
+  MissingLineWeak.Divergence.Current.fDeaHeight = 6;
 
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(MissingAbc);
+  Candidates.push_back(MissingZeroPull);
   Candidates.push_back(MissingMacdArea);
+  Candidates.push_back(MissingLineWeak);
 
   ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
 
@@ -3596,6 +3604,8 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
          NearlyEqual(pOut[3], -1.0f) &&
          NearlyEqual(pOut[5], 0.0f) &&
          NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) &&
+         NearlyEqual(pOut[11], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
