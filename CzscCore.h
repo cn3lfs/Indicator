@@ -90,6 +90,7 @@ enum CzscSignalContextFlag
   CZSC_SIGNAL_CTX_REVERSAL_CONS     = 512,
   CZSC_SIGNAL_CTX_REVERSAL_EXTEND   = 1024,
   CZSC_SIGNAL_CTX_OVERLAPPED        = 2048,
+  CZSC_SIGNAL_CTX_CENTER_BREAKOUT   = 4096,
 };
 
 // 均线吻分类（第11课）：短长均线靠近/相交处的反抗强度，递增

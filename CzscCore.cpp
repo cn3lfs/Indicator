@@ -2507,6 +2507,10 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_OVERLAPPED;
   }
+  if (C.nBreakout >= 0)
+  {
+    nFlags |= CZSC_SIGNAL_CTX_CENTER_BREAKOUT;
+  }
   return nFlags;
 }
 

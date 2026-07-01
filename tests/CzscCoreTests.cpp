@@ -3350,9 +3350,11 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   Buy.nSmallTurn = 1;
   Buy.nReversal = CZSC_REVERSAL_TREND;
   Buy.bOverlapped = true;
+  Buy.nBreakout = 0;
   TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
   Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
   Newborn.nReversal = CZSC_REVERSAL_CONSOLIDATION;
+  Newborn.nBreakout = 1;
   TradingSignalCandidate Extended = MakeTestCandidate(5, 13.0f, 20);
   Extended.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   Extended.nReversal = CZSC_REVERSAL_EXTENSION;
@@ -3369,9 +3371,11 @@ static bool TestApplyTradingContextFlagsMapsCodes()
                                CZSC_SIGNAL_CTX_SMALL_TURN |
                                CZSC_SIGNAL_CTX_STANDARD_DIV |
                                CZSC_SIGNAL_CTX_REVERSAL_TREND |
-                               CZSC_SIGNAL_CTX_OVERLAPPED);
+                               CZSC_SIGNAL_CTX_OVERLAPPED |
+                               CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fNewbornExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN |
-                                   CZSC_SIGNAL_CTX_REVERSAL_CONS);
+                                   CZSC_SIGNAL_CTX_REVERSAL_CONS |
+                                   CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
                                     CZSC_SIGNAL_CTX_REVERSAL_EXTEND);
 
@@ -3397,12 +3401,15 @@ static bool TestApplyTradingContextFlagsUsesWinningPriority()
   Low.nReversal = CZSC_REVERSAL_TREND;
   TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
   High.bOverlapped = true;
+  High.nBreakout = 0;
   Candidates.push_back(Low);
   Candidates.push_back(High);
 
   ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
 
-  return NearlyEqual(pOut[2], (float)CZSC_SIGNAL_CTX_OVERLAPPED) &&
+  float fExpected = (float)(CZSC_SIGNAL_CTX_OVERLAPPED |
+                            CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  return NearlyEqual(pOut[2], fExpected) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
