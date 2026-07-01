@@ -55,7 +55,7 @@ DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep)
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
-        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result sse-result-check release-check run clean debug
+        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result sse-result-check release release-check run clean debug
 
 all : $(TARGETS)
 
@@ -119,6 +119,9 @@ sse-result-check: $(SSE_DUMP_TARGET)
 
 release-check:
 	@sh scripts/check-release-dlls.sh
+
+release:
+	@sh scripts/build-release.sh
 
 mingw32-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build

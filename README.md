@@ -119,6 +119,7 @@ make test
 检查工具链、运行测试并打包 DLL（脚本会先 `make clean` 再做 检查→原生测试→Win 测试构建→打 DLL）：
 
 ```bash
+make release                 # 构建 32/64 位 DLL 并执行发布校验
 sh scripts/build-mingw32.sh    # 32 位 → build/CZSC.dll
 sh scripts/build-mingw64.sh    # 64 位 → build/CZSC64.dll
 make release-check             # 校验 PE32/PE32+ 类型、静态依赖与零 PE 时间戳
