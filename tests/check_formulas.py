@@ -106,6 +106,7 @@ EXPECTED_FORMULA_SNIPPETS = {
     "XC:=TDXDLL1(40,C,V,0);",
     "BSP:=TDXDLL1(30,H,L,40);",
     "日二买:=BARSLAST(BSP=2)<10;",
+    "XC30:=TDXDLL1(40,C,V,0)#MIN30;",
     "BSP30:=TDXDLL1(30,H,L,40)#MIN30;",
     "小买点:=BARSLAST(BSP30=2 OR BSP30=3)<16;",
     "日二买 AND 小买点;",
@@ -525,6 +526,7 @@ def self_test() -> int:
       "XC:=TDXDLL1(40,C,V,0);\n"
       "BSP:=TDXDLL1(30,H,L,40);\n"
       "日二买:=BARSLAST(BSP=2)<10;\n"
+      "XC30:=TDXDLL1(40,C,V,0)#MIN30;\n"
       "BSP30:=TDXDLL1(30,H,L,40)#MIN30;\n"
       "小买点:=BARSLAST(BSP30=2 OR BSP30=3)<16;\n"
       "日二买 AND 小买点;\n"
