@@ -2588,7 +2588,7 @@ static int GetFirstSignalDirection(const TradingSignalCandidate &C)
 static bool HasMatchingAbcStructure(const TradingSignalCandidate &C)
 {
   int nSign = GetFirstSignalDirection(C);
-  return (nSign != 0) && (C.nAbcStructure == nSign);
+  return (nSign != 0) && (C.nAbcStructure == nSign) && (C.nAbcBreakout >= 0);
 }
 
 static bool HasMatchingMacdZeroPullback(const TradingSignalCandidate &C)
@@ -2817,7 +2817,7 @@ static bool IsStandardMacdDivergence(const TradingSignalCandidate &C)
 }
 
 // 第24/25/37课标准趋势背驰组合诊断：
-// 一类趋势背驰 + C段创新极值 + 柱面积走弱 + 黄白线高度走弱 + B中枢回零 + ABC结构。
+// 一类趋势背驰 + C段创新极值 + 柱面积走弱 + 黄白线高度走弱 + B中枢回零 + ABC关联突破。
 // 输出 1=标准一买背驰，-1=标准一卖背驰，0=未满足完整组合。
 void ApplyTradingSignalStandardDivergence(int nCount,
                                           float *pOut,

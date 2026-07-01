@@ -5208,13 +5208,17 @@ static bool TestApplyTradingAbcStructureMapsCodes()
   std::vector<TradingSignalCandidate> Candidates;
   TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
   Buy.nAbcStructure = 1;
+  Buy.nAbcBreakout = 0;
   TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
   Sell.nAbcStructure = -1;
+  Sell.nAbcBreakout = 1;
   TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
   TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
   WrongDirection.nAbcStructure = -1;
+  WrongDirection.nAbcBreakout = 2;
   TradingSignalCandidate NonFirst = MakeTestCandidate(9, 3.0f, 30);
   NonFirst.nAbcStructure = 1;
+  NonFirst.nAbcBreakout = 3;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(None);
@@ -5289,11 +5293,13 @@ static bool TestApplyTradingStrictAbcFiltersFirstSignals()
   TradingSignalCandidate ConfirmedAbc = MakeTestCandidate(2, 11.0f, 30);
   ConfirmedAbc.nSource = 1;
   ConfirmedAbc.nAbcStructure = -1;
+  ConfirmedAbc.nAbcBreakout = 0;
   TradingSignalCandidate Third = MakeTestCandidate(3, 3.0f, 20);
   Third.nSource = 3;
   TradingSignalCandidate WrongDirection = MakeTestCandidate(4, 1.0f, 30);
   WrongDirection.nSource = 1;
   WrongDirection.nAbcStructure = -1;
+  WrongDirection.nAbcBreakout = 1;
   TradingSignalCandidate Second = MakeTestCandidate(5, 2.0f, 10);
   Second.nSource = 2;
   TradingSignalCandidate MismatchedSource = MakeTestCandidate(6, 1.0f, 30);
@@ -5402,6 +5408,7 @@ static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
   pC->nTrend = 0;
   pC->nMovementType = (nSign > 0) ? CZSC_MOVEMENT_DOWN : CZSC_MOVEMENT_UP;
   pC->nAbcStructure = nSign;
+  pC->nAbcBreakout = 0;
   pC->nMacdZeroPullback = nSign;
   pC->Divergence.nDirection = -nSign;
   pC->Divergence.bNewExtreme = true;
@@ -5415,7 +5422,7 @@ static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
 
 static bool TestApplyTradingStandardDivergenceMapsCodes()
 {
-  const int nCount = 28;
+  const int nCount = 30;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -5430,6 +5437,9 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   TradingSignalCandidate MissingAbc = MakeTestCandidate(5, 1.0f, 30);
   MakeStandardDivergence(&MissingAbc, 1);
   MissingAbc.nAbcStructure = 0;
+  TradingSignalCandidate MissingAbcBreakout = MakeTestCandidate(29, 1.0f, 30);
+  MakeStandardDivergence(&MissingAbcBreakout, 1);
+  MissingAbcBreakout.nAbcBreakout = -1;
   TradingSignalCandidate MissingZeroPull = MakeTestCandidate(7, 1.0f, 30);
   MakeStandardDivergence(&MissingZeroPull, 1);
   MissingZeroPull.nMacdZeroPullback = 0;
@@ -5478,6 +5488,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
   Candidates.push_back(MissingNewExtreme);
   Candidates.push_back(MissingTrend);
   Candidates.push_back(WrongMovement);
+  Candidates.push_back(MissingAbcBreakout);
 
   ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
 
@@ -5495,6 +5506,7 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
          NearlyEqual(pOut[23], 0.0f) &&
          NearlyEqual(pOut[25], 0.0f) &&
          NearlyEqual(pOut[27], 0.0f) &&
+         NearlyEqual(pOut[29], 0.0f) &&
          NearlyEqual(pOut[0], 0.0f);
 }
 
