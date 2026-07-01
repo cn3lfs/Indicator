@@ -414,6 +414,9 @@ void ApplyTradingSignalMacdZeroPullback(int nCount,
 void ApplyTradingSignalStandardDivergence(int nCount,
                                           float *pOut,
                                           const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalMacdAreaRatio(int nCount,
+                                     float *pOut,
+                                     const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalContextFlags(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
@@ -452,6 +455,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 26 为胜出买卖点关联突破一基编号，0=无突破，不占用旧函数编号。
 // Func30 输出 27 为胜出买卖点对应端点一基编号，0=无信号/未知，不占用旧函数编号。
 // Func30 输出 28 为胜出买卖点所属走势结构一基编号，0=无走势结构，不占用旧函数编号。
+// Func30 输出 29 为胜出买卖点 C/A 段 MACD 柱面积比(百分比)，0=无有效面积，不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

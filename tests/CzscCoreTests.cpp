@@ -5317,6 +5317,46 @@ static bool TestApplyTradingStandardDivergenceMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingMacdAreaRatioMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.Previous.fMacdArea = 200;
+  Buy.Divergence.Current.fMacdArea = 80;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.Previous.fMacdArea = 300;
+  Low.Divergence.Current.fMacdArea = 120;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.Previous.fMacdArea = 300;
+  High.Divergence.Current.fMacdArea = 90;
+  TradingSignalCandidate MissingBase = MakeTestCandidate(5, 11.0f, 30);
+  MissingBase.Divergence.Previous.fMacdArea = 0;
+  MissingBase.Divergence.Current.fMacdArea = 50;
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.Previous.fMacdArea = 100;
+  Invalid.Divergence.Current.fMacdArea = 10;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(MissingBase);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalMacdAreaRatio(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 40.0f) &&
+         NearlyEqual(pOut[3], 30.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestApplyTradingContextFlagsMapsCodes()
 {
   const int nCount = 12;
@@ -6306,7 +6346,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6378,6 +6418,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 26: ApplyTradingSignalBreakoutId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 27: ApplyTradingSignalPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 28: ApplyTradingSignalTrendId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 29: ApplyTradingSignalMacdAreaRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -7263,6 +7304,10 @@ int main()
   if (!TestApplyTradingStandardDivergenceMapsCodes())
   {
     return 140;
+  }
+  if (!TestApplyTradingMacdAreaRatioMapsCodes())
+  {
+    return 184;
   }
   if (!TestApplyTradingContextFlagsMapsCodes())
   {

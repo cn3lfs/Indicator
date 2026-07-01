@@ -2761,6 +2761,45 @@ void ApplyTradingSignalStandardDivergence(int nCount,
   }
 }
 
+// 第24课 MACD 柱面积量化：按优先级导出胜出候选 C段/A段 的面积百分比。
+// 小于 100 表示 C段柱面积弱于 A段；无有效 A段面积时输出 0。
+void ApplyTradingSignalMacdAreaRatio(int nCount,
+                                     float *pOut,
+                                     const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0.0f;
+      if (C.Divergence.Previous.fMacdArea > 0)
+      {
+        fCode = C.Divergence.Current.fMacdArea / C.Divergence.Previous.fMacdArea * 100.0f;
+      }
+      pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
 {
   if (!IsTradingSignal(C.fSignal))
@@ -4523,6 +4562,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 26: ApplyTradingSignalBreakoutId(nCount, pOut, An.Candidates); break; // 胜出候选关联突破编号
     case 27: ApplyTradingSignalPointId(nCount, pOut, An.Candidates); break; // 胜出候选端点编号
     case 28: ApplyTradingSignalTrendId(nCount, pOut, An.Candidates); break; // 胜出候选走势结构编号
+    case 29: ApplyTradingSignalMacdAreaRatio(nCount, pOut, An.Candidates); break; // C/A段MACD面积比
     default: ClearOutput(nCount, pOut); break;
   }
 }
