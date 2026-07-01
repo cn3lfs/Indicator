@@ -69,6 +69,14 @@ EXPECTED_FORMULA_SNIPPETS = {
     "BSP:=TDXDLL1(30,H,L,40);",
     "BARSLAST(BSP=3)<10;",
   ],
+  "chan-multi-buy.txt": [
+    "XC:=TDXDLL1(40,C,V,0);",
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "日二买:=BARSLAST(BSP=2)<10;",
+    "BSP30:=TDXDLL1(30,H,L,40)#MIN30;",
+    "小买点:=BARSLAST(BSP30=2 OR BSP30=3)<16;",
+    "日二买 AND 小买点;",
+  ],
   "chan-first-sell-abc.txt": [
     "ABX:=TDXDLL1(30,H,L,160);",
     "BARSLAST(ABX=11)<10;",
@@ -367,6 +375,14 @@ def self_test() -> int:
     "chan-third-buy.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
       "BARSLAST(BSP=3)<10;\n"
+    ),
+    "chan-multi-buy.txt": (
+      "XC:=TDXDLL1(40,C,V,0);\n"
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "日二买:=BARSLAST(BSP=2)<10;\n"
+      "BSP30:=TDXDLL1(30,H,L,40)#MIN30;\n"
+      "小买点:=BARSLAST(BSP30=2 OR BSP30=3)<16;\n"
+      "日二买 AND 小买点;\n"
     ),
     "chan-first-sell-abc.txt": (
       "ABX:=TDXDLL1(30,H,L,160);\n"
