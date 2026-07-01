@@ -3976,6 +3976,7 @@ static void WriteDivergenceSegmentSignal(int nCount,
   {
     const TradingSignalCandidate &C = Candidates[i];
     if ((C.nSource != SIGNAL_SOURCE_FIRST) ||
+        !IsFirstSignal(C.fSignal) ||
         (C.nPoint < 1) || ((std::size_t)C.nPoint >= Points.size()))
     {
       continue;
@@ -4002,6 +4003,7 @@ static bool GetDivergenceSegmentBars(const std::vector<SegmentPoint> &Points,
 {
   if ((pStart == 0) || (pEnd == 0) ||
       (C.nSource != SIGNAL_SOURCE_FIRST) ||
+      !IsFirstSignal(C.fSignal) ||
       (C.nPoint < 1) || ((std::size_t)C.nPoint >= Points.size()))
   {
     return false;

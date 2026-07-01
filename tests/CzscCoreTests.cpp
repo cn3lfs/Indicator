@@ -4875,6 +4875,42 @@ static bool TestNestedDivergenceMarksSellDirection()
          NearlyEqual(pOut[40], -2.0f);
 }
 
+static bool TestNestedDivergenceRequiresFirstSignalCode()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 3.0f, 30);
+  High.nSource = 1;
+  High.nPoint = 1;
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(32, 3.0f, 30);
+  Low.nSource = 1;
+  Low.nPoint = 1;
+  LowCandidates.push_back(Low);
+
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+
+  return NearlyEqual(pOut[20], 0.0f) &&
+         NearlyEqual(pOut[32], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestFunc13HandlesEmptyInput()
 {
   Func13(0, 0, 0, 0, 0);
@@ -6503,6 +6539,10 @@ int main()
   if (!TestNestedDivergenceMarksSellDirection())
   {
     return 134;
+  }
+  if (!TestNestedDivergenceRequiresFirstSignalCode())
+  {
+    return 169;
   }
   if (!TestFunc13HandlesEmptyInput())
   {
