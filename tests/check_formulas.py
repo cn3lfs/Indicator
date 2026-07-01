@@ -23,6 +23,7 @@ def main() -> int:
   empty = []
   undocumented = []
   invalid_modes = []
+  stale_comments = []
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
@@ -51,7 +52,17 @@ def main() -> int:
       elif not is_valid_config(n_config):
         invalid_modes.append(f"{doc.relative_to(ROOT)} -> {n_mode}: invalid config {n_config}")
 
-  if missing or empty or undocumented or invalid_modes:
+  debug_text = (ROOT / "formulas" / "chan-debug.txt").read_text(encoding="utf-8")
+  expected_debug_comments = [
+    "中枢关系：1上涨/-1下跌/2扩展",
+    "一类背驰转折：1扩展/2盘整/3反趋势",
+    "三买三卖后续：1扩张/2新生",
+  ]
+  for comment in expected_debug_comments:
+    if comment not in debug_text:
+      stale_comments.append(f"chan-debug.txt missing comment: {comment}")
+
+  if missing or empty or undocumented or invalid_modes or stale_comments:
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -60,6 +71,8 @@ def main() -> int:
       print(f"undocumented formula: formulas/README.md -> {item}", file=sys.stderr)
     for item in invalid_modes:
       print(f"invalid Func30 mode: {item}", file=sys.stderr)
+    for item in stale_comments:
+      print(f"stale formula comment: {item}", file=sys.stderr)
     return 1
   return 0
 
