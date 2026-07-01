@@ -937,6 +937,10 @@ int ClassifyCenterAftermath(const std::vector<Center> &Centers, int nCenter, flo
   {
     return CZSC_CENTER_AFTERMATH_UNKNOWN;
   }
+  if ((fSignal != SIGNAL_THIRD_BUY) && (fSignal != SIGNAL_THIRD_SELL))
+  {
+    return CZSC_CENTER_AFTERMATH_UNKNOWN;
+  }
 
   int nRelation = ClassifyCenterRelation(Centers[(std::size_t)nCenter],
                                          Centers[(std::size_t)nCenter + 1]);

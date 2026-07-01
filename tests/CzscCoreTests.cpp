@@ -4205,6 +4205,16 @@ static bool TestCenterAftermathSell()
   return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN;
 }
 
+static bool TestCenterAftermathRequiresThirdSignal()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 10, 5, 12, 4));
+  Centers.push_back(MakeTestCenterFull(16, 28, 13, 9, 14, 8));   // 与前全幅重叠 → 扩展
+
+  return (ClassifyCenterAftermath(Centers, 0, 1.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN) &&
+         (ClassifyCenterAftermath(Centers, 0, 12.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN);
+}
+
 static bool TestApplyTradingAftermathMapsCodes()
 {
   const int nCount = 6;
@@ -6360,6 +6370,10 @@ int main()
   if (!TestCenterAftermathSell())
   {
     return 79;
+  }
+  if (!TestCenterAftermathRequiresThirdSignal())
+  {
+    return 167;
   }
   if (!TestApplyTradingAftermathMapsCodes())
   {
