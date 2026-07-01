@@ -37,6 +37,22 @@ EXPECTED_FORMULA_SNIPPETS = {
     "STD:=TDXDLL1(30,H,L,200);",
     "BARSLAST(STD=1)<10;",
   ],
+  "chan-first-sell.txt": [
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "BARSLAST(BSP=11)<10;",
+  ],
+  "chan-second-sell.txt": [
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "BARSLAST(BSP=12)<10;",
+  ],
+  "chan-third-sell.txt": [
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "BARSLAST(BSP=13)<10;",
+  ],
+  "chan-first-sell-standard.txt": [
+    "STD:=TDXDLL1(30,H,L,200);",
+    "BARSLAST(STD=-1)<10;",
+  ],
   "chan-overlap-buy.txt": [
     "CTX:=TDXDLL1(30,H,L,210);",
     "OVL:=MOD(INTPART(CTX/2048),2)=1;",
@@ -232,6 +248,22 @@ def self_test() -> int:
     "chan-first-buy-standard.txt": (
       "STD:=TDXDLL1(30,H,L,200);\n"
       "BARSLAST(STD=1)<10;\n"
+    ),
+    "chan-first-sell.txt": (
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "BARSLAST(BSP=11)<10;\n"
+    ),
+    "chan-second-sell.txt": (
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "BARSLAST(BSP=12)<10;\n"
+    ),
+    "chan-third-sell.txt": (
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "BARSLAST(BSP=13)<10;\n"
+    ),
+    "chan-first-sell-standard.txt": (
+      "STD:=TDXDLL1(30,H,L,200);\n"
+      "BARSLAST(STD=-1)<10;\n"
     ),
     "chan-overlap-buy.txt": (
       "CTX:=TDXDLL1(30,H,L,210);\n"
