@@ -4686,6 +4686,7 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   MakeStandardDivergence(&WrongDirection, 1);
   WrongDirection.nAbcStructure = -1;
   WrongDirection.nMacdZeroPullback = -1;
+  WrongDirection.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   Candidates.push_back(Buy);
   Candidates.push_back(Newborn);
   Candidates.push_back(Extended);

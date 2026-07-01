@@ -41,6 +41,11 @@ static const int SIGNAL_SOURCE_FIRST = 1;
 static const int SIGNAL_SOURCE_SECOND = 2;
 static const int SIGNAL_SOURCE_THIRD = 3;
 
+static bool IsThirdSignal(float fSignal)
+{
+  return (fSignal == SIGNAL_THIRD_BUY) || (fSignal == SIGNAL_THIRD_SELL);
+}
+
 //=============================================================================
 // 形态学辅助：输出校验、K线包含处理、分型/线段点构造
 //=============================================================================
@@ -937,7 +942,7 @@ int ClassifyCenterAftermath(const std::vector<Center> &Centers, int nCenter, flo
   {
     return CZSC_CENTER_AFTERMATH_UNKNOWN;
   }
-  if ((fSignal != SIGNAL_THIRD_BUY) && (fSignal != SIGNAL_THIRD_SELL))
+  if (!IsThirdSignal(fSignal))
   {
     return CZSC_CENTER_AFTERMATH_UNKNOWN;
   }
@@ -2156,7 +2161,7 @@ void ApplyTradingSignalAftermath(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       float fCode = 0;
-      bool bThirdSignal = (C.fSignal == SIGNAL_THIRD_BUY) || (C.fSignal == SIGNAL_THIRD_SELL);
+      bool bThirdSignal = IsThirdSignal(C.fSignal);
       if (bThirdSignal && (C.nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED))
       {
         fCode = 1;
@@ -2704,11 +2709,12 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_STANDARD_DIV;
   }
-  if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN)
+  bool bThirdSignal = IsThirdSignal(C.fSignal);
+  if (bThirdSignal && (C.nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN))
   {
     nFlags |= CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN;
   }
-  else if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED)
+  else if (bThirdSignal && (C.nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED))
   {
     nFlags |= CZSC_SIGNAL_CTX_AFTERMATH_EXTEND;
   }
