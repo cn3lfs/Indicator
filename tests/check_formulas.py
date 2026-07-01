@@ -9,7 +9,7 @@ FORMULA_REF = re.compile(r"(?:formulas[\\/])?(chan-[A-Za-z0-9_-]+\.txt)")
 FUNC30_REF = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*([0-9]+)\s*\)")
 FUNC30_CALL = re.compile(r"TDXDLL1\s*\(\s*30\s*,")
 FUNC40_CALL = re.compile(r"TDXDLL1\s*\(\s*40\s*,\s*C\s*,\s*V\s*,\s*0\s*\)")
-FUNC30_OUTPUTS = set(range(0, 24))
+FUNC30_OUTPUTS = set(range(0, 25))
 
 
 def is_valid_config(n_config: int) -> bool:
@@ -72,6 +72,7 @@ def main() -> int:
     "一类背驰转折：1扩展/2盘整/3反趋势",
     "三买三卖后续：1扩张/2新生",
     "上下文位图：含4096首次离开/回试",
+    "胜出候选优先级：二10三20一30",
   ]
   for comment in expected_debug_comments:
     if comment not in debug_text:

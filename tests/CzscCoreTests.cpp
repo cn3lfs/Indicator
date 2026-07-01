@@ -3142,6 +3142,30 @@ static bool TestApplyTradingMovementTypeMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingPriorityMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  TradingSignalCandidate First = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(First);
+
+  ApplyTradingSignalPriority(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 20.0f) &&
+         NearlyEqual(pOut[4], 30.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestApplyTradingSmallTurnMapsCodes()
 {
   const int nCount = 6;
@@ -4225,7 +4249,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21, 22, 23};
+  const int Outputs[] = {14, 15, 16, 18, 19, 20, 21, 22, 23, 24};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -4240,6 +4264,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 21: ApplyTradingSignalContextFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 22: ApplyTradingSignalCenterPosition(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 23: ApplyTradingSignalMovementType(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 24: ApplyTradingSignalPriority(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -4902,6 +4927,10 @@ int main()
   if (!TestApplyTradingMovementTypeMapsCodes())
   {
     return 145;
+  }
+  if (!TestApplyTradingPriorityMapsCodes())
+  {
+    return 146;
   }
   if (!TestApplyTradingSmallTurnMapsCodes())
   {

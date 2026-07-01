@@ -2210,6 +2210,39 @@ void ApplyTradingSignalMovementType(int nCount,
   }
 }
 
+// 按优先级取胜，导出胜出信号本身的候选优先级：二类10、三类20、一类30。
+void ApplyTradingSignalPriority(int nCount,
+                                float *pOut,
+                                const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)C.nPriority;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 // 第44课小转大必要条件：小级别底/顶背驰后，最后中枢出现三买/三卖才可能引发大级别转折。
 // 输出 1=底背驰后的三买必要条件成立，-1=顶背驰后的三卖必要条件成立，0=无。
 void ApplyTradingSignalSmallTurn(int nCount,
@@ -4194,6 +4227,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 21: ApplyTradingSignalContextFlags(nCount, pOut, An.Candidates); break; // 胜出候选上下文位图
     case 22: ApplyTradingSignalCenterPosition(nCount, pOut, An.Candidates); break; // 胜出候选相对中枢位置
     case 23: ApplyTradingSignalMovementType(nCount, pOut, An.Candidates); break; // 胜出候选所属走势类型
+    case 24: ApplyTradingSignalPriority(nCount, pOut, An.Candidates); break; // 胜出候选优先级
     default: ClearOutput(nCount, pOut); break;
   }
 }
