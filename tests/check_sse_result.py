@@ -36,7 +36,7 @@ POINT_LINE = re.compile(
 )
 NESTED_LINE = re.compile(
   r"^  (?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})  "
-  r"级别(?P<level>[0-9]+)  源H(?P<source>[0-9]+)  "
+  r"级别(?P<level>[0-9]+)  语义(?P<semantic>[0-9]+)  确认(?P<flags>[0-9]+)  源H(?P<source>[0-9]+)  "
   r"低P(?P<start>[0-9]+)/(?P<start_date>[0-9]{4}-[0-9]{2}-[0-9]{2})"
   r"->P(?P<end>[0-9]+)/(?P<end_date>[0-9]{4}-[0-9]{2}-[0-9]{2})  "
   r"方向(?P<direction>-?[0-9]+)  小转大(?P<small>[0-9]+)$"
@@ -255,13 +255,19 @@ def validate_nested_context(text: str):
       continue
     parsed += 1
     n_level = int(nested.group("level"))
+    n_semantic = int(nested.group("semantic"))
+    n_flags = int(nested.group("flags"))
     n_source = int(nested.group("source"))
     n_start = int(nested.group("start"))
     n_end = int(nested.group("end"))
     n_direction = int(nested.group("direction"))
     n_small = int(nested.group("small"))
-    if n_level not in (1, 2):
-      errors.append(f"line {n_line}: nested level must be 1 or 2")
+    if n_level not in (0, 1, 2):
+      errors.append(f"line {n_line}: nested level must be 0, 1 or 2")
+    if n_semantic not in (1, 2, 3):
+      errors.append(f"line {n_line}: nested semantic must be 1, 2 or 3")
+    if (n_flags & 3) != 3:
+      errors.append(f"line {n_line}: nested flags must include inside and divergence bits")
     if n_source <= 0:
       errors.append(f"line {n_line}: nested source must be positive")
     if not (0 < n_start < n_end):
@@ -270,8 +276,12 @@ def validate_nested_context(text: str):
       errors.append(f"line {n_line}: nested direction must be -1 or 1")
     if n_small not in (0, 1):
       errors.append(f"line {n_line}: nested small-turn flag must be 0 or 1")
-    if n_small == 1 and n_level != 2:
-      errors.append(f"line {n_line}: nested small-turn confirmation requires level 2")
+    if n_level == 0 and (n_semantic != 2 or (n_flags & 4) != 0):
+      errors.append(f"line {n_line}: nested consolidation context must be semantic 2 without new-extreme bit")
+    if n_level > 0 and (n_semantic not in (1, 3) or (n_flags & 4) == 0):
+      errors.append(f"line {n_line}: nested trend context requires trend/small-turn semantic and new-extreme bit")
+    if n_small == 1 and (n_level != 2 or n_semantic != 3 or (n_flags & 8) == 0):
+      errors.append(f"line {n_line}: nested small-turn confirmation requires level 2, semantic 3 and small-turn bit")
   if in_nested and declared != parsed:
     errors.append(f"nested context section declared {declared} rows but parsed {parsed}")
   return errors

@@ -18,6 +18,9 @@ NLV:=TDXDLL1(30,H,L,490);          { 区间套层级：1一层/2小转大确认 
 NSR:=TDXDLL1(30,H,L,500);          { 区间套源高级别背驰段编号：一基 }
 NSP:=TDXDLL1(30,H,L,510);          { 区间套低级别背驰段起点端点编号：一基 }
 NEP:=TDXDLL1(30,H,L,520);          { 区间套低级别背驰段终点端点编号：一基 }
+NDS:=TDXDLL1(30,H,L,560);          { 区间套递归背驰语义：1趋势/2盘整/3小转大 }
+NDF:=TDXDLL1(30,H,L,570);          { 区间套递归确认位图：1内部/2背驰/4创新/8小转大 }
+NDR:=TDXDLL1(30,H,L,580);          { 区间套低级别背驰方向：买1/卖-1 }
 MLW:=TDXDLL1(30,H,L,180);          { MACD黄白线高度走弱：买1/卖-1 }
 MZP:=TDXDLL1(30,H,L,190);          { B中枢MACD回零：一买1/一卖-1 }
 STD:=TDXDLL1(30,H,L,200);          { 标准趋势背驰确认：一买1/一卖-1 }
@@ -102,6 +105,9 @@ DRAWNUMBER(NLV>0,L*0.935,NLV),COLORCYAN;
 DRAWNUMBER(NLV>0 AND NSR>0,H*1.070,NSR),COLORCYAN;
 DRAWNUMBER(NLV>0 AND NSP>0,L*0.930,NSP),COLORGREEN;
 DRAWNUMBER(NLV>0 AND NEP>0,H*1.075,NEP),COLORGREEN;
+DRAWNUMBER(NDS>0,L*0.925,NDS),COLORWHITE;
+DRAWNUMBER(NDS>0 AND NDF>0,H*1.080,NDF),COLORWHITE;
+DRAWNUMBER(NDS>0,L*0.920,NDR),COLORYELLOW;
 DRAWLINE(BSG=1,L,BSG=2,L,0),COLORBLUE;
 DRAWLINE(BSG=-1,H,BSG=-2,H,0),COLORBLUE;
 DRAWLINE(NST=1,L,NST=2,L,0),COLORCYAN;

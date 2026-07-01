@@ -79,6 +79,13 @@ static bool IsTrendDivergenceFirstCandidate(const TradingSignalCandidate &C)
          C.Divergence.bNewExtreme;
 }
 
+static bool IsConfirmedFirstDivergenceCandidate(const TradingSignalCandidate &C)
+{
+  return (C.nSource == SIGNAL_SOURCE_FIRST) &&
+         IsFirstSignal(C.fSignal) &&
+         C.Divergence.bDivergence;
+}
+
 static bool HasNestedSmallTurnConfirmation(const std::vector<TradingSignalCandidate> &Candidates,
                                            const TradingSignalCandidate &Low,
                                            int nHighStart,
@@ -132,7 +139,7 @@ std::vector<NestedDivergenceContext> BuildNestedDivergenceContexts(
     for (std::size_t j = 0; j < LowCandidates.size(); j++)
     {
       const TradingSignalCandidate &Low = LowCandidates[j];
-      if ((Low.fSignal != High.fSignal) || !IsTrendDivergenceFirstCandidate(Low))
+      if ((Low.fSignal != High.fSignal) || !IsConfirmedFirstDivergenceCandidate(Low))
       {
         continue;
       }
@@ -154,16 +161,28 @@ std::vector<NestedDivergenceContext> BuildNestedDivergenceContexts(
 
       NestedDivergenceContext Ctx;
       Ctx.nIndex = Low.nIndex;
-      Ctx.nLevel = 1;
+      Ctx.nLevel = Low.Divergence.bNewExtreme ? 1 : 0;
+      Ctx.nSemantic = Low.Divergence.bNewExtreme ?
+                      CZSC_DIVERGENCE_SEM_TREND :
+                      CZSC_DIVERGENCE_SEM_CONSOLIDATION;
+      Ctx.nConfirmFlags = CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                          CZSC_NESTED_CONFIRMED_DIVERGENCE;
+      if (Low.Divergence.bNewExtreme)
+      {
+        Ctx.nConfirmFlags |= CZSC_NESTED_NEW_EXTREME;
+      }
       Ctx.nSourceDivergence = (int)i;
       Ctx.nLowStartPoint = Low.nPoint - 1;
       Ctx.nLowEndPoint = Low.nPoint;
       Ctx.nDirection = GetTradingSignalSide(Low.fSignal);
       Ctx.bSmallTurnSatisfied =
+        Low.Divergence.bNewExtreme &&
         HasNestedSmallTurnConfirmation(LowCandidates, Low, nHighStart, nHighEnd);
-      if (Ctx.bSmallTurnSatisfied)
+      if (Ctx.bSmallTurnSatisfied && Low.Divergence.bNewExtreme)
       {
         Ctx.nLevel = 2;
+        Ctx.nSemantic = CZSC_DIVERGENCE_SEM_SMALL_TURN;
+        Ctx.nConfirmFlags |= CZSC_NESTED_SMALL_TURN;
       }
       Contexts.push_back(Ctx);
     }
@@ -192,7 +211,8 @@ void WriteNestedDivergenceSignal(int nCount,
   for (std::size_t i = 0; i < Contexts.size(); i++)
   {
     const NestedDivergenceContext &Ctx = Contexts[i];
-    if ((Ctx.nLowStartPoint < 0) || ((std::size_t)Ctx.nLowStartPoint >= LowPoints.size()) ||
+    if ((Ctx.nLevel <= 0) ||
+        (Ctx.nLowStartPoint < 0) || ((std::size_t)Ctx.nLowStartPoint >= LowPoints.size()) ||
         (Ctx.nLowEndPoint < 0) || ((std::size_t)Ctx.nLowEndPoint >= LowPoints.size()) ||
         (Ctx.nDirection == 0))
     {
@@ -234,7 +254,8 @@ static void ApplyNestedDivergenceContextValue(int nCount,
   for (std::size_t i = 0; i < Contexts.size(); i++)
   {
     const NestedDivergenceContext &Ctx = Contexts[i];
-    if ((Ctx.nIndex < 0) || (Ctx.nIndex >= nCount) ||
+    if ((Ctx.nLevel <= 0) ||
+        (Ctx.nIndex < 0) || (Ctx.nIndex >= nCount) ||
         (Ctx.nLevel < Priorities[(std::size_t)Ctx.nIndex]))
     {
       continue;
@@ -289,5 +310,81 @@ void ApplyNestedDivergenceEndPointId(int nCount,
                                      const std::vector<NestedDivergenceContext> &Contexts)
 {
   ApplyNestedDivergenceContextValue(nCount, pOut, Contexts, 3);
+}
+
+static void ApplyNestedDivergenceRecursiveValue(int nCount,
+                                                float *pOut,
+                                                const std::vector<NestedDivergenceContext> &Contexts,
+                                                int nWhich)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Contexts.size(); i++)
+  {
+    const NestedDivergenceContext &Ctx = Contexts[i];
+    if ((Ctx.nIndex < 0) || (Ctx.nIndex >= nCount))
+    {
+      continue;
+    }
+
+    int nPriority = Ctx.nLevel;
+    if (nPriority <= 0)
+    {
+      nPriority = 0;
+    }
+    if (nPriority < Priorities[(std::size_t)Ctx.nIndex])
+    {
+      continue;
+    }
+
+    float fCode = 0.0f;
+    if (nWhich == 0)
+    {
+      fCode = (float)Ctx.nSemantic;
+    }
+    else if (nWhich == 1)
+    {
+      fCode = (float)Ctx.nConfirmFlags;
+    }
+    else if (nWhich == 2)
+    {
+      fCode = (float)Ctx.nDirection;
+    }
+
+    pOut[Ctx.nIndex] = fCode;
+    Priorities[(std::size_t)Ctx.nIndex] = nPriority;
+  }
+}
+
+void ApplyNestedDivergenceSemantic(int nCount,
+                                   float *pOut,
+                                   const std::vector<NestedDivergenceContext> &Contexts)
+{
+  ApplyNestedDivergenceRecursiveValue(nCount, pOut, Contexts, 0);
+}
+
+void ApplyNestedDivergenceConfirmFlags(int nCount,
+                                       float *pOut,
+                                       const std::vector<NestedDivergenceContext> &Contexts)
+{
+  ApplyNestedDivergenceRecursiveValue(nCount, pOut, Contexts, 1);
+}
+
+void ApplyNestedDivergenceDirection(int nCount,
+                                    float *pOut,
+                                    const std::vector<NestedDivergenceContext> &Contexts)
+{
+  ApplyNestedDivergenceRecursiveValue(nCount, pOut, Contexts, 2);
 }
 

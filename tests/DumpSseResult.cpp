@@ -617,9 +617,11 @@ static void PrintNestedDivergenceContexts(FILE *pFile,
   {
     const NestedDivergenceContext &C = Contexts[i];
     std::fprintf(pFile,
-                 "  %s  级别%d  源H%02d  低P%d/%s->P%d/%s  方向%d  小转大%d\n",
+                 "  %s  级别%d  语义%d  确认%d  源H%02d  低P%d/%s->P%d/%s  方向%d  小转大%d\n",
                  DateAt(C.nIndex),
                  C.nLevel,
+                 C.nSemantic,
+                 C.nConfirmFlags,
                  C.nSourceDivergence + 1,
                  OneBasedId(C.nLowStartPoint),
                  PointDateAt(LowPoints, C.nLowStartPoint),

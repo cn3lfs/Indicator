@@ -130,6 +130,14 @@ enum CzscTradingFilterReason
   CZSC_FILTER_MISSING_CENTER       = 8,  // 候选缺少可归属中枢
 };
 
+enum CzscNestedDivergenceFlag
+{
+  CZSC_NESTED_INSIDE_HIGH_SEGMENT = 1,  // 低级别背驰段落在高级别背驰段内部
+  CZSC_NESTED_CONFIRMED_DIVERGENCE = 2, // 低级别背驰成立
+  CZSC_NESTED_NEW_EXTREME = 4,          // 低级别背驰创新高/新低，可作为趋势背驰区间套
+  CZSC_NESTED_SMALL_TURN = 8,           // 低级别背驰后同向三买/三卖满足小转大必要条件
+};
+
 // 均线吻分类（第11课）：短长均线靠近/相交处的反抗强度，递增
 enum CzscKissType
 {
@@ -320,7 +328,9 @@ struct TradingSignalCandidate
 struct NestedDivergenceContext
 {
   int  nIndex;                 // 低级别背驰段终点所在原始 K 线下标
-  int  nLevel;                 // 1=一层区间套，2=低级别小转大必要条件已成立
+  int  nLevel;                 // 0=盘整背驰上下文，1=一层区间套，2=低级别小转大必要条件已成立
+  int  nSemantic;              // 见 CzscDivergenceSemantic：1趋势/2盘整/3小转大
+  int  nConfirmFlags;          // 见 CzscNestedDivergenceFlag
   int  nSourceDivergence;      // 源高级别背驰段候选下标（无则 -1）
   int  nLowStartPoint;         // 低级别背驰段起点端点下标（无则 -1）
   int  nLowEndPoint;           // 低级别背驰段终点端点下标（无则 -1）

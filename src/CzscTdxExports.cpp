@@ -848,6 +848,9 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 50:
     case 51:
     case 52:
+    case 56:
+    case 57:
+    case 58:
     {
       CzscConfig HighConfig = DefaultConfig();
       HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
@@ -869,9 +872,21 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       {
         ApplyNestedDivergenceStartPointId(nCount, pOut, Contexts);
       }
-      else
+      else if (nOutput == 52)
       {
         ApplyNestedDivergenceEndPointId(nCount, pOut, Contexts);
+      }
+      else if (nOutput == 56)
+      {
+        ApplyNestedDivergenceSemantic(nCount, pOut, Contexts);
+      }
+      else if (nOutput == 57)
+      {
+        ApplyNestedDivergenceConfirmFlags(nCount, pOut, Contexts);
+      }
+      else
+      {
+        ApplyNestedDivergenceDirection(nCount, pOut, Contexts);
       }
       break;
     }

@@ -62,6 +62,9 @@
 // Func30 输出 53 为胜出候选背驰语义，0无/1趋势背驰/2盘整背驰/3小转大必要条件。
 // Func30 输出 54 为一类背驰后首段回拉/反弹端点一基编号，0=无。
 // Func30 输出 55 为买卖点候选过滤原因，0无/1无趋势/2非趋势背驰/3二类顺序失败/4非首次回试/5回中枢/6方向不匹配/7 ABC未对齐/8缺中枢。
+// Func30 输出 56 为区间套递归背驰语义，0无/1趋势/2盘整/3小转大。
+// Func30 输出 57 为区间套递归确认位图，1内部/2背驰成立/4创新极值/8小转大。
+// Func30 输出 58 为区间套低级别背驰方向，1买/-1卖。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

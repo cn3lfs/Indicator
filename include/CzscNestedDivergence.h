@@ -35,5 +35,8 @@ void ApplyNestedDivergenceLevel(int nCount, float *pOut, const std::vector<Neste
 void ApplyNestedDivergenceSourceId(int nCount, float *pOut, const std::vector<NestedDivergenceContext> &Contexts);
 void ApplyNestedDivergenceStartPointId(int nCount, float *pOut, const std::vector<NestedDivergenceContext> &Contexts);
 void ApplyNestedDivergenceEndPointId(int nCount, float *pOut, const std::vector<NestedDivergenceContext> &Contexts);
+void ApplyNestedDivergenceSemantic(int nCount, float *pOut, const std::vector<NestedDivergenceContext> &Contexts);
+void ApplyNestedDivergenceConfirmFlags(int nCount, float *pOut, const std::vector<NestedDivergenceContext> &Contexts);
+void ApplyNestedDivergenceDirection(int nCount, float *pOut, const std::vector<NestedDivergenceContext> &Contexts);
 
 #endif

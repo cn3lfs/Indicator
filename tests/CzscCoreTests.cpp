@@ -6726,13 +6726,19 @@ static bool TestNestedDivergenceRequiresFirstSignalCode()
          NearlyEqual(pOut[0], 0.0f);
 }
 
-static bool TestNestedDivergenceRequiresTrendExtreme()
+static bool TestNestedDivergenceWithoutNewExtremeIsConsolidationOnly()
 {
   const int nCount = 61;
   float pOut[nCount];
+  float pSemantic[nCount];
+  float pFlags[nCount];
+  float pLevel[nCount];
   for (int i = 0; i < nCount; i++)
   {
     pOut[i] = -1;
+    pSemantic[i] = -1;
+    pFlags[i] = -1;
+    pLevel[i] = -1;
   }
 
   std::vector<SegmentPoint> HighPoints;
@@ -6759,10 +6765,21 @@ static bool TestNestedDivergenceRequiresTrendExtreme()
   std::vector<NestedDivergenceContext> Contexts =
     BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
   WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+  ApplyNestedDivergenceSemantic(nCount, pSemantic, Contexts);
+  ApplyNestedDivergenceConfirmFlags(nCount, pFlags, Contexts);
+  ApplyNestedDivergenceLevel(nCount, pLevel, Contexts);
 
-  return Contexts.empty() &&
+  return (Contexts.size() == 1) &&
+         (Contexts[0].nLevel == 0) &&
+         (Contexts[0].nSemantic == CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         (Contexts[0].nConfirmFlags == (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                        CZSC_NESTED_CONFIRMED_DIVERGENCE)) &&
          NearlyEqual(pOut[20], 0.0f) &&
-         NearlyEqual(pOut[32], 0.0f);
+         NearlyEqual(pOut[32], 0.0f) &&
+         NearlyEqual(pSemantic[32], (float)CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         NearlyEqual(pFlags[32], (float)(CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                         CZSC_NESTED_CONFIRMED_DIVERGENCE)) &&
+         NearlyEqual(pLevel[32], 0.0f);
 }
 
 static bool TestNestedDivergenceContextOutputs()
@@ -6772,12 +6789,18 @@ static bool TestNestedDivergenceContextOutputs()
   float pSource[nCount];
   float pStart[nCount];
   float pEnd[nCount];
+  float pSemantic[nCount];
+  float pFlags[nCount];
+  float pDirection[nCount];
   for (int i = 0; i < nCount; i++)
   {
     pLevel[i] = -1;
     pSource[i] = -1;
     pStart[i] = -1;
     pEnd[i] = -1;
+    pSemantic[i] = -1;
+    pFlags[i] = -1;
+    pDirection[i] = -1;
   }
 
   std::vector<SegmentPoint> HighPoints;
@@ -6815,14 +6838,28 @@ static bool TestNestedDivergenceContextOutputs()
   ApplyNestedDivergenceSourceId(nCount, pSource, Contexts);
   ApplyNestedDivergenceStartPointId(nCount, pStart, Contexts);
   ApplyNestedDivergenceEndPointId(nCount, pEnd, Contexts);
+  ApplyNestedDivergenceSemantic(nCount, pSemantic, Contexts);
+  ApplyNestedDivergenceConfirmFlags(nCount, pFlags, Contexts);
+  ApplyNestedDivergenceDirection(nCount, pDirection, Contexts);
 
   return (Contexts.size() == 1) &&
          Contexts[0].bSmallTurnSatisfied &&
          (Contexts[0].nDirection == 1) &&
+         (Contexts[0].nSemantic == CZSC_DIVERGENCE_SEM_SMALL_TURN) &&
+         (Contexts[0].nConfirmFlags == (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                        CZSC_NESTED_CONFIRMED_DIVERGENCE |
+                                        CZSC_NESTED_NEW_EXTREME |
+                                        CZSC_NESTED_SMALL_TURN)) &&
          NearlyEqual(pLevel[32], 2.0f) &&
          NearlyEqual(pSource[32], 1.0f) &&
          NearlyEqual(pStart[32], 1.0f) &&
          NearlyEqual(pEnd[32], 2.0f) &&
+         NearlyEqual(pSemantic[32], (float)CZSC_DIVERGENCE_SEM_SMALL_TURN) &&
+         NearlyEqual(pFlags[32], (float)(CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                         CZSC_NESTED_CONFIRMED_DIVERGENCE |
+                                         CZSC_NESTED_NEW_EXTREME |
+                                         CZSC_NESTED_SMALL_TURN)) &&
+         NearlyEqual(pDirection[32], 1.0f) &&
          NearlyEqual(pLevel[0], 0.0f);
 }
 
@@ -7634,7 +7671,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -7730,6 +7767,9 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 50:
       case 51:
       case 52:
+      case 56:
+      case 57:
+      case 58:
       {
         CzscConfig HighConfig = DefaultConfig();
         HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
@@ -7753,9 +7793,21 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
         {
           ApplyNestedDivergenceStartPointId(SSE_DAILY_COUNT, &Expected[0], Contexts);
         }
-        else
+        else if (nOutput == 52)
         {
           ApplyNestedDivergenceEndPointId(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 56)
+        {
+          ApplyNestedDivergenceSemantic(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 57)
+        {
+          ApplyNestedDivergenceConfirmFlags(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else
+        {
+          ApplyNestedDivergenceDirection(SSE_DAILY_COUNT, &Expected[0], Contexts);
         }
         break;
       }
@@ -8843,7 +8895,7 @@ int main()
   {
     return 169;
   }
-  if (!TestNestedDivergenceRequiresTrendExtreme())
+  if (!TestNestedDivergenceWithoutNewExtremeIsConsolidationOnly())
   {
     return 200;
   }
