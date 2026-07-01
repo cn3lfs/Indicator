@@ -8,6 +8,7 @@ import tempfile
 
 CANDIDATE_LINE = re.compile(r"^  [0-9]{4}-[0-9]{2}-[0-9]{2}  ")
 BREAKOUT_FIELD = re.compile(r"突破(?P<breakout>-?[0-9]+)")
+ABC_FIELD = re.compile(r" ABC(?P<abc>-?[0-9]+) ")
 DEBUG_IDS = re.compile(
   r"调试CEN(?P<center>[0-9]+) BKO(?P<bko>[0-9]+) "
   r"BLP(?P<blp>[0-9]+) BRP(?P<brp>[0-9]+) "
@@ -34,6 +35,16 @@ def validate_candidate_context(text: str):
     if debug_ids is None:
       errors.append(f"line {n_line}: candidate missing debug ids")
       continue
+    abc_field = ABC_FIELD.search(line)
+    if abc_field is None:
+      errors.append(f"line {n_line}: candidate missing ABC field")
+      continue
+    n_abc = int(abc_field.group("abc"))
+    n_abk = int(debug_ids.group("abk"))
+    if n_abc == 0 and n_abk != 0:
+      errors.append(f"line {n_line}: ABC0 conflicts with ABK{n_abk}")
+    if n_abc != 0 and n_abk <= 0:
+      errors.append(f"line {n_line}: ABC{n_abc} requires positive ABK")
     if "bko[-]" in line:
       if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp")):
         errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP debug ids")
