@@ -2156,11 +2156,12 @@ void ApplyTradingSignalAftermath(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       float fCode = 0;
-      if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED)
+      bool bThirdSignal = (C.fSignal == SIGNAL_THIRD_BUY) || (C.fSignal == SIGNAL_THIRD_SELL);
+      if (bThirdSignal && (C.nAfterEffect == CZSC_CENTER_AFTERMATH_EXTENDED))
       {
         fCode = 1;
       }
-      else if (C.nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN)
+      else if (bThirdSignal && (C.nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN))
       {
         fCode = 2;
       }

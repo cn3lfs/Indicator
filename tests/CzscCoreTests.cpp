@@ -4217,7 +4217,7 @@ static bool TestCenterAftermathRequiresThirdSignal()
 
 static bool TestApplyTradingAftermathMapsCodes()
 {
-  const int nCount = 6;
+  const int nCount = 8;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4230,14 +4230,18 @@ static bool TestApplyTradingAftermathMapsCodes()
   TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
   Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
   TradingSignalCandidate Unknown = MakeTestCandidate(5, 3.0f, 20);
+  TradingSignalCandidate NonThird = MakeTestCandidate(7, 1.0f, 20);
+  NonThird.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   Candidates.push_back(Extended);
   Candidates.push_back(Newborn);
   Candidates.push_back(Unknown);
+  Candidates.push_back(NonThird);
 
   ApplyTradingSignalAftermath(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], 2.0f) &&
-         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
 }
 
 static bool TestApplyTradingCenterPositionMapsCodes()
