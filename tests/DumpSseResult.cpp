@@ -355,7 +355,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
     const TradingSignalCandidate &C = Candidates[i];
     int nCtx = BuildTradingSignalContextFlags(C);
     std::fprintf(pFile,
-                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d PID%d TID%d  ctx%d",
+                 "  %s  %s  质量%d  优先级%d  中枢%d  趋势%d/%s  点%d  突破%d  位置%s  背驰%s  后续%s  小转大%d  ABC%d  回零%d  调试CEN%d BKO%d BLP%d BRP%d ABK%d PID%d TID%d  ctx%d",
                  DateAt(C.nIndex),
                  SignalName(C.fSignal),
                  C.nQuality,
@@ -375,6 +375,7 @@ static void PrintCandidates(FILE *pFile, const char *pTitle,
                  OneBasedId(C.nBreakout),
                  BreakoutLeavePointId(Breakouts, C.nBreakout),
                  BreakoutRetestPointId(Breakouts, C.nBreakout),
+                 ScopedFirstSignalValue(C.fSignal, OneBasedId(C.nAbcBreakout)),
                  OneBasedId(C.nPoint),
                  OneBasedId(C.nTrend),
                  nCtx);

@@ -11,6 +11,7 @@ BREAKOUT_FIELD = re.compile(r"突破(?P<breakout>-?[0-9]+)")
 DEBUG_IDS = re.compile(
   r"调试CEN(?P<center>[0-9]+) BKO(?P<bko>[0-9]+) "
   r"BLP(?P<blp>[0-9]+) BRP(?P<brp>[0-9]+) "
+  r"ABK(?P<abk>[0-9]+) "
   r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)"
 )
 BKO_CONTEXT = re.compile(
