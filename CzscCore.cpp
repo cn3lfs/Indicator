@@ -1141,6 +1141,10 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
   {
     return false;
   }
+  if (Structures[(std::size_t)nTrend].nLastCenter <= Structures[(std::size_t)nTrend].nFirstCenter)
+  {
+    return false;  // 第一类买点只在至少两个同向中枢构成的下跌趋势背驰后出现
+  }
   int nLastCenter = Structures[nTrend].nLastCenter;
   if (FindLastCenterBeforeIndex(Centers, Points[nPoint].nIndex) != nLastCenter)
   {
@@ -1206,6 +1210,10 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
   if (!FindLastTrendStructure(Structures, Points[nPoint].nIndex, 1, &nTrend))
   {
     return false;
+  }
+  if (Structures[(std::size_t)nTrend].nLastCenter <= Structures[(std::size_t)nTrend].nFirstCenter)
+  {
+    return false;  // 第一类卖点只在至少两个同向中枢构成的上涨趋势背驰后出现
   }
   int nLastCenter = Structures[nTrend].nLastCenter;
   if (FindLastCenterBeforeIndex(Centers, Points[nPoint].nIndex) != nLastCenter)
