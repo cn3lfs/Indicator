@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = [ROOT / "README.md", ROOT / "formulas" / "README.md"]
 FORMULA_REF = re.compile(r"(?:formulas[\\/])?(chan-[A-Za-z0-9_-]+\.txt)")
 FUNC30_REF = re.compile(r"TDXDLL1\s*\(\s*30\s*,\s*H\s*,\s*L\s*,\s*([0-9]+)\s*\)")
+FUNC30_CALL = re.compile(r"TDXDLL1\s*\(\s*30\s*,")
+FUNC40_CALL = re.compile(r"TDXDLL1\s*\(\s*40\s*,\s*C\s*,\s*V\s*,\s*0\s*\)")
 FUNC30_OUTPUTS = set(range(0, 24))
 
 
@@ -24,6 +26,7 @@ def main() -> int:
   undocumented = []
   invalid_modes = []
   stale_comments = []
+  aux_order_errors = []
   guide_text = (ROOT / "formulas" / "README.md").read_text(encoding="utf-8")
   formula_files = sorted((ROOT / "formulas").glob("chan-*.txt"))
   for doc in DOCS:
@@ -52,6 +55,17 @@ def main() -> int:
       elif not is_valid_config(n_config):
         invalid_modes.append(f"{doc.relative_to(ROOT)} -> {n_mode}: invalid config {n_config}")
 
+  for path in formula_files:
+    text = path.read_text(encoding="utf-8")
+    first_func30 = FUNC30_CALL.search(text)
+    if first_func30 is None:
+      continue
+    first_func40 = FUNC40_CALL.search(text)
+    if first_func40 is None:
+      aux_order_errors.append(f"{path.relative_to(ROOT)}: missing TDXDLL1(40,C,V,0) before Func30")
+    elif first_func40.start() > first_func30.start():
+      aux_order_errors.append(f"{path.relative_to(ROOT)}: TDXDLL1(40,C,V,0) must appear before Func30")
+
   debug_text = (ROOT / "formulas" / "chan-debug.txt").read_text(encoding="utf-8")
   expected_debug_comments = [
     "中枢关系：1上涨/-1下跌/2扩展",
@@ -62,7 +76,7 @@ def main() -> int:
     if comment not in debug_text:
       stale_comments.append(f"chan-debug.txt missing comment: {comment}")
 
-  if missing or empty or undocumented or invalid_modes or stale_comments:
+  if missing or empty or undocumented or invalid_modes or stale_comments or aux_order_errors:
     for item in missing:
       print(f"missing formula: {item}", file=sys.stderr)
     for item in empty:
@@ -73,6 +87,8 @@ def main() -> int:
       print(f"invalid Func30 mode: {item}", file=sys.stderr)
     for item in stale_comments:
       print(f"stale formula comment: {item}", file=sys.stderr)
+    for item in aux_order_errors:
+      print(f"aux order error: {item}", file=sys.stderr)
     return 1
   return 0
 
