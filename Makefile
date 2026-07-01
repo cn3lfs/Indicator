@@ -62,7 +62,7 @@ mingw32: clean
 	@$(MAKE) clean
 
 mingw32-test:
-	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) test
+	@$(MAKE) mingw32-test-build
 
 check-mingw32:
 	@command -v make
@@ -76,7 +76,7 @@ mingw64: clean
 	@$(MAKE) clean
 
 mingw64-test:
-	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) test
+	@$(MAKE) mingw64-test-build
 
 check-mingw64:
 	@command -v make
