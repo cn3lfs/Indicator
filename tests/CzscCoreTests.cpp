@@ -437,6 +437,18 @@ static bool ContainsSseCenter(const std::vector<Center> &Centers,
   return false;
 }
 
+static bool CentersAreStrictlySeparated(const std::vector<Center> &Centers)
+{
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    if (Centers[i].nStart <= Centers[i - 1].nEnd)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool TestRealSseGoldenCentersPresent()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
@@ -455,6 +467,23 @@ static bool TestRealSseGoldenCentersPresent()
          ContainsSseCenter(Centers, 1, "2019-03-07", "2019-04-08", 3125.02f, 2987.77f) &&
          ContainsSseCenter(Centers, -1, "2019-05-10", "2019-06-06", 2922.91f, 2838.38f) &&
          ContainsSseCenter(Centers, -1, "2020-03-19", "2020-07-09", 2833.02f, 2802.47f);
+}
+
+static bool TestRealSseCentersDoNotShareEndpoints()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<SegmentPoint> StrokePoints = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+  std::vector<Center> StrokeCenters = BuildCenters(StrokePoints);
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  std::vector<SegmentPoint> SegmentPoints = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+  std::vector<Center> SegmentCenters = BuildCenters(SegmentPoints);
+
+  return CentersAreStrictlySeparated(StrokeCenters) &&
+         CentersAreStrictlySeparated(SegmentCenters);
 }
 
 static bool TestRealSseGoldenSegmentCentersPresent()
@@ -4941,6 +4970,10 @@ int main()
   if (!TestRealSseGoldenCentersPresent())
   {
     return 121;
+  }
+  if (!TestRealSseCentersDoNotShareEndpoints())
+  {
+    return 156;
   }
   if (!TestRealSseGoldenSegmentCentersPresent())
   {
