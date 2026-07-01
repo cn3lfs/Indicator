@@ -4964,6 +4964,41 @@ static bool TestApplyTradingReversalRequiresFirstSignal()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingReversalPointIdMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(1, 1.0f, 30);
+  First.nPoint = 4;
+  First.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate Unknown = MakeTestCandidate(3, 11.0f, 30);
+  Unknown.nPoint = 5;
+  Unknown.nReversal = CZSC_REVERSAL_UNKNOWN;
+  TradingSignalCandidate Third = MakeTestCandidate(5, 3.0f, 20);
+  Third.nPoint = 6;
+  Third.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate MissingPoint = MakeTestCandidate(7, 1.0f, 30);
+  MissingPoint.nReversal = CZSC_REVERSAL_EXTENSION;
+  Candidates.push_back(First);
+  Candidates.push_back(Unknown);
+  Candidates.push_back(Third);
+  Candidates.push_back(MissingPoint);
+
+  ApplyTradingSignalReversalPointId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 6.0f) &&
+         NearlyEqual(pOut[3], 0.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestCenterAftermathExtended()
 {
   std::vector<Center> Centers;
@@ -7310,7 +7345,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -7436,6 +7471,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
         break;
       }
       case 53: ApplyTradingSignalDivergenceSemantic(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 54: ApplyTradingSignalReversalPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -8668,6 +8704,10 @@ int main()
   if (!TestApplyTradingReversalRequiresFirstSignal())
   {
     return 168;
+  }
+  if (!TestApplyTradingReversalPointIdMapsCodes())
+  {
+    return 199;
   }
 
   return 0;

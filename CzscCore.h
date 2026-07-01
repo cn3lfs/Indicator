@@ -421,6 +421,9 @@ void ApplyTradingSignalQuality(int nCount,
 void ApplyTradingSignalReversal(int nCount,
                                 float *pOut,
                                 const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalReversalPointId(int nCount,
+                                       float *pOut,
+                                       const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalAftermath(int nCount,
                                  float *pOut,
                                  const std::vector<TradingSignalCandidate> &Candidates);
@@ -604,6 +607,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 50 为区间套源高级别背驰段一基编号，0=无。
 // Func30 输出 51/52 为区间套低级别背驰段起点/终点端点一基编号，0=无。
 // Func30 输出 53 为胜出候选背驰语义，0无/1趋势背驰/2盘整背驰/3小转大必要条件。
+// Func30 输出 54 为一类背驰后首段回拉/反弹端点一基编号，0=无。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

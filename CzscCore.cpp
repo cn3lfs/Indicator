@@ -2262,6 +2262,46 @@ void ApplyTradingSignalReversal(int nCount,
   }
 }
 
+// 第29课背驰-转折核对端点：输出一类买卖点后首段反弹/回落端点编号，1基。
+void ApplyTradingSignalReversalPointId(int nCount,
+                                       float *pOut,
+                                       const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      float fCode = 0.0f;
+      if (IsFirstSignal(C.fSignal) &&
+          (C.nReversal != CZSC_REVERSAL_UNKNOWN) &&
+          (C.nPoint >= 0))
+      {
+        fCode = (float)(C.nPoint + 2);
+      }
+      pOut[C.nIndex] = fCode;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 // 按优先级取胜，导出胜出信号的三类买卖点后续（第21课）：1=中枢扩张、2=中枢新生，0=其它。
 void ApplyTradingSignalAftermath(int nCount,
                                  float *pOut,
@@ -5698,6 +5738,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
       break;
     }
     case 53: ApplyTradingSignalDivergenceSemantic(nCount, pOut, An.Candidates); break; // 胜出候选背驰语义
+    case 54: ApplyTradingSignalReversalPointId(nCount, pOut, An.Candidates); break; // 一类背驰后首段回拉端点编号
     default: ClearOutput(nCount, pOut); break;
   }
 }
