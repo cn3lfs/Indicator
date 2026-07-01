@@ -46,8 +46,8 @@
 - 需要第21课原文位置口径的一卖时，另导入 `chan-first-sell-original.txt`（一卖 + 中枢上方 + 上涨走势）
 - 需要第37课 A-B-C 结构确认的一买时，另导入 `chan-first-buy-abc.txt`
 - 需要第37课 A-B-C 结构确认的一卖时，另导入 `chan-first-sell-abc.txt`
-- 需要第24/25/37课标准趋势背驰确认的一买时，另导入 `chan-first-buy-standard.txt`
-- 需要第24/25/37课标准趋势背驰确认的一卖时，另导入 `chan-first-sell-standard.txt`
+- 需要第24/25/37课标准趋势背驰确认且第37课 c 段三买/三卖端点可定位的一买时，另导入 `chan-first-buy-standard.txt`
+- 需要第24/25/37课标准趋势背驰确认且第37课 c 段三买/三卖端点可定位的一卖时，另导入 `chan-first-sell-standard.txt`
 - 需要创新极值且空间/速度/MACD 柱面积均走弱的一买时，另导入 `chan-first-buy-dynamics.txt`
 - 需要创新极值且空间/速度/MACD 柱面积均走弱的一卖时，另导入 `chan-first-sell-dynamics.txt`
 - 需要第44课小转大必要条件买点时，另导入 `chan-small-turn-buy.txt`

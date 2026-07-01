@@ -61,7 +61,10 @@ EXPECTED_FORMULA_SNIPPETS = {
   ],
   "chan-first-buy-standard.txt": [
     "STD:=TDXDLL1(30,H,L,200);",
-    "BARSLAST(STD=1)<10;",
+    "ABK:=TDXDLL1(30,H,L,350);",
+    "ABL:=TDXDLL1(30,H,L,360);",
+    "ABR:=TDXDLL1(30,H,L,370);",
+    "BARSLAST(STD=1 AND ABK>0 AND ABL>0 AND ABR>ABL)<10;",
   ],
   "chan-first-buy-dynamics.txt": [
     "XC:=TDXDLL1(40,C,V,0);",
@@ -130,7 +133,10 @@ EXPECTED_FORMULA_SNIPPETS = {
   ],
   "chan-first-sell-standard.txt": [
     "STD:=TDXDLL1(30,H,L,200);",
-    "BARSLAST(STD=-1)<10;",
+    "ABK:=TDXDLL1(30,H,L,350);",
+    "ABL:=TDXDLL1(30,H,L,360);",
+    "ABR:=TDXDLL1(30,H,L,370);",
+    "BARSLAST(STD=-1 AND ABK>0 AND ABL>0 AND ABR>ABL)<10;",
   ],
   "chan-first-sell-dynamics.txt": [
     "XC:=TDXDLL1(40,C,V,0);",
@@ -464,7 +470,10 @@ def self_test() -> int:
     ),
     "chan-first-buy-standard.txt": (
       "STD:=TDXDLL1(30,H,L,200);\n"
-      "BARSLAST(STD=1)<10;\n"
+      "ABK:=TDXDLL1(30,H,L,350);\n"
+      "ABL:=TDXDLL1(30,H,L,360);\n"
+      "ABR:=TDXDLL1(30,H,L,370);\n"
+      "BARSLAST(STD=1 AND ABK>0 AND ABL>0 AND ABR>ABL)<10;\n"
     ),
     "chan-first-buy-dynamics.txt": (
       "XC:=TDXDLL1(40,C,V,0);\n"
@@ -533,7 +542,10 @@ def self_test() -> int:
     ),
     "chan-first-sell-standard.txt": (
       "STD:=TDXDLL1(30,H,L,200);\n"
-      "BARSLAST(STD=-1)<10;\n"
+      "ABK:=TDXDLL1(30,H,L,350);\n"
+      "ABL:=TDXDLL1(30,H,L,360);\n"
+      "ABR:=TDXDLL1(30,H,L,370);\n"
+      "BARSLAST(STD=-1 AND ABK>0 AND ABL>0 AND ABR>ABL)<10;\n"
     ),
     "chan-first-sell-dynamics.txt": (
       "XC:=TDXDLL1(40,C,V,0);\n"
