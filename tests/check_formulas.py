@@ -656,6 +656,7 @@ def main() -> int:
     "C/A段MACD面积比：小于100为柱面积走弱",
     "C/A段价差力度比：小于100为空间走弱",
     "C/A段平均力度比：小于100为速度走弱",
+    "背驰要素位图：1创新/2空间弱/4速度弱/8柱弱/16成立",
   ]
   expected_debug_lines = [
     "DRAWNUMBER(BSP<>0 AND POS<>2,L*0.995,POS)",
@@ -668,6 +669,7 @@ def main() -> int:
     "DRAWNUMBER(BSP<>0 AND MAR>0,L*0.980,MAR)",
     "DRAWNUMBER(BSP<>0 AND SPR>0,H*1.025,SPR)",
     "DRAWNUMBER(BSP<>0 AND VPR>0,L*0.975,VPR)",
+    "DRAWNUMBER(BSP<>0 AND DVG>0,H*1.030,DVG)",
     "DRAWLINE(BSG=1,L,BSG=2,L,0),COLORBLUE",
     "DRAWLINE(BSG=-1,H,BSG=-2,H,0),COLORBLUE",
     "DRAWLINE(NST=1,L,NST=2,L,0),COLORCYAN",

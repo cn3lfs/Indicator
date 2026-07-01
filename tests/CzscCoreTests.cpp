@@ -5415,6 +5415,59 @@ static bool TestApplyTradingStrengthRatiosMapCodes()
          NearlyEqual(pSpeed[0], 0.0f);
 }
 
+static bool TestApplyTradingDivergenceFlagsMapCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.bNewExtreme = true;
+  Buy.Divergence.bWeakSpace = true;
+  Buy.Divergence.bWeakMacd = true;
+  Buy.Divergence.bDivergence = true;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.bNewExtreme = true;
+  Low.Divergence.bWeakSpace = true;
+  Low.Divergence.bWeakSpeed = true;
+  Low.Divergence.bWeakMacd = true;
+  Low.Divergence.bDivergence = true;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.bNewExtreme = true;
+  High.Divergence.bWeakSpeed = true;
+  TradingSignalCandidate None = MakeTestCandidate(5, 11.0f, 30);
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.bNewExtreme = true;
+  Invalid.Divergence.bWeakSpace = true;
+  Invalid.Divergence.bWeakSpeed = true;
+  Invalid.Divergence.bWeakMacd = true;
+  Invalid.Divergence.bDivergence = true;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(None);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalDivergenceFlags(nCount, pOut, Candidates);
+
+  float fBuyExpected = (float)(CZSC_DIVERGENCE_NEW_EXTREME |
+                               CZSC_DIVERGENCE_WEAK_SPACE |
+                               CZSC_DIVERGENCE_WEAK_MACD |
+                               CZSC_DIVERGENCE_CONFIRMED);
+  float fHighExpected = (float)(CZSC_DIVERGENCE_NEW_EXTREME |
+                                CZSC_DIVERGENCE_WEAK_SPEED);
+
+  return NearlyEqual(pOut[1], fBuyExpected) &&
+         NearlyEqual(pOut[3], fHighExpected) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestApplyTradingContextFlagsMapsCodes()
 {
   const int nCount = 12;
@@ -6404,7 +6457,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6479,6 +6532,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 29: ApplyTradingSignalMacdAreaRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 30: ApplyTradingSignalSpaceRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 31: ApplyTradingSignalSpeedRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 32: ApplyTradingSignalDivergenceFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 
@@ -7372,6 +7426,10 @@ int main()
   if (!TestApplyTradingStrengthRatiosMapCodes())
   {
     return 185;
+  }
+  if (!TestApplyTradingDivergenceFlagsMapCodes())
+  {
+    return 186;
   }
   if (!TestApplyTradingContextFlagsMapsCodes())
   {

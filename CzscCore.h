@@ -93,6 +93,15 @@ enum CzscSignalContextFlag
   CZSC_SIGNAL_CTX_CENTER_BREAKOUT   = 4096,
 };
 
+enum CzscDivergenceFlag
+{
+  CZSC_DIVERGENCE_NEW_EXTREME = 1,
+  CZSC_DIVERGENCE_WEAK_SPACE  = 2,
+  CZSC_DIVERGENCE_WEAK_SPEED  = 4,
+  CZSC_DIVERGENCE_WEAK_MACD   = 8,
+  CZSC_DIVERGENCE_CONFIRMED   = 16,
+};
+
 // 均线吻分类（第11课）：短长均线靠近/相交处的反抗强度，递增
 enum CzscKissType
 {
@@ -423,6 +432,9 @@ void ApplyTradingSignalSpaceRatio(int nCount,
 void ApplyTradingSignalSpeedRatio(int nCount,
                                   float *pOut,
                                   const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalDivergenceFlags(int nCount,
+                                       float *pOut,
+                                       const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalContextFlags(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
@@ -464,6 +476,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 29 为胜出买卖点 C/A 段 MACD 柱面积比(百分比)，0=无有效面积，不占用旧函数编号。
 // Func30 输出 30 为胜出买卖点 C/A 段价差力度比(百分比)，0=无有效 A 段价差，不占用旧函数编号。
 // Func30 输出 31 为胜出买卖点 C/A 段平均力度比(百分比)，0=无有效 A 段速度，不占用旧函数编号。
+// Func30 输出 32 为胜出买卖点背驰要素位图，位值见 CzscDivergenceFlag，不占用旧函数编号。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

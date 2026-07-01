@@ -2878,6 +2878,65 @@ void ApplyTradingSignalSpeedRatio(int nCount,
   }
 }
 
+static int BuildDivergenceFlags(const DivergenceResult &D)
+{
+  int nFlags = 0;
+  if (D.bNewExtreme)
+  {
+    nFlags |= CZSC_DIVERGENCE_NEW_EXTREME;
+  }
+  if (D.bWeakSpace)
+  {
+    nFlags |= CZSC_DIVERGENCE_WEAK_SPACE;
+  }
+  if (D.bWeakSpeed)
+  {
+    nFlags |= CZSC_DIVERGENCE_WEAK_SPEED;
+  }
+  if (D.bWeakMacd)
+  {
+    nFlags |= CZSC_DIVERGENCE_WEAK_MACD;
+  }
+  if (D.bDivergence)
+  {
+    nFlags |= CZSC_DIVERGENCE_CONFIRMED;
+  }
+  return nFlags;
+}
+
+// 背驰要素诊断位图：创新极值、空间走弱、速度走弱、MACD柱面积走弱、综合成立。
+void ApplyTradingSignalDivergenceFlags(int nCount,
+                                       float *pOut,
+                                       const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (float)BuildDivergenceFlags(C.Divergence);
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
 {
   if (!IsTradingSignal(C.fSignal))
@@ -4643,6 +4702,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 29: ApplyTradingSignalMacdAreaRatio(nCount, pOut, An.Candidates); break; // C/A段MACD面积比
     case 30: ApplyTradingSignalSpaceRatio(nCount, pOut, An.Candidates); break; // C/A段价差力度比
     case 31: ApplyTradingSignalSpeedRatio(nCount, pOut, An.Candidates); break; // C/A段平均力度比
+    case 32: ApplyTradingSignalDivergenceFlags(nCount, pOut, An.Candidates); break; // 背驰要素位图
     default: ClearOutput(nCount, pOut); break;
   }
 }
