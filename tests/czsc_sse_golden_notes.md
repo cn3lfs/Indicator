@@ -35,6 +35,17 @@ strengths, C/A percent ratios, and divergence condition flags for manual
 P4动力学核对, plus `BLP`/`BRP` and `bko[...]` leave/retest context for checking 第20课首次离开/首次回试;
 those diagnostics are generated, not edited here.
 
+Machine-checked structural invariants in `tests/check_sse_result.py`:
+
+- Every generated line-segment endpoint must also appear in the stroke endpoint
+  section with the same date, type, and price.
+- The generated line-segment endpoint count must be lower than the stroke
+  endpoint count.
+- Candidate debug ids must keep ordered divergence A/C endpoints, second-signal
+  `SFP < SMP < PID`, small-turn `STF < STL < STR`, and third-signal
+  `BLP < BRP == PID`.
+- Breakout debug ids must match the rendered `bko[...]` leave/retest context.
+
 | unit | date | signal | quality | center | movement | point | breakout | position | aftermath | ctx |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 笔中枢 | 2018-07-12 | 三卖 | 1 | 0 | 盘整 | 9 | 0 | 下方 | 扩张 | 4224 |
