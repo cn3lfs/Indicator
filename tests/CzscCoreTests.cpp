@@ -4457,7 +4457,7 @@ static bool TestApplyTradingTrendIdMapsCodes()
 
 static bool TestApplyTradingSmallTurnMapsCodes()
 {
-  const int nCount = 6;
+  const int nCount = 8;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -4470,14 +4470,18 @@ static bool TestApplyTradingSmallTurnMapsCodes()
   TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
   Sell.nSmallTurn = -1;
   TradingSignalCandidate None = MakeTestCandidate(5, 3.0f, 20);
+  TradingSignalCandidate NonThird = MakeTestCandidate(7, 1.0f, 20);
+  NonThird.nSmallTurn = 1;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(None);
+  Candidates.push_back(NonThird);
 
   ApplyTradingSignalSmallTurn(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
-         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
 }
 
 static bool TestApplyTradingAbcStructureMapsCodes()
@@ -4705,10 +4709,12 @@ static bool TestApplyTradingContextFlagsMapsCodes()
   Buy.nBreakout = 0;
   TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
   Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
+  Newborn.nSmallTurn = 1;
   Newborn.nReversal = CZSC_REVERSAL_CONSOLIDATION;
   Newborn.nBreakout = 1;
   TradingSignalCandidate Extended = MakeTestCandidate(5, 13.0f, 20);
   Extended.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
+  Extended.nSmallTurn = -1;
   Extended.nReversal = CZSC_REVERSAL_EXTENSION;
   TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
   MakeStandardDivergence(&WrongDirection, 1);
@@ -4726,14 +4732,15 @@ static bool TestApplyTradingContextFlagsMapsCodes()
                                CZSC_SIGNAL_CTX_ABC_STRUCTURE |
                                CZSC_SIGNAL_CTX_MACD_ZERO_PULL |
                                CZSC_SIGNAL_CTX_MACD_LINE_WEAK |
-                               CZSC_SIGNAL_CTX_SMALL_TURN |
                                CZSC_SIGNAL_CTX_STANDARD_DIV |
                                CZSC_SIGNAL_CTX_REVERSAL_TREND |
                                CZSC_SIGNAL_CTX_OVERLAPPED |
                                CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
   float fNewbornExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN |
+                                   CZSC_SIGNAL_CTX_SMALL_TURN |
                                    CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
-  float fExtendedExpected = (float)CZSC_SIGNAL_CTX_AFTERMATH_EXTEND;
+  float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
+                                    CZSC_SIGNAL_CTX_SMALL_TURN);
   float fWrongDirectionExpected = (float)CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
 
   return NearlyEqual(pOut[1], fBuyExpected) &&

@@ -2441,7 +2441,7 @@ void ApplyTradingSignalSmallTurn(int nCount,
     }
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
-      pOut[C.nIndex] = (float)C.nSmallTurn;
+      pOut[C.nIndex] = IsThirdSignal(C.fSignal) ? (float)C.nSmallTurn : 0.0f;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -2707,7 +2707,7 @@ int BuildTradingSignalContextFlags(const TradingSignalCandidate &C)
   {
     nFlags |= CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
   }
-  if (C.nSmallTurn != 0)
+  if (IsThirdSignal(C.fSignal) && (C.nSmallTurn != 0))
   {
     nFlags |= CZSC_SIGNAL_CTX_SMALL_TURN;
   }
