@@ -2557,7 +2557,7 @@ void ApplyTradingSignalStrictAbcCandidates(int nCount,
     {
       continue;
     }
-    if ((C.nSource == SIGNAL_SOURCE_FIRST) && !HasMatchingAbcStructure(C))
+    if (IsFirstSignal(C.fSignal) && !HasMatchingAbcStructure(C))
     {
       continue;
     }
