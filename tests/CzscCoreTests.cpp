@@ -1892,6 +1892,61 @@ static bool TestFirstCandidateRequiresTrendStructure()
   return true;
 }
 
+static bool TestFirstCandidateRequiresOutsideLastCenter()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 8));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 7.5f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 4.2f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 3.8f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+    Centers.push_back(MakeTestCenter(20, 32, 4.2f, 3.7f));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts;
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+    if (HasSignalCandidate(Candidates, 32, 1.0f))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 12.1f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 13));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 28, 12.8f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 32, 13.2f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+    Centers.push_back(MakeTestCenter(20, 32, 13.3f, 12.8f));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts;
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+    if (HasSignalCandidate(Candidates, 32, 11.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFirstCandidateMarksAbcStructure()
 {
   const int nCount = 41;
@@ -6433,6 +6488,10 @@ int main()
   if (!TestFirstCandidateRequiresTrendStructure())
   {
     return 151;
+  }
+  if (!TestFirstCandidateRequiresOutsideLastCenter())
+  {
+    return 176;
   }
   if (!TestFirstCandidateMarksAbcStructure())
   {
