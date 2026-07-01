@@ -3772,46 +3772,232 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
 // 线段划分·特征序列法（第67课）：与上面的保护点启发式并存的可选实现
 //=============================================================================
 
-// 定位线段终点（第64/67课「线段只能被线段破坏」，逆向三笔自身构成反向线段级别结构即破坏）：
-//  逆向笔 j 占端点 P[nStart+1+2j]（内端=线段终点候选）与 P[nStart+2+2j]（外端）——
-//  第二笔回调确认（下降 higher low：下一内端高于本内端 / 上升 lower high：下一内端低于本内端）后，
-//  反向「创新极值」(下降 higher high / 上升 lower low) 可由两种情况之一给出：
-//   · 情况1（终点优先落在极值点）：第一笔不破前一逆向笔外端，但第三笔（下一逆向笔外端）破本笔外端；
-//   · 情况2（终点为局部点）：第一笔即破前一逆向笔外端（外端突破），第三笔仅需成笔确认。
-//  两者线段终点都是本逆向笔的内端，不一定是全局最高/最低点（如 3723→2635 的下跌实终于 2863，非 2635）。
+struct FeatureElement
+{
+  std::size_t nInnerPoint;
+  std::size_t nOuterPoint;
+  std::size_t nHighPoint;
+  std::size_t nLowPoint;
+  float       fHigh;
+  float       fLow;
+};
+
+static bool MakeFeatureElement(const std::vector<SegmentPoint> &P,
+                               std::size_t nStart,
+                               std::size_t nElement,
+                               FeatureElement *pElement)
+{
+  if ((pElement == 0) || (nStart + 2 + 2 * nElement >= P.size()))
+  {
+    return false;
+  }
+
+  pElement->nInnerPoint = nStart + 1 + 2 * nElement;
+  pElement->nOuterPoint = nStart + 2 + 2 * nElement;
+  SegmentInterval Interval = MakeSegmentInterval(P[pElement->nInnerPoint], P[pElement->nOuterPoint]);
+  pElement->fHigh = Interval.fHigh;
+  pElement->fLow = Interval.fLow;
+  if (GetPointPrice(P[pElement->nInnerPoint]) >= GetPointPrice(P[pElement->nOuterPoint]))
+  {
+    pElement->nHighPoint = pElement->nInnerPoint;
+    pElement->nLowPoint = pElement->nOuterPoint;
+  }
+  else
+  {
+    pElement->nHighPoint = pElement->nOuterPoint;
+    pElement->nLowPoint = pElement->nInnerPoint;
+  }
+  return true;
+}
+
+static bool FeatureElementsIncluded(const FeatureElement &Left, const FeatureElement &Right)
+{
+  return ((Right.fHigh <= Left.fHigh) && (Right.fLow >= Left.fLow)) ||
+         ((Right.fHigh >= Left.fHigh) && (Right.fLow <= Left.fLow));
+}
+
+static int DetectFeatureDirection(const FeatureElement &Left, const FeatureElement &Right)
+{
+  if ((Right.fHigh > Left.fHigh) && (Right.fLow > Left.fLow))
+  {
+    return 1;
+  }
+  if ((Right.fHigh < Left.fHigh) && (Right.fLow < Left.fLow))
+  {
+    return -1;
+  }
+  return 0;
+}
+
+static int ChooseFeatureMergeDirection(const FeatureElement &Last, const FeatureElement &Current, int nDirection)
+{
+  if (nDirection != 0)
+  {
+    return nDirection;
+  }
+
+  float fHighDiff = Current.fHigh - Last.fHigh;
+  if (fHighDiff < 0)
+  {
+    fHighDiff = -fHighDiff;
+  }
+
+  float fLowDiff = Current.fLow - Last.fLow;
+  if (fLowDiff < 0)
+  {
+    fLowDiff = -fLowDiff;
+  }
+
+  return (fHighDiff >= fLowDiff) ? 1 : -1;
+}
+
+static void MergeFeatureElement(FeatureElement *pLast, const FeatureElement &Current, int nDirection)
+{
+  if (pLast == 0)
+  {
+    return;
+  }
+
+  if (nDirection >= 0)
+  {
+    if (Current.fHigh >= pLast->fHigh)
+    {
+      pLast->fHigh = Current.fHigh;
+      pLast->nHighPoint = Current.nHighPoint;
+    }
+    if (Current.fLow >= pLast->fLow)
+    {
+      pLast->fLow = Current.fLow;
+      pLast->nLowPoint = Current.nLowPoint;
+    }
+  }
+  else
+  {
+    if (Current.fHigh <= pLast->fHigh)
+    {
+      pLast->fHigh = Current.fHigh;
+      pLast->nHighPoint = Current.nHighPoint;
+    }
+    if (Current.fLow <= pLast->fLow)
+    {
+      pLast->fLow = Current.fLow;
+      pLast->nLowPoint = Current.nLowPoint;
+    }
+  }
+
+  pLast->nOuterPoint = Current.nOuterPoint;
+}
+
+static std::vector<FeatureElement> BuildStandardFeatureSequence(const std::vector<SegmentPoint> &P,
+                                                                std::size_t nStart)
+{
+  std::vector<FeatureElement> Standard;
+  int nDirection = 0;
+
+  for (std::size_t i = 0; ; i++)
+  {
+    FeatureElement Current;
+    if (!MakeFeatureElement(P, nStart, i, &Current))
+    {
+      break;
+    }
+    if (Standard.empty())
+    {
+      Standard.push_back(Current);
+      continue;
+    }
+
+    FeatureElement &Last = Standard.back();
+    if (FeatureElementsIncluded(Last, Current))
+    {
+      int nMergeDirection = ChooseFeatureMergeDirection(Last, Current, nDirection);
+      MergeFeatureElement(&Last, Current, nMergeDirection);
+      if (nDirection == 0)
+      {
+        nDirection = nMergeDirection;
+      }
+      continue;
+    }
+
+    int nNewDirection = DetectFeatureDirection(Last, Current);
+    if (nNewDirection != 0)
+    {
+      nDirection = nNewDirection;
+    }
+    Standard.push_back(Current);
+  }
+
+  return Standard;
+}
+
+static bool FeatureElementsOverlap(const FeatureElement &Left, const FeatureElement &Right)
+{
+  return IntervalsOverlap(Left.fLow, Left.fHigh, Right.fLow, Right.fHigh);
+}
+
+static bool IsFeatureFractal(const FeatureElement &Left,
+                             const FeatureElement &Middle,
+                             const FeatureElement &Right,
+                             int nDir)
+{
+  if (nDir > 0)
+  {
+    // 以向上笔开始的线段只考察特征序列顶分型（第67课）
+    return (Middle.fHigh > Left.fHigh) && (Middle.fHigh > Right.fHigh) &&
+           (Middle.fLow > Left.fLow) && (Middle.fLow > Right.fLow);
+  }
+  if (nDir < 0)
+  {
+    // 以向下笔开始的线段只考察特征序列底分型（第67课）
+    return (Middle.fLow < Left.fLow) && (Middle.fLow < Right.fLow) &&
+           (Middle.fHigh < Left.fHigh) && (Middle.fHigh < Right.fHigh);
+  }
+  return false;
+}
+
+static bool HasAnyFeatureFractal(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
+{
+  std::vector<FeatureElement> Seq = BuildStandardFeatureSequence(P, nStart);
+  for (std::size_t i = 1; i + 1 < Seq.size(); i++)
+  {
+    if (IsFeatureFractal(Seq[i - 1], Seq[i], Seq[i + 1], nDir))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static std::size_t FeatureFractalPoint(const FeatureElement &Element, int nDir)
+{
+  return (nDir > 0) ? Element.nHighPoint : Element.nLowPoint;
+}
+
+// 定位线段终点（第67课）：
+//  第一种情况：标准特征序列分型的第一、第二元素无缺口，线段在该分型高/低点结束；
+//  第二种情况：第一、第二元素有缺口，必须从该分型高/低点开始的反向特征序列出现分型确认。
 static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
 {
-  for (std::size_t j = 1; (nStart + 3 + 2 * j) < P.size(); j++)
+  std::vector<FeatureElement> Seq = BuildStandardFeatureSequence(P, nStart);
+  for (std::size_t i = 1; i + 1 < Seq.size(); i++)
   {
-    float fOuter     = GetPointPrice(P[nStart + 2 + 2 * j]);  // 逆向笔 j 外端（下降:顶 / 上升:底）
-    float fOuterPrev = GetPointPrice(P[nStart + 2 * j]);      // 逆向笔 j-1 外端
-    float fInner     = GetPointPrice(P[nStart + 1 + 2 * j]);  // 逆向笔 j 内端（下降:底 / 上升:顶）
-    float fInnerNext = GetPointPrice(P[nStart + 3 + 2 * j]);  // 逆向笔 j+1 内端
-
-    // 第二笔回调确认：下降 higher low / 上升 lower high
-    bool bPullback = (nDir < 0) ? (fInnerNext > fInner) : (fInnerNext < fInner);
-    if (!bPullback)
+    if (!IsFeatureFractal(Seq[i - 1], Seq[i], Seq[i + 1], nDir))
     {
       continue;
     }
 
-    // 情况2：第一笔即破前一逆向笔外端（下降 higher high / 上升 lower low）
-    bool bBreakFirst = (nDir < 0) ? (fOuter > fOuterPrev) : (fOuter < fOuterPrev);
-
-    // 情况1：第三笔（下一逆向笔外端）破本笔外端（终点优先落在极值点）
-    bool bBreakThird = false;
-    if ((nStart + 4 + 2 * j) < P.size())
+    std::size_t nEndPoint = FeatureFractalPoint(Seq[i], nDir);
+    if (FeatureElementsOverlap(Seq[i - 1], Seq[i]))
     {
-      float fOuterNext = GetPointPrice(P[nStart + 4 + 2 * j]);  // 逆向笔 j+1 外端
-      bBreakThird = (nDir < 0) ? (fOuterNext > fOuter) : (fOuterNext < fOuter);
+      return (int)nEndPoint;
     }
 
-    if (bBreakFirst || bBreakThird)
+    if (HasAnyFeatureFractal(P, nEndPoint, -nDir))
     {
-      return (int)(nStart + 1 + 2 * j);  // 线段终点 = 逆向笔 j 的内端
+      return (int)nEndPoint;
     }
   }
-  return -1;  // 未出现反向线段结构 → 线段当下未完成
+  return -1;
 }
 
 static bool FirstThreeStrokesOverlap(const std::vector<SegmentPoint> &P, std::size_t nStart)

@@ -246,6 +246,55 @@ static int FindSseDateIndex(const char *pDate)
   return -1;
 }
 
+static float TestPointPrice(const SegmentPoint &Point)
+{
+  return (Point.nType == CZSC_POINT_TOP) ? Point.fHigh : Point.fLow;
+}
+
+static bool TestIntervalsOverlap(float fLeftLow, float fLeftHigh, float fRightLow, float fRightHigh)
+{
+  return (fLeftLow <= fRightHigh) && (fRightLow <= fLeftHigh);
+}
+
+static bool TestFirstThreeStrokePointsOverlap(const std::vector<SegmentPoint> &Points, std::size_t nStart)
+{
+  if (nStart + 3 >= Points.size())
+  {
+    return false;
+  }
+
+  float fLow = TestPointPrice(Points[nStart]);
+  float fHigh = TestPointPrice(Points[nStart + 1]);
+  if (fLow > fHigh)
+  {
+    float fSwap = fLow;
+    fLow = fHigh;
+    fHigh = fSwap;
+  }
+
+  for (std::size_t i = nStart + 1; i < nStart + 3; i++)
+  {
+    float fA = TestPointPrice(Points[i]);
+    float fB = TestPointPrice(Points[i + 1]);
+    float fSegLow = (fA < fB) ? fA : fB;
+    float fSegHigh = (fA > fB) ? fA : fB;
+    if (!TestIntervalsOverlap(fLow, fHigh, fSegLow, fSegHigh))
+    {
+      return false;
+    }
+    if (fSegLow > fLow)
+    {
+      fLow = fSegLow;
+    }
+    if (fSegHigh < fHigh)
+    {
+      fHigh = fSegHigh;
+    }
+  }
+
+  return fLow <= fHigh;
+}
+
 static bool TestRealSseMergedBarsAreWellFormed()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
@@ -375,9 +424,17 @@ static bool TestRealSseSegmentsSubsetOfStrokes()
     {
       return false;  // 线段端点顶底交替
     }
+    if ((i > 0) && (nStrokeIndex <= nStrokePrev))
+    {
+      return false;  // 线段端点顺序必须沿笔端点推进
+    }
     if ((i > 0) && ((nStrokeIndex - nStrokePrev) < 3))
     {
       return false;  // 相邻线段端点之间至少三笔
+    }
+    if ((i > 0) && !TestFirstThreeStrokePointsOverlap(StrokePts, nStrokePrev))
+    {
+      return false;  // 每个线段前三笔必须有重叠
     }
     nStrokePrev = nStrokeIndex;
   }
@@ -598,15 +655,15 @@ static bool TestRealSseDiagnosticCounts()
 
   return (Strokes.size() == 157) &&
          (StrokeAn.Points.size() == 158) &&
-         (SegmentAn.Points.size() == 31) &&
+         (SegmentAn.Points.size() == 15) &&
          (StrokeAn.Centers.size() == 18) &&
-         (SegmentAn.Centers.size() == 4) &&
+         (SegmentAn.Centers.size() == 2) &&
          (StrokeAn.Candidates.size() == 17) &&
-         (SegmentAn.Candidates.size() == 4) &&
+         (SegmentAn.Candidates.size() == 2) &&
          CheckSseCandidateSummary(StrokeSummary, 0, 0, 9, 0, 0, 8,
                                   5, 0, 0, 3, 0, 0, 0, 17) &&
-         CheckSseCandidateSummary(SegmentSummary, 0, 0, 3, 0, 0, 1,
-                                  1, 0, 0, 1, 0, 0, 0, 4);
+         CheckSseCandidateSummary(SegmentSummary, 0, 0, 1, 0, 0, 1,
+                                  1, 0, 0, 0, 0, 0, 0, 2);
 }
 
 static bool TestRealSsePricePointsStayOnStrictStrokeEndpoints()
@@ -882,15 +939,13 @@ static bool TestRealSseGoldenSegmentCentersPresent()
   std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, Config);
   std::vector<Center> Centers = BuildCenters(Points);
 
-  if (Centers.size() != 4)
+  if (Centers.size() != 2)
   {
     return false;
   }
 
-  return ContainsSseCenter(Centers, 1, "2018-04-11", "2019-04-08", 2703.51f, 2449.20f) &&
-         ContainsSseCenter(Centers, -1, "2019-06-06", "2020-08-18", 3042.93f, 2822.19f) &&
-         ContainsSseCenter(Centers, -1, "2020-09-25", "2023-06-26", 3418.95f, 3344.97f) &&
-         ContainsSseCenter(Centers, 1, "2023-08-04", "2025-11-14", 3174.27f, 3040.69f);
+  return ContainsSseCenter(Centers, 1, "2018-11-19", "2020-07-09", 2822.19f, 2822.19f) &&
+         ContainsSseCenter(Centers, -1, "2020-09-25", "2023-06-26", 3418.95f, 3312.72f);
 }
 
 static bool TestRealSseGoldenCandidatesPresent()
@@ -928,10 +983,8 @@ static bool TestRealSseGoldenCandidatesPresent()
   };
 
   static const SseCandidateExpectation SegmentExpected[] = {
-    {"2019-06-06", 3.0f, 1, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 6, 0, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2020-09-25", 3.0f, 1, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 12, 1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2023-08-04", 13.0f, 1, 2, 2, CZSC_MOVEMENT_CONSOLIDATION, 23, 2, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2025-12-16", 3.0f, 2, 3, 3, CZSC_MOVEMENT_CONSOLIDATION, 30, 3, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 4105}
+    {"2020-09-25", 3.0f, 2, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 6, 0, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
+    {"2024-05-20", 13.0f, 1, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 13, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_UNKNOWN, 4096}
   };
 
   return ContainsAllSseCandidates(StrokeAn.Candidates,
@@ -964,8 +1017,8 @@ static bool TestRealSseGoldenBreakoutsPresent()
   };
 
   static const SseBreakoutExpectation SegmentExpected[] = {
-    {0, 0, 1, 5, "2019-04-08", 6, "2019-06-06", true, false, true},
-    {3, 3, 1, 29, "2025-11-14", 30, "2025-12-16", true, false, true}
+    {0, 0, 1, 5, "2020-07-09", 6, "2020-09-25", true, false, true},
+    {1, 1, -1, 12, "2023-06-26", 13, "2024-05-20", true, false, true}
   };
 
   return CheckAllSseBreakouts(StrokeAn.Points,
@@ -6567,27 +6620,24 @@ static bool TestStrictStrokeUsesMergedGap()
   return true;
 }
 
-// 下降线段被 higher high + higher low 破坏：逆向(向上)笔顶创新高(92>88)、其后回调底不创新低(75>70)
-// → 下降线段在该逆向笔的底(idx20)结束。终点是逆向笔内端，不必是全局最低点（第64/67课）。
+// 向上线段的特征序列出现无缺口顶分型：线段在该顶分型高点结束（第67课第一种情况）。
 static bool TestFeatureLineSegmentEndsAtTopFractal()
 {
   std::vector<Fractal> F;
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 0, 100, 95));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 4, 92, 90));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 8, 95, 88));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 12, 82, 80));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 16, 88, 82));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 20, 72, 70));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 24, 92, 82));   // 顶92 > 前顶88（higher high）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 28, 77, 75)); // 底75 > 前底70（higher low）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 32, 85, 78));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));   // X1=[14,20]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 21));     // X2=[19,25] 顶分型高点
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 22, 19));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 20));     // X3=[17,23]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 19, 17));
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
   std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
   return (Line.size() >= 2) &&
-         (Line[0].nType == CZSC_POINT_TOP) && (Line[0].nIndex == 0) &&
-         (Line[1].nType == CZSC_POINT_BOTTOM) && (Line[1].nIndex == 20);
+         (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12);
 }
 
 static bool TestFeatureLineSegmentNeedsFourPoints()
@@ -6617,58 +6667,64 @@ static bool TestFeatureLineSegmentRequiresFirstThreeOverlap()
   return Line.empty();
 }
 
-// 上升线段被 lower low + lower high 破坏：逆向(向下)笔底创新低(12<18)、其后反弹顶不创新高(22<30)
-// → 上升线段在该逆向笔的顶(idx20)结束（对称于下降线段）。
-static bool TestFeatureSegmentExtendsPastRelay()
+// 向下线段的特征序列出现无缺口底分型：线段在该底分型低点结束（第67课第一种情况）。
+static bool TestFeatureLineSegmentEndsAtBottomFractal()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 0, 100, 96));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 4, 92, 85));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 8, 95, 90));      // S1=[85,95]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 12, 88, 80));  // S2=[80,90] 底分型低点
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 16, 90, 84));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 20, 89, 84));  // S3=[84,92]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 24, 92, 88));
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return (Line.size() >= 2) &&
+         (Line[0].nType == CZSC_POINT_TOP) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_BOTTOM) && (Line[1].nIndex == 12);
+}
+
+// 有缺口的特征序列顶分型，必须等反向特征序列出现底分型确认（第67课第二种情况）。
+static bool TestFeatureSegmentGapConfirmedByReversal()
 {
   std::vector<Fractal> F;
   F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
   F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 15));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 20, 18));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 30, 24));     // 顶30（创 lower low 的回调起点）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 14, 12));  // 底12 < 前底18（lower low）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 22, 18));     // 顶22 < 30（lower high）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 17, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));   // X1=[14,20]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // X2=[25,30]，与 X1 有缺口
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));     // 反向序列 S1=[25,28]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // X3=[22,28]，确认原顶分型
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 26, 24));     // 反向序列 S2=[22,26]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 25, 23));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 27, 25));     // 反向序列 S3=[23,27]，S2 为底分型
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
   std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
   return (Line.size() >= 2) &&
          (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
-         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 20);
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12);
 }
 
-// 真实上证：线段终点不一定是全局极值——存在某下降线段端点(底)，其后续笔端点里仍有更低的底
-// （如 2.5 年下跌实终于 2863，而其后才到 2635）
-static bool TestFeatureSegmentGapConfirmedByReversal()
+static bool TestFeatureSegmentGapRequiresReversalFractal()
 {
-  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
-  float *pL = const_cast<float *>(SSE_DAILY_LOW);
-  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
-  std::vector<Fractal> Fractals = BuildFractals(Bars);
-  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
-  std::vector<SegmentPoint> StrokePts = BuildSegmentPoints(Strokes);
-  std::vector<SegmentPoint> Seg = BuildLineSegmentPointsByFeature(Strokes);
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));   // X1=[14,20]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // X2=[25,30]，与 X1 有缺口
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // X3=[22,28]，原序列顶分型成立
 
-  for (std::size_t i = 0; i < Seg.size(); i++)
-  {
-    if (Seg[i].nType != CZSC_POINT_BOTTOM)
-    {
-      continue;
-    }
-    for (std::size_t j = 0; j < StrokePts.size(); j++)
-    {
-      if ((StrokePts[j].nIndex > Seg[i].nIndex) &&
-          (StrokePts[j].nType == CZSC_POINT_BOTTOM) &&
-          (StrokePts[j].fLow < Seg[i].fLow))
-      {
-        return true;  // 该线段终点(底)之后还有更低的底 → 终点非全局最低
-      }
-    }
-  }
-  return false;
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return Line.size() == 1;  // 未出现反向底分型，不确认线段结束
 }
 
 static bool TestDecodeConfig()
@@ -8269,13 +8325,17 @@ int main()
   {
     return 112;
   }
-  if (!TestFeatureSegmentExtendsPastRelay())
+  if (!TestFeatureLineSegmentEndsAtBottomFractal())
   {
     return 113;
   }
   if (!TestFeatureSegmentGapConfirmedByReversal())
   {
     return 114;
+  }
+  if (!TestFeatureSegmentGapRequiresReversalFractal())
+  {
+    return 189;
   }
   if (!TestApplyTradingReversalRequiresFirstSignal())
   {
