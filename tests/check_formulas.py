@@ -160,9 +160,21 @@ def main() -> int:
     "胜出候选端点编号：一基",
     "胜出候选走势编号：一基",
   ]
+  expected_debug_lines = [
+    "DRAWNUMBER(BSP<>0 AND POS<>2,L*0.995,POS)",
+    "DRAWNUMBER(BSP<>0,H*1.005,MOV)",
+    "DRAWNUMBER(BSP<>0,H*1.010,PRI)",
+    "DRAWNUMBER(BSP<>0 AND CEN>0,L*0.990,CEN)",
+    "DRAWNUMBER(BSP<>0 AND BKO>0,H*1.015,BKO)",
+    "DRAWNUMBER(BSP<>0 AND PID>0,L*0.985,PID)",
+    "DRAWNUMBER(BSP<>0 AND TID>0,H*1.020,TID)",
+  ]
   for comment in expected_debug_comments:
     if comment not in debug_text:
       stale_comments.append(f"chan-debug.txt missing comment: {comment}")
+  for line in expected_debug_lines:
+    if line not in debug_text:
+      stale_comments.append(f"chan-debug.txt missing debug line: {line}")
 
   if missing or empty or undocumented or invalid_modes or stale_comments or aux_order_errors or func30_errors:
     for item in missing:
