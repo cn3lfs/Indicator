@@ -86,6 +86,35 @@ static bool TestMergedBarsTrackExtremeIndexes()
   return true;
 }
 
+static bool TestMergedBarsApplySequentialInclusionDirection()
+{
+  {
+    const int nCount = 4;
+    float pHigh[nCount] = {10, 12, 11, 11.5f};
+    float pLow[nCount] = {5, 7, 8, 9};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 3)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 12) || !NearlyEqual(Bars[1].fLow, 9)) return false;
+    if ((Bars[1].nHighIndex != 1) || (Bars[1].nLowIndex != 3)) return false;
+  }
+
+  {
+    const int nCount = 4;
+    float pHigh[nCount] = {12, 10, 11, 9};
+    float pLow[nCount] = {8, 6, 5, 5.5f};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 3)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 9) || !NearlyEqual(Bars[1].fLow, 5)) return false;
+    if ((Bars[1].nHighIndex != 3) || (Bars[1].nLowIndex != 2)) return false;
+  }
+
+  return true;
+}
+
 static MergedBar MakeTestMergedBar(int nStart, int nEnd,
                                    int nHighIndex, int nLowIndex,
                                    float fHigh, float fLow)
@@ -215,6 +244,44 @@ static int FindSseDateIndex(const char *pDate)
     }
   }
   return -1;
+}
+
+static bool TestRealSseMergedBarsAreWellFormed()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+
+  if (Bars.size() < 10)
+  {
+    return false;
+  }
+  for (std::size_t i = 0; i < Bars.size(); i++)
+  {
+    const MergedBar &B = Bars[i];
+    if ((B.nStart > B.nEnd) ||
+        (B.nHighIndex < B.nStart) || (B.nHighIndex > B.nEnd) ||
+        (B.nLowIndex < B.nStart) || (B.nLowIndex > B.nEnd))
+    {
+      return false;
+    }
+    if (!NearlyEqual(B.fHigh, SSE_DAILY_HIGH[B.nHighIndex]) ||
+        !NearlyEqual(B.fLow, SSE_DAILY_LOW[B.nLowIndex]))
+    {
+      return false;
+    }
+    if (i > 0)
+    {
+      const MergedBar &P = Bars[i - 1];
+      bool bIncluded = ((B.fHigh <= P.fHigh) && (B.fLow >= P.fLow)) ||
+                       ((B.fHigh >= P.fHigh) && (B.fLow <= P.fLow));
+      if (bIncluded)
+      {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 // 笔结构良好：顶底异型、方向正确、严格笔合并K线跨度≥4（含顶底≥5根合并K线）、首尾相接且方向交替
@@ -6104,6 +6171,10 @@ int main()
   {
     return 122;
   }
+  if (!TestMergedBarsApplySequentialInclusionDirection())
+  {
+    return 171;
+  }
   if (!TestFractalsUseMergedExtremeIndexes())
   {
     return 123;
@@ -6115,6 +6186,10 @@ int main()
   if (!TestStrokeRequiresFiveBars())
   {
     return 4;
+  }
+  if (!TestRealSseMergedBarsAreWellFormed())
+  {
+    return 172;
   }
   if (!TestRealSseStrokesWellFormed())
   {
