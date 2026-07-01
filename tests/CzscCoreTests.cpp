@@ -2156,6 +2156,68 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
          NearlyEqual(pOut[40], 13.0f);
 }
 
+static bool TestSmallTurnRequiresSameCenterAndLaterThird()
+{
+  const int nCount = 45;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = pLow[36] = 6;
+  pIn[40] = -1;
+  pHigh[40] = pLow[40] = 4.5f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 7));
+  Breakouts.back().nCenter = 1;  // 同一最后中枢，但三买早于一买
+  Breakouts.push_back(MakeTestBreakout(1, 10));
+  Breakouts.back().nCenter = 0;  // 一买之后，但不是最后中枢
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+  const TradingSignalCandidate *pEarlyThird = FindSignalCandidate(Candidates, 28, 3.0f);
+  const TradingSignalCandidate *pOtherCenterThird = FindSignalCandidate(Candidates, 40, 3.0f);
+
+  return (pFirst != 0) &&
+         (pEarlyThird != 0) &&
+         (pOtherCenterThird != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pEarlyThird->nSmallTurn == 0) &&
+         (pOtherCenterThird->nSmallTurn == 0);
+}
+
 static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
 {
   const int nCount = 41;
@@ -5477,6 +5539,10 @@ int main()
   if (!TestTradingCandidatesMarkSecondThirdSellOverlap())
   {
     return 33;
+  }
+  if (!TestSmallTurnRequiresSameCenterAndLaterThird())
+  {
+    return 162;
   }
   if (!TestTradingCandidatesMarkSecondBuyInsideCenter())
   {
