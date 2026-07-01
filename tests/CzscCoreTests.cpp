@@ -365,6 +365,12 @@ static bool TestRealSseSegmentsSubsetOfStrokes()
     {
       return false;  // 线段端点必落在笔端点上
     }
+    if ((StrokePts[nStrokeIndex].nType != SegPts[i].nType) ||
+        !NearlyEqual(StrokePts[nStrokeIndex].fHigh, SegPts[i].fHigh) ||
+        !NearlyEqual(StrokePts[nStrokeIndex].fLow, SegPts[i].fLow))
+    {
+      return false;  // 线段端点必须复用同一个笔端点，而不只是同一天
+    }
     if ((i > 0) && (SegPts[i].nType == SegPts[i - 1].nType))
     {
       return false;  // 线段端点顶底交替
