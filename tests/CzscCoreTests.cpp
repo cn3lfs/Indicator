@@ -1479,6 +1479,34 @@ static bool TestCenterBreakoutsSkipBackIntoCenter()
   return Breakouts[0].bBackIntoCenter && !Breakouts[0].bThirdSignal;
 }
 
+static bool TestCenterBreakoutsDoNotUseLaterRetestAfterBackIntoCenter()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));      // 首次离开
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 8.5f)); // 首次回试回中枢，不能算三买
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 13));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 9.5f)); // 后续回试不回，也不能补算三买
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  if (Breakouts.size() != 1)
+  {
+    return false;
+  }
+  return (Breakouts[0].nLeavePoint == 5) &&
+         (Breakouts[0].nRetestPoint == 6) &&
+         Breakouts[0].bBackIntoCenter &&
+         !Breakouts[0].bThirdSignal;
+}
+
 static bool TestCenterBreakoutsSkipWithoutLeave()
 {
   std::vector<SegmentPoint> Points;
@@ -6349,6 +6377,10 @@ int main()
   if (!TestCenterBreakoutsSkipBackIntoCenter())
   {
     return 20;
+  }
+  if (!TestCenterBreakoutsDoNotUseLaterRetestAfterBackIntoCenter())
+  {
+    return 175;
   }
   if (!TestCenterBreakoutsSkipWithoutLeave())
   {
