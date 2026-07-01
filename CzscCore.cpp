@@ -1639,6 +1639,7 @@ static TradingSignalCandidate MakeTradingSignalCandidate(int nIndex,
   C.nSecondBasePoint = -1;
   C.nSecondTurnPoint = -1;
   C.nSmallTurn = 0;
+  C.nSmallTurnBasePoint = -1;
   C.nAbcStructure = 0;
   C.nAbcBreakout = -1;
   C.nMacdZeroPullback = 0;
@@ -2055,11 +2056,13 @@ static void AnnotateSmallTurnConditions(std::vector<TradingSignalCandidate> *pCa
       if ((First.fSignal == SIGNAL_FIRST_BUY) && (C.fSignal == SIGNAL_THIRD_BUY))
       {
         C.nSmallTurn = 1;
+        C.nSmallTurnBasePoint = First.nPoint;
         break;
       }
       if ((First.fSignal == SIGNAL_FIRST_SELL) && (C.fSignal == SIGNAL_THIRD_SELL))
       {
         C.nSmallTurn = -1;
+        C.nSmallTurnBasePoint = First.nPoint;
         break;
       }
     }
@@ -2640,6 +2643,40 @@ void ApplyTradingSignalSmallTurn(int nCount,
     if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
     {
       pOut[C.nIndex] = HasMatchingSmallTurn(C) ? (float)C.nSmallTurn : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 输出第44课小转大必要条件关联的小级别一类买卖点端点编号，1基；无确认输出0。
+void ApplyTradingSignalSmallTurnBasePointId(int nCount,
+                                            float *pOut,
+                                            const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (HasMatchingSmallTurn(C) && (C.nSmallTurnBasePoint >= 0)) ?
+                       (float)(C.nSmallTurnBasePoint + 1) : 0.0f;
       Priorities[(std::size_t)C.nIndex] = C.nPriority;
     }
   }
@@ -4997,6 +5034,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 39: ApplyTradingSignalSmallTurnRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 小转大突破回试端点编号
     case 40: ApplyTradingSignalSecondBasePointId(nCount, pOut, An.Candidates); break; // 二类关联一类端点编号
     case 41: ApplyTradingSignalSecondTurnPointId(nCount, pOut, An.Candidates); break; // 二类中间反向端点编号
+    case 42: ApplyTradingSignalSmallTurnBasePointId(nCount, pOut, An.Candidates); break; // 小转大关联一类端点编号
     default: ClearOutput(nCount, pOut); break;
   }
 }

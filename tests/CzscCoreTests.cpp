@@ -1087,6 +1087,7 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nSecondBasePoint = -1;
   C.nSecondTurnPoint = -1;
   C.nSmallTurn = 0;
+  C.nSmallTurnBasePoint = -1;
   C.nAbcStructure = 0;
   C.nAbcBreakout = -1;
   C.nMacdZeroPullback = 0;
@@ -2882,6 +2883,7 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
          pSecond->bOverlapped &&
          pThird->bOverlapped &&
          (pThird->nSmallTurn == 1) &&
+         (pThird->nSmallTurnBasePoint == 8) &&
          (pSecond->nBreakout == 0) &&
          (pSecond->nSecondBasePoint == 8) &&
          (pSecond->nSecondTurnPoint == 9) &&
@@ -2966,6 +2968,7 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
          pSecond->bOverlapped &&
          pThird->bOverlapped &&
          (pThird->nSmallTurn == -1) &&
+         (pThird->nSmallTurnBasePoint == 8) &&
          (pSecond->nBreakout == 0) &&
          (pSecond->nSecondBasePoint == 8) &&
          (pSecond->nSecondTurnPoint == 9) &&
@@ -3150,7 +3153,9 @@ static bool TestSmallTurnRequiresSameCenterAndLaterThird()
          (pOtherCenterThird != 0) &&
          (pFirst->nCenter == 1) &&
          (pEarlyThird->nSmallTurn == 0) &&
-         (pOtherCenterThird->nSmallTurn == 0);
+         (pEarlyThird->nSmallTurnBasePoint == -1) &&
+         (pOtherCenterThird->nSmallTurn == 0) &&
+         (pOtherCenterThird->nSmallTurnBasePoint == -1);
 }
 
 static bool TestSmallTurnSellRequiresSameCenterAndLaterThird()
@@ -3212,7 +3217,9 @@ static bool TestSmallTurnSellRequiresSameCenterAndLaterThird()
          (pOtherCenterThird != 0) &&
          (pFirst->nCenter == 1) &&
          (pEarlyThird->nSmallTurn == 0) &&
-         (pOtherCenterThird->nSmallTurn == 0);
+         (pEarlyThird->nSmallTurnBasePoint == -1) &&
+         (pOtherCenterThird->nSmallTurn == 0) &&
+         (pOtherCenterThird->nSmallTurnBasePoint == -1);
 }
 
 static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
@@ -5278,10 +5285,12 @@ static bool TestApplyTradingSmallTurnMapsCodes()
 static bool TestApplyTradingSmallTurnPointIdsMapCodes()
 {
   const int nCount = 14;
+  float pBase[nCount];
   float pLeave[nCount];
   float pRetest[nCount];
   for (int i = 0; i < nCount; i++)
   {
+    pBase[i] = -1;
     pLeave[i] = -1;
     pRetest[i] = -1;
   }
@@ -5299,29 +5308,34 @@ static bool TestApplyTradingSmallTurnPointIdsMapCodes()
   Buy.nCenter = 0;
   Buy.nBreakout = 0;
   Buy.nSmallTurn = 1;
+  Buy.nSmallTurnBasePoint = 0;
   TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
   Sell.nSource = 3;
   Sell.nPoint = 3;
   Sell.nCenter = 0;
   Sell.nBreakout = 1;
   Sell.nSmallTurn = -1;
+  Sell.nSmallTurnBasePoint = 2;
   TradingSignalCandidate WrongDirection = MakeTestCandidate(5, 3.0f, 20);
   WrongDirection.nSource = 3;
   WrongDirection.nPoint = 5;
   WrongDirection.nCenter = 0;
   WrongDirection.nBreakout = 0;
   WrongDirection.nSmallTurn = -1;
+  WrongDirection.nSmallTurnBasePoint = 4;
   TradingSignalCandidate MissingBreakout = MakeTestCandidate(7, 3.0f, 20);
   MissingBreakout.nSource = 3;
   MissingBreakout.nPoint = 7;
   MissingBreakout.nCenter = 0;
   MissingBreakout.nSmallTurn = 1;
+  MissingBreakout.nSmallTurnBasePoint = 6;
   TradingSignalCandidate LowerPrioritySmallTurn = MakeTestCandidate(10, 3.0f, 10);
   LowerPrioritySmallTurn.nSource = 3;
   LowerPrioritySmallTurn.nPoint = 10;
   LowerPrioritySmallTurn.nCenter = 0;
   LowerPrioritySmallTurn.nBreakout = 0;
   LowerPrioritySmallTurn.nSmallTurn = 1;
+  LowerPrioritySmallTurn.nSmallTurnBasePoint = 9;
   TradingSignalCandidate HigherPriorityNonThird = MakeTestCandidate(10, 2.0f, 20);
   HigherPriorityNonThird.nSource = 2;
   TradingSignalCandidate MissingCenter = MakeTestCandidate(12, 3.0f, 20);
@@ -5329,6 +5343,7 @@ static bool TestApplyTradingSmallTurnPointIdsMapCodes()
   MissingCenter.nPoint = 12;
   MissingCenter.nBreakout = 0;
   MissingCenter.nSmallTurn = 1;
+  MissingCenter.nSmallTurnBasePoint = 11;
   Candidates.push_back(Buy);
   Candidates.push_back(Sell);
   Candidates.push_back(WrongDirection);
@@ -5337,21 +5352,29 @@ static bool TestApplyTradingSmallTurnPointIdsMapCodes()
   Candidates.push_back(HigherPriorityNonThird);
   Candidates.push_back(MissingCenter);
 
+  ApplyTradingSignalSmallTurnBasePointId(nCount, pBase, Candidates);
   ApplyTradingSignalSmallTurnLeavePointId(nCount, pLeave, Candidates, Breakouts);
   ApplyTradingSignalSmallTurnRetestPointId(nCount, pRetest, Candidates, Breakouts);
 
-  return NearlyEqual(pLeave[1], 3.0f) &&
+  return NearlyEqual(pBase[1], 1.0f) &&
+         NearlyEqual(pLeave[1], 3.0f) &&
          NearlyEqual(pRetest[1], 5.0f) &&
+         NearlyEqual(pBase[3], 3.0f) &&
          NearlyEqual(pLeave[3], 7.0f) &&
          NearlyEqual(pRetest[3], 9.0f) &&
+         NearlyEqual(pBase[5], 0.0f) &&
          NearlyEqual(pLeave[5], 0.0f) &&
          NearlyEqual(pRetest[5], 0.0f) &&
+         NearlyEqual(pBase[7], 0.0f) &&
          NearlyEqual(pLeave[7], 0.0f) &&
          NearlyEqual(pRetest[7], 0.0f) &&
+         NearlyEqual(pBase[10], 0.0f) &&
          NearlyEqual(pLeave[10], 0.0f) &&
          NearlyEqual(pRetest[10], 0.0f) &&
+         NearlyEqual(pBase[12], 0.0f) &&
          NearlyEqual(pLeave[12], 0.0f) &&
          NearlyEqual(pRetest[12], 0.0f) &&
+         NearlyEqual(pBase[0], 0.0f) &&
          NearlyEqual(pLeave[0], 0.0f) &&
          NearlyEqual(pRetest[0], 0.0f);
 }
@@ -6887,7 +6910,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6972,6 +6995,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 39: ApplyTradingSignalSmallTurnRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
       case 40: ApplyTradingSignalSecondBasePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 41: ApplyTradingSignalSecondTurnPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 42: ApplyTradingSignalSmallTurnBasePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       default: return false;
     }
 

@@ -276,6 +276,7 @@ struct TradingSignalCandidate
   int   nSecondBasePoint;   // 第二类买卖点关联的一类买卖点端点（无则 -1）
   int   nSecondTurnPoint;   // 第二类买卖点前一段反向端点（无则 -1）
   int   nSmallTurn;         // 第44课小转大必要条件：三买=1、三卖=-1、无=0
+  int   nSmallTurnBasePoint; // 小转大关联的小级别一类买卖点端点（无则 -1）
   int   nAbcStructure;      // 第37课a+A+b+B+c结构：一买=1、一卖=-1、无=0
   int   nAbcBreakout;       // 第37课c段包含的B中枢三买/三卖突破下标（无则 -1）
   int   nMacdZeroPullback;  // 第24/25课B中枢黄白线回拉0轴：一买=1、一卖=-1、无=0
@@ -426,6 +427,9 @@ void ApplyTradingSignalSecondTurnPointId(int nCount,
 void ApplyTradingSignalSmallTurn(int nCount,
                                  float *pOut,
                                  const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalSmallTurnBasePointId(int nCount,
+                                            float *pOut,
+                                            const std::vector<TradingSignalCandidate> &Candidates);
 void ApplyTradingSignalSmallTurnLeavePointId(int nCount,
                                              float *pOut,
                                              const std::vector<TradingSignalCandidate> &Candidates,
@@ -519,6 +523,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 36/37 为一类ABC结构关联突破的离开/回试端点一基编号，0=无ABC确认。
 // Func30 输出 38/39 为小转大必要条件关联突破的离开/回试端点一基编号，0=无小转大确认。
 // Func30 输出 40/41 为第二类买卖点关联的一类端点/中间反向端点一基编号，0=无二类确认。
+// Func30 输出 42 为小转大必要条件关联的小级别一类买卖点端点一基编号，0=无小转大确认。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);

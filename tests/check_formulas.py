@@ -85,7 +85,8 @@ EXPECTED_FORMULA_SNIPPETS = {
     "STB:=TDXDLL1(30,H,L,140);",
     "STL:=TDXDLL1(30,H,L,380);",
     "STR:=TDXDLL1(30,H,L,390);",
-    "BARSLAST(STB=1 AND STL>0 AND STR>STL)<10;",
+    "STF:=TDXDLL1(30,H,L,420);",
+    "BARSLAST(STB=1 AND STF>0 AND STL>STF AND STR>STL)<10;",
   ],
   "chan-first-sell.txt": [
     "BSP:=TDXDLL1(30,H,L,40);",
@@ -166,7 +167,8 @@ EXPECTED_FORMULA_SNIPPETS = {
     "STB:=TDXDLL1(30,H,L,140);",
     "STL:=TDXDLL1(30,H,L,380);",
     "STR:=TDXDLL1(30,H,L,390);",
-    "BARSLAST(STB=-1 AND STL>0 AND STR>STL)<10;",
+    "STF:=TDXDLL1(30,H,L,420);",
+    "BARSLAST(STB=-1 AND STF>0 AND STL>STF AND STR>STL)<10;",
   ],
   "chan-overlap-buy.txt": [
     "CTX:=TDXDLL1(30,H,L,210);",
@@ -515,7 +517,8 @@ def self_test() -> int:
       "STB:=TDXDLL1(30,H,L,140);\n"
       "STL:=TDXDLL1(30,H,L,380);\n"
       "STR:=TDXDLL1(30,H,L,390);\n"
-      "BARSLAST(STB=1 AND STL>0 AND STR>STL)<10;\n"
+      "STF:=TDXDLL1(30,H,L,420);\n"
+      "BARSLAST(STB=1 AND STF>0 AND STL>STF AND STR>STL)<10;\n"
     ),
     "chan-first-sell.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
@@ -596,7 +599,8 @@ def self_test() -> int:
       "STB:=TDXDLL1(30,H,L,140);\n"
       "STL:=TDXDLL1(30,H,L,380);\n"
       "STR:=TDXDLL1(30,H,L,390);\n"
-      "BARSLAST(STB=-1 AND STL>0 AND STR>STL)<10;\n"
+      "STF:=TDXDLL1(30,H,L,420);\n"
+      "BARSLAST(STB=-1 AND STF>0 AND STL>STF AND STR>STL)<10;\n"
     ),
     "chan-overlap-buy.txt": (
       "CTX:=TDXDLL1(30,H,L,210);\n"
@@ -765,6 +769,7 @@ def main() -> int:
     "ABC关联突破回试端点编号：一基",
     "小转大突破离开端点编号：一基",
     "小转大突破回试端点编号：一基",
+    "小转大关联一类端点编号：一基",
     "二类关联一类端点编号：一基",
     "二类中间反向端点编号：一基",
     "C/A段MACD面积比：小于100为柱面积走弱",
@@ -791,7 +796,8 @@ def main() -> int:
     "DRAWNUMBER(BSP<>0 AND ABR>0,L*0.960,ABR)",
     "DRAWNUMBER(BSP<>0 AND STL>0,H*1.045,STL)",
     "DRAWNUMBER(BSP<>0 AND STR>0,L*0.955,STR)",
-    "DRAWNUMBER(BSP<>0 AND SFP>0,H*1.050,SFP)",
+    "DRAWNUMBER(BSP<>0 AND STF>0,H*1.050,STF)",
+    "DRAWNUMBER(BSP<>0 AND SFP>0,H*1.055,SFP)",
     "DRAWNUMBER(BSP<>0 AND SMP>0,L*0.950,SMP)",
     "DRAWLINE(BSG=1,L,BSG=2,L,0),COLORBLUE",
     "DRAWLINE(BSG=-1,H,BSG=-2,H,0),COLORBLUE",
