@@ -2276,6 +2276,7 @@ static bool TestFirstCandidateMarksAbcStructure()
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(-1, 7));
   Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
@@ -2328,6 +2329,7 @@ static bool TestFirstSellCandidateMarksAbcStructure()
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(1, 7));
   Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
@@ -2386,6 +2388,9 @@ static bool TestFirstCandidateRequiresValidAbcBreakout()
     Breakouts.back().bThirdSignal = false;
     Breakouts.push_back(MakeTestBreakout(-1, 7));
     Breakouts.back().nCenter = 0;                  // 不是一买所属最后中枢
+    Breakouts.push_back(MakeTestBreakout(-1, 6));  // 回试点早于C段起点
+    Breakouts.back().nCenter = 1;
+    Breakouts.back().nLeavePoint = 5;
     Breakouts.push_back(MakeTestBreakout(-1, 8));  // 回试不早于一买点
     Breakouts.back().nCenter = 1;
 
@@ -2443,6 +2448,9 @@ static bool TestFirstCandidateRequiresValidAbcBreakout()
     Breakouts.back().bThirdSignal = false;
     Breakouts.push_back(MakeTestBreakout(1, 7));
     Breakouts.back().nCenter = 0;
+    Breakouts.push_back(MakeTestBreakout(1, 6));   // 回试点早于C段起点
+    Breakouts.back().nCenter = 1;
+    Breakouts.back().nLeavePoint = 5;
     Breakouts.push_back(MakeTestBreakout(1, 8));
     Breakouts.back().nCenter = 1;
 
@@ -2562,6 +2570,7 @@ static bool TestFirstCandidateBuildsStandardMacdDivergence()
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(-1, 7));
   Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
@@ -2627,6 +2636,7 @@ static bool TestFirstSellCandidateBuildsStandardMacdDivergence()
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(1, 7));
   Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);

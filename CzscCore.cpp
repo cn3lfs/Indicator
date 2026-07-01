@@ -1809,6 +1809,25 @@ static void AppendFirstSignalCandidates(std::vector<TradingSignalCandidate> *pCa
   *pCandidates = Deduped;
 }
 
+static bool IsAbcBreakoutAlignedWithCurrentSegment(const TradingSignalCandidate &C,
+                                                   const CenterBreakout &B)
+{
+  if ((C.Divergence.nCurrentStartPoint < 0) ||
+      (C.Divergence.nCurrentEndPoint < 0) ||
+      (C.Divergence.nCurrentStartPoint >= C.Divergence.nCurrentEndPoint) ||
+      (C.Divergence.nCurrentEndPoint != C.nPoint))
+  {
+    return false;
+  }
+  if ((B.nLeavePoint < 0) ||
+      (B.nRetestPoint < 0) ||
+      (B.nLeavePoint >= B.nRetestPoint))
+  {
+    return false;
+  }
+  return B.nRetestPoint == C.Divergence.nCurrentStartPoint;
+}
+
 static void AnnotateAbcDivergenceStructure(std::vector<TradingSignalCandidate> *pFirstCandidates,
                                            const std::vector<CenterBreakout> &Breakouts)
 {
@@ -1832,6 +1851,10 @@ static void AnnotateAbcDivergenceStructure(std::vector<TradingSignalCandidate> *
       if (!B.bFirstRetest || !B.bThirdSignal ||
           (B.nCenter != C.nCenter) ||
           (B.nRetestPoint < 0) || (B.nRetestPoint >= C.nPoint))
+      {
+        continue;
+      }
+      if (!IsAbcBreakoutAlignedWithCurrentSegment(C, B))
       {
         continue;
       }
