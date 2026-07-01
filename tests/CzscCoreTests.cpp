@@ -437,6 +437,68 @@ static bool ContainsSseCenter(const std::vector<Center> &Centers,
   return false;
 }
 
+struct SseCandidateExpectation
+{
+  const char *pDate;
+  float fSignal;
+  int nQuality;
+  int nCenter;
+  int nTrend;
+  int nMovementType;
+  int nPoint;
+  int nBreakout;
+  int nCenterPosition;
+  int nAfterEffect;
+  int nContextFlags;
+};
+
+static bool ContainsSseCandidate(const std::vector<TradingSignalCandidate> &Candidates,
+                                 const SseCandidateExpectation &E)
+{
+  int nIndex = FindSseDateIndex(E.pDate);
+  if (nIndex < 0)
+  {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex == nIndex) && NearlyEqual(C.fSignal, E.fSignal))
+    {
+      return (C.nQuality == E.nQuality) &&
+             (C.nCenter == E.nCenter) &&
+             (C.nTrend == E.nTrend) &&
+             (C.nMovementType == E.nMovementType) &&
+             (C.nPoint == E.nPoint) &&
+             (C.nBreakout == E.nBreakout) &&
+             (C.nCenterPosition == E.nCenterPosition) &&
+             (C.nAfterEffect == E.nAfterEffect) &&
+             (BuildTradingSignalContextFlags(C) == E.nContextFlags);
+    }
+  }
+  return false;
+}
+
+static bool ContainsAllSseCandidates(const std::vector<TradingSignalCandidate> &Candidates,
+                                     const SseCandidateExpectation *pExpected,
+                                     std::size_t nExpected)
+{
+  if (Candidates.size() != nExpected)
+  {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < nExpected; i++)
+  {
+    if (!ContainsSseCandidate(Candidates, pExpected[i]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool CentersAreStrictlySeparated(const std::vector<Center> &Centers)
 {
   for (std::size_t i = 1; i < Centers.size(); i++)
@@ -506,6 +568,47 @@ static bool TestRealSseGoldenSegmentCentersPresent()
          ContainsSseCenter(Centers, -1, "2020-04-16", "2021-06-02", 3456.72f, 3344.97f) &&
          ContainsSseCenter(Centers, -1, "2021-07-28", "2024-02-05", 3315.05f, 3312.72f) &&
          ContainsSseCenter(Centers, 1, "2024-05-20", "2025-11-14", 3174.27f, 3040.69f);
+}
+
+static bool TestRealSseGoldenCandidatesPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  static const SseCandidateExpectation StrokeExpected[] = {
+    {"2018-07-12", 13.0f, 1, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 9, 0, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2020-07-27", 3.0f, 1, 8, 7, CZSC_MOVEMENT_CONSOLIDATION, 48, 8, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2021-01-29", 3.0f, 2, 10, 9, CZSC_MOVEMENT_CONSOLIDATION, 58, 10, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2021-06-18", 3.0f, 1, 12, 11, CZSC_MOVEMENT_CONSOLIDATION, 68, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2022-04-07", 13.0f, 2, 15, 14, CZSC_MOVEMENT_CONSOLIDATION, 83, 15, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2022-10-18", 13.0f, 1, 17, 16, CZSC_MOVEMENT_CONSOLIDATION, 93, 17, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-01-02", 13.0f, 1, 21, 20, CZSC_MOVEMENT_CONSOLIDATION, 117, 21, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-10-16", 3.0f, 1, 23, 22, CZSC_MOVEMENT_CONSOLIDATION, 126, 23, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-05-27", 3.0f, 2, 25, 24, CZSC_MOVEMENT_CONSOLIDATION, 138, 25, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
+    {"2025-09-04", 3.0f, 1, 26, 25, CZSC_MOVEMENT_CONSOLIDATION, 142, 26, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-11-05", 3.0f, 2, 27, 26, CZSC_MOVEMENT_CONSOLIDATION, 146, 27, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233}
+  };
+
+  static const SseCandidateExpectation SegmentExpected[] = {
+    {"2024-05-20", 13.0f, 1, 3, 3, CZSC_MOVEMENT_CONSOLIDATION, 25, 3, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-12-16", 3.0f, 2, 4, 4, CZSC_MOVEMENT_CONSOLIDATION, 30, 4, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 4105}
+  };
+
+  return ContainsAllSseCandidates(StrokeAn.Candidates,
+                                  StrokeExpected,
+                                  sizeof(StrokeExpected) / sizeof(StrokeExpected[0])) &&
+         ContainsAllSseCandidates(SegmentAn.Candidates,
+                                  SegmentExpected,
+                                  sizeof(SegmentExpected) / sizeof(SegmentExpected[0]));
 }
 
 static bool TestFunc1WritesCompatibleSignal()
@@ -5026,6 +5129,10 @@ int main()
   if (!TestRealSseGoldenSegmentCentersPresent())
   {
     return 154;
+  }
+  if (!TestRealSseGoldenCandidatesPresent())
+  {
+    return 158;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {
