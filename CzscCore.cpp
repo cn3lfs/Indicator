@@ -2309,6 +2309,72 @@ void ApplyTradingSignalBreakoutId(int nCount,
   }
 }
 
+// 按优先级取胜，导出胜出信号对应端点的一基编号；0 表示无信号或未知端点。
+void ApplyTradingSignalPointId(int nCount,
+                               float *pOut,
+                               const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (C.nPoint >= 0) ? (float)(C.nPoint + 1) : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 按优先级取胜，导出胜出信号所属走势结构的一基编号；0 表示无走势结构。
+void ApplyTradingSignalTrendId(int nCount,
+                               float *pOut,
+                               const std::vector<TradingSignalCandidate> &Candidates)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex < 0) || (C.nIndex >= nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      pOut[C.nIndex] = (C.nTrend >= 0) ? (float)(C.nTrend + 1) : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
 // 第44课小转大必要条件：小级别底/顶背驰后，最后中枢出现三买/三卖才可能引发大级别转折。
 // 输出 1=底背驰后的三买必要条件成立，-1=顶背驰后的三卖必要条件成立，0=无。
 void ApplyTradingSignalSmallTurn(int nCount,
@@ -4296,6 +4362,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 24: ApplyTradingSignalPriority(nCount, pOut, An.Candidates); break; // 胜出候选优先级
     case 25: ApplyTradingSignalCenterId(nCount, pOut, An.Candidates); break; // 胜出候选所属中枢编号
     case 26: ApplyTradingSignalBreakoutId(nCount, pOut, An.Candidates); break; // 胜出候选关联突破编号
+    case 27: ApplyTradingSignalPointId(nCount, pOut, An.Candidates); break; // 胜出候选端点编号
+    case 28: ApplyTradingSignalTrendId(nCount, pOut, An.Candidates); break; // 胜出候选走势结构编号
     default: ClearOutput(nCount, pOut); break;
   }
 }
