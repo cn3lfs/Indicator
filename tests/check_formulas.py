@@ -31,6 +31,10 @@ EXPECTED_FORMULA_SNIPPETS = {
     "DRAWTEXT(BSP=1,LOW,'一买'),COLORWHITE;",
     "DRAWTEXT(BSP=11,HIGH,'一卖'),COLORGREEN;",
   ],
+  "chan-first-buy.txt": [
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "BARSLAST(BSP=1)<10;",
+  ],
   "chan-first-buy-abc.txt": [
     "ABX:=TDXDLL1(30,H,L,160);",
     "BARSLAST(ABX=1)<10;",
@@ -56,6 +60,14 @@ EXPECTED_FORMULA_SNIPPETS = {
   "chan-first-sell.txt": [
     "BSP:=TDXDLL1(30,H,L,40);",
     "BARSLAST(BSP=11)<10;",
+  ],
+  "chan-second-buy.txt": [
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "BARSLAST(BSP=2)<10;",
+  ],
+  "chan-third-buy.txt": [
+    "BSP:=TDXDLL1(30,H,L,40);",
+    "BARSLAST(BSP=3)<10;",
   ],
   "chan-first-sell-abc.txt": [
     "ABX:=TDXDLL1(30,H,L,160);",
@@ -318,6 +330,10 @@ def self_test() -> int:
       "DRAWTEXT(BSP=1,LOW,'一买'),COLORWHITE;\n"
       "DRAWTEXT(BSP=11,HIGH,'一卖'),COLORGREEN;\n"
     ),
+    "chan-first-buy.txt": (
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "BARSLAST(BSP=1)<10;\n"
+    ),
     "chan-first-buy-abc.txt": (
       "ABX:=TDXDLL1(30,H,L,160);\n"
       "BARSLAST(ABX=1)<10;\n"
@@ -343,6 +359,14 @@ def self_test() -> int:
     "chan-first-sell.txt": (
       "BSP:=TDXDLL1(30,H,L,40);\n"
       "BARSLAST(BSP=11)<10;\n"
+    ),
+    "chan-second-buy.txt": (
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "BARSLAST(BSP=2)<10;\n"
+    ),
+    "chan-third-buy.txt": (
+      "BSP:=TDXDLL1(30,H,L,40);\n"
+      "BARSLAST(BSP=3)<10;\n"
     ),
     "chan-first-sell-abc.txt": (
       "ABX:=TDXDLL1(30,H,L,160);\n"
