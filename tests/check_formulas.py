@@ -257,6 +257,20 @@ def validate_formula_aliases(formula_texts):
   return errors
 
 
+def validate_aux_order(formula_texts):
+  errors = []
+  for name, text in formula_texts.items():
+    first_func30 = FUNC30_CALL.search(text)
+    if first_func30 is None:
+      continue
+    first_func40 = FUNC40_CALL.search(text)
+    if first_func40 is None:
+      errors.append(f"{name}: missing TDXDLL1(40,C,V,0) before Func30")
+    elif first_func40.start() > first_func30.start():
+      errors.append(f"{name}: TDXDLL1(40,C,V,0) must appear before Func30")
+  return errors
+
+
 def self_test() -> int:
   sample = (
     "void Func30(int nCount)\n"
@@ -483,6 +497,19 @@ def self_test() -> int:
   if alias_errors != ["chan-main.txt must match chan-all-buys.txt"]:
     print(f"self-test failed: formula alias mismatch {alias_errors!r}", file=sys.stderr)
     return 1
+  aux_errors = validate_aux_order({
+    "ok.txt": "XC:=TDXDLL1(40,C,V,0);\nBSP:=TDXDLL1(30,H,L,40);\n",
+    "missing.txt": "BSP:=TDXDLL1(30,H,L,40);\n",
+    "late.txt": "BSP:=TDXDLL1(30,H,L,40);\nXC:=TDXDLL1(40,C,V,0);\n",
+    "plain.txt": "CLOSE>0;\n",
+  })
+  expected_aux_errors = [
+    "missing.txt: missing TDXDLL1(40,C,V,0) before Func30",
+    "late.txt: TDXDLL1(40,C,V,0) must appear before Func30",
+  ]
+  if aux_errors != expected_aux_errors:
+    print(f"self-test failed: aux order {aux_errors!r}", file=sys.stderr)
+    return 1
   return 0
 
 
@@ -529,21 +556,14 @@ def main() -> int:
       if error:
         invalid_modes.append(f"{doc.relative_to(ROOT)} -> {n_mode}: {error}")
 
-  for path in formula_files:
-    text = path.read_text(encoding="utf-8")
-    first_func30 = FUNC30_CALL.search(text)
-    if first_func30 is None:
-      continue
-    first_func40 = FUNC40_CALL.search(text)
-    if first_func40 is None:
-      aux_order_errors.append(f"{path.relative_to(ROOT)}: missing TDXDLL1(40,C,V,0) before Func30")
-    elif first_func40.start() > first_func30.start():
-      aux_order_errors.append(f"{path.relative_to(ROOT)}: TDXDLL1(40,C,V,0) must appear before Func30")
-
   formula_texts = {
     path.name: path.read_text(encoding="utf-8")
     for path in formula_files
   }
+  aux_order_errors = validate_aux_order({
+    str(path.relative_to(ROOT)): formula_texts[path.name]
+    for path in formula_files
+  })
   formula_snippet_errors = validate_formula_snippets(formula_texts)
   formula_alias_errors = validate_formula_aliases(formula_texts)
 
