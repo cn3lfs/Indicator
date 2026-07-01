@@ -2664,6 +2664,64 @@ void ApplyTradingSignalAbcBreakoutId(int nCount,
   }
 }
 
+static void ApplyTradingSignalAbcBreakoutPointId(int nCount,
+                                                 float *pOut,
+                                                 const std::vector<TradingSignalCandidate> &Candidates,
+                                                 const std::vector<CenterBreakout> &Breakouts,
+                                                 bool bLeavePoint)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      int nPoint = -1;
+      if (HasMatchingAbcStructure(C) && ((std::size_t)C.nAbcBreakout < Breakouts.size()))
+      {
+        const CenterBreakout &B = Breakouts[(std::size_t)C.nAbcBreakout];
+        nPoint = bLeavePoint ? B.nLeavePoint : B.nRetestPoint;
+      }
+      pOut[C.nIndex] = (nPoint >= 0) ? (float)(nPoint + 1) : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 输出第37课ABC结构里c段所含三买/三卖突破的离开端点编号，1基；无ABC确认输出0。
+void ApplyTradingSignalAbcBreakoutLeavePointId(int nCount,
+                                               float *pOut,
+                                               const std::vector<TradingSignalCandidate> &Candidates,
+                                               const std::vector<CenterBreakout> &Breakouts)
+{
+  ApplyTradingSignalAbcBreakoutPointId(nCount, pOut, Candidates, Breakouts, true);
+}
+
+// 输出第37课ABC结构里c段所含三买/三卖突破的回试端点编号，1基；无ABC确认输出0。
+void ApplyTradingSignalAbcBreakoutRetestPointId(int nCount,
+                                                float *pOut,
+                                                const std::vector<TradingSignalCandidate> &Candidates,
+                                                const std::vector<CenterBreakout> &Breakouts)
+{
+  ApplyTradingSignalAbcBreakoutPointId(nCount, pOut, Candidates, Breakouts, false);
+}
+
 // 与常规买卖点输出相同，但一类买卖点必须满足第37课A-B-C结构标记。
 // 二、三类买卖点不按此条件过滤，保持第三类“首次离开+首次回试”的独立判定。
 void ApplyTradingSignalStrictAbcCandidates(int nCount,
@@ -4801,6 +4859,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 33: ApplyTradingSignalBreakoutLeavePointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 突破离开端点编号
     case 34: ApplyTradingSignalBreakoutRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 突破回试端点编号
     case 35: ApplyTradingSignalAbcBreakoutId(nCount, pOut, An.Candidates); break; // ABC关联突破编号
+    case 36: ApplyTradingSignalAbcBreakoutLeavePointId(nCount, pOut, An.Candidates, An.Breakouts); break; // ABC关联突破离开端点编号
+    case 37: ApplyTradingSignalAbcBreakoutRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // ABC关联突破回试端点编号
     default: ClearOutput(nCount, pOut); break;
   }
 }

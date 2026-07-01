@@ -12,7 +12,7 @@ ABC_FIELD = re.compile(r" ABC(?P<abc>-?[0-9]+) ")
 DEBUG_IDS = re.compile(
   r"调试CEN(?P<center>[0-9]+) BKO(?P<bko>[0-9]+) "
   r"BLP(?P<blp>[0-9]+) BRP(?P<brp>[0-9]+) "
-  r"ABK(?P<abk>[0-9]+) "
+  r"ABK(?P<abk>[0-9]+) ABL(?P<abl>[0-9]+) ABR(?P<abr>[0-9]+) "
   r"PID(?P<pid>[0-9]+) TID(?P<trend>[0-9]+)"
 )
 BKO_CONTEXT = re.compile(
@@ -41,10 +41,16 @@ def validate_candidate_context(text: str):
       continue
     n_abc = int(abc_field.group("abc"))
     n_abk = int(debug_ids.group("abk"))
+    n_abl = int(debug_ids.group("abl"))
+    n_abr = int(debug_ids.group("abr"))
     if n_abc == 0 and n_abk != 0:
       errors.append(f"line {n_line}: ABC0 conflicts with ABK{n_abk}")
     if n_abc != 0 and n_abk <= 0:
       errors.append(f"line {n_line}: ABC{n_abc} requires positive ABK")
+    if n_abk == 0 and (n_abl != 0 or n_abr != 0):
+      errors.append(f"line {n_line}: ABK0 conflicts with ABL{n_abl}/ABR{n_abr}")
+    if n_abk > 0 and (n_abl <= 0 or n_abr <= 0 or n_abl >= n_abr):
+      errors.append(f"line {n_line}: ABK{n_abk} requires ordered positive ABL/ABR")
     if "bko[-]" in line:
       if any(int(debug_ids.group(name)) != 0 for name in ("bko", "blp", "brp")):
         errors.append(f"line {n_line}: bko[-] conflicts with BKO/BLP/BRP debug ids")

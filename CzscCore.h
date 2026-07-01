@@ -424,6 +424,14 @@ void ApplyTradingSignalAbcStructure(int nCount,
 void ApplyTradingSignalAbcBreakoutId(int nCount,
                                      float *pOut,
                                      const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalAbcBreakoutLeavePointId(int nCount,
+                                               float *pOut,
+                                               const std::vector<TradingSignalCandidate> &Candidates,
+                                               const std::vector<CenterBreakout> &Breakouts);
+void ApplyTradingSignalAbcBreakoutRetestPointId(int nCount,
+                                                float *pOut,
+                                                const std::vector<TradingSignalCandidate> &Candidates,
+                                                const std::vector<CenterBreakout> &Breakouts);
 void ApplyTradingSignalStrictAbcCandidates(int nCount,
                                            float *pOut,
                                            const std::vector<TradingSignalCandidate> &Candidates);
@@ -492,6 +500,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 32 为胜出买卖点背驰要素位图，位值见 CzscDivergenceFlag，不占用旧函数编号。
 // Func30 输出 33/34 为胜出买卖点关联突破的离开/回试端点一基编号，0=无关联突破。
 // Func30 输出 35 为一类ABC结构关联的三买/三卖突破一基编号，0=无ABC确认。
+// Func30 输出 36/37 为一类ABC结构关联突破的离开/回试端点一基编号，0=无ABC确认。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
