@@ -1307,6 +1307,22 @@ static bool TestTrendStructuresUseFullCenterExtent()
          (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
 }
 
+static bool TestTrendStructuresTreatTouchingFullExtentsAsConsolidation()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 10, 4, 12, 2));
+  Centers.push_back(MakeTestCenterFull(16, 28, 16, 11, 18, 12));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 2)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
+}
+
 static bool TestCenterBreakoutsDetectThirdBuy()
 {
   std::vector<SegmentPoint> Points;
@@ -4059,6 +4075,29 @@ static bool TestClassifyCenterRelationExtension()
          (ClassifyCenterRelation(Prev, Next) == CZSC_CENTER_RELATION_EXTENSION);
 }
 
+static bool TestClassifyCenterRelationExtensionAtFullExtentBoundary()
+{
+  {
+    Center Prev = MakeTestCenterFull(0, 12, 9, 5, 12, 4);
+    Center Next = MakeTestCenterFull(16, 28, 15, 10, 16, 12); // 后DD == 前GG
+    if (ClassifyCenterRelation(Prev, Next) != CZSC_CENTER_RELATION_EXTENSION)
+    {
+      return false;
+    }
+  }
+
+  {
+    Center Prev = MakeTestCenterFull(0, 12, 15, 10, 16, 12);
+    Center Next = MakeTestCenterFull(16, 28, 9, 5, 12, 4);    // 后GG == 前DD
+    if (ClassifyCenterRelation(Prev, Next) != CZSC_CENTER_RELATION_EXTENSION)
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestWriteCenterRelationSignalMarks()
 {
   const int nCount = 20;
@@ -6287,6 +6326,10 @@ int main()
   {
     return 124;
   }
+  if (!TestTrendStructuresTreatTouchingFullExtentsAsConsolidation())
+  {
+    return 174;
+  }
   if (!TestCenterBreakoutsDetectThirdBuy())
   {
     return 17;
@@ -6566,6 +6609,10 @@ int main()
   if (!TestClassifyCenterRelationExtension())
   {
     return 66;
+  }
+  if (!TestClassifyCenterRelationExtensionAtFullExtentBoundary())
+  {
+    return 173;
   }
   if (!TestWriteCenterRelationSignalMarks())
   {
