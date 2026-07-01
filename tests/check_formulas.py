@@ -31,6 +31,10 @@ EXPECTED_FORMULA_SNIPPETS = {
     "MOV:=TDXDLL1(30,H,L,230);",
     "BARSLAST(BSP=1 AND POS=-1 AND MOV=-1)<10;",
   ],
+  "chan-first-buy-standard.txt": [
+    "STD:=TDXDLL1(30,H,L,200);",
+    "BARSLAST(STD=1)<10;",
+  ],
   "chan-overlap-buy.txt": [
     "CTX:=TDXDLL1(30,H,L,210);",
     "OVL:=MOD(INTPART(CTX/2048),2)=1;",
@@ -187,6 +191,10 @@ def self_test() -> int:
       "POS:=TDXDLL1(30,H,L,220);\n"
       "MOV:=TDXDLL1(30,H,L,230);\n"
       "BARSLAST(BSP=1 AND POS=-1 AND MOV=-1)<10;\n"
+    ),
+    "chan-first-buy-standard.txt": (
+      "STD:=TDXDLL1(30,H,L,200);\n"
+      "BARSLAST(STD=1)<10;\n"
     ),
     "chan-overlap-buy.txt": (
       "CTX:=TDXDLL1(30,H,L,210);\n"
