@@ -2571,6 +2571,64 @@ void ApplyTradingSignalSmallTurn(int nCount,
   }
 }
 
+static void ApplyTradingSignalSmallTurnPointId(int nCount,
+                                               float *pOut,
+                                               const std::vector<TradingSignalCandidate> &Candidates,
+                                               const std::vector<CenterBreakout> &Breakouts,
+                                               bool bLeavePoint)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priorities;
+  Priorities.resize((std::size_t)nCount);
+  for (int i = 0; i < nCount; i++)
+  {
+    Priorities[(std::size_t)i] = -1;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (!HasTradingSignalOutput(C, nCount))
+    {
+      continue;
+    }
+    if (C.nPriority >= Priorities[(std::size_t)C.nIndex])
+    {
+      int nPoint = -1;
+      if (HasMatchingSmallTurn(C) && ((std::size_t)C.nBreakout < Breakouts.size()))
+      {
+        const CenterBreakout &B = Breakouts[(std::size_t)C.nBreakout];
+        nPoint = bLeavePoint ? B.nLeavePoint : B.nRetestPoint;
+      }
+      pOut[C.nIndex] = (nPoint >= 0) ? (float)(nPoint + 1) : 0.0f;
+      Priorities[(std::size_t)C.nIndex] = C.nPriority;
+    }
+  }
+}
+
+// 输出第44课小转大必要条件关联三买/三卖突破的离开端点编号，1基；无确认输出0。
+void ApplyTradingSignalSmallTurnLeavePointId(int nCount,
+                                             float *pOut,
+                                             const std::vector<TradingSignalCandidate> &Candidates,
+                                             const std::vector<CenterBreakout> &Breakouts)
+{
+  ApplyTradingSignalSmallTurnPointId(nCount, pOut, Candidates, Breakouts, true);
+}
+
+// 输出第44课小转大必要条件关联三买/三卖突破的回试端点编号，1基；无确认输出0。
+void ApplyTradingSignalSmallTurnRetestPointId(int nCount,
+                                              float *pOut,
+                                              const std::vector<TradingSignalCandidate> &Candidates,
+                                              const std::vector<CenterBreakout> &Breakouts)
+{
+  ApplyTradingSignalSmallTurnPointId(nCount, pOut, Candidates, Breakouts, false);
+}
+
 // 第37课a+A+b+B+c：一类背驰的c段至少包含对最后中枢B的三买/三卖。
 static int GetFirstSignalDirection(const TradingSignalCandidate &C)
 {
@@ -4861,6 +4919,8 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 35: ApplyTradingSignalAbcBreakoutId(nCount, pOut, An.Candidates); break; // ABC关联突破编号
     case 36: ApplyTradingSignalAbcBreakoutLeavePointId(nCount, pOut, An.Candidates, An.Breakouts); break; // ABC关联突破离开端点编号
     case 37: ApplyTradingSignalAbcBreakoutRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // ABC关联突破回试端点编号
+    case 38: ApplyTradingSignalSmallTurnLeavePointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 小转大突破离开端点编号
+    case 39: ApplyTradingSignalSmallTurnRetestPointId(nCount, pOut, An.Candidates, An.Breakouts); break; // 小转大突破回试端点编号
     default: ClearOutput(nCount, pOut); break;
   }
 }

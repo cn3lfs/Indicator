@@ -5196,6 +5196,87 @@ static bool TestApplyTradingSmallTurnMapsCodes()
          NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingSmallTurnPointIdsMapCodes()
+{
+  const int nCount = 14;
+  float pLeave[nCount];
+  float pRetest[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pLeave[i] = -1;
+    pRetest[i] = -1;
+  }
+
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 4));
+  Breakouts.back().nLeavePoint = 2;
+  Breakouts.push_back(MakeTestBreakout(-1, 8));
+  Breakouts.back().nLeavePoint = 6;
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 3.0f, 20);
+  Buy.nSource = 3;
+  Buy.nPoint = 1;
+  Buy.nCenter = 0;
+  Buy.nBreakout = 0;
+  Buy.nSmallTurn = 1;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
+  Sell.nSource = 3;
+  Sell.nPoint = 3;
+  Sell.nCenter = 0;
+  Sell.nBreakout = 1;
+  Sell.nSmallTurn = -1;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(5, 3.0f, 20);
+  WrongDirection.nSource = 3;
+  WrongDirection.nPoint = 5;
+  WrongDirection.nCenter = 0;
+  WrongDirection.nBreakout = 0;
+  WrongDirection.nSmallTurn = -1;
+  TradingSignalCandidate MissingBreakout = MakeTestCandidate(7, 3.0f, 20);
+  MissingBreakout.nSource = 3;
+  MissingBreakout.nPoint = 7;
+  MissingBreakout.nCenter = 0;
+  MissingBreakout.nSmallTurn = 1;
+  TradingSignalCandidate LowerPrioritySmallTurn = MakeTestCandidate(10, 3.0f, 10);
+  LowerPrioritySmallTurn.nSource = 3;
+  LowerPrioritySmallTurn.nPoint = 10;
+  LowerPrioritySmallTurn.nCenter = 0;
+  LowerPrioritySmallTurn.nBreakout = 0;
+  LowerPrioritySmallTurn.nSmallTurn = 1;
+  TradingSignalCandidate HigherPriorityNonThird = MakeTestCandidate(10, 2.0f, 20);
+  HigherPriorityNonThird.nSource = 2;
+  TradingSignalCandidate MissingCenter = MakeTestCandidate(12, 3.0f, 20);
+  MissingCenter.nSource = 3;
+  MissingCenter.nPoint = 12;
+  MissingCenter.nBreakout = 0;
+  MissingCenter.nSmallTurn = 1;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(MissingBreakout);
+  Candidates.push_back(LowerPrioritySmallTurn);
+  Candidates.push_back(HigherPriorityNonThird);
+  Candidates.push_back(MissingCenter);
+
+  ApplyTradingSignalSmallTurnLeavePointId(nCount, pLeave, Candidates, Breakouts);
+  ApplyTradingSignalSmallTurnRetestPointId(nCount, pRetest, Candidates, Breakouts);
+
+  return NearlyEqual(pLeave[1], 3.0f) &&
+         NearlyEqual(pRetest[1], 5.0f) &&
+         NearlyEqual(pLeave[3], 7.0f) &&
+         NearlyEqual(pRetest[3], 9.0f) &&
+         NearlyEqual(pLeave[5], 0.0f) &&
+         NearlyEqual(pRetest[5], 0.0f) &&
+         NearlyEqual(pLeave[7], 0.0f) &&
+         NearlyEqual(pRetest[7], 0.0f) &&
+         NearlyEqual(pLeave[10], 0.0f) &&
+         NearlyEqual(pRetest[10], 0.0f) &&
+         NearlyEqual(pLeave[12], 0.0f) &&
+         NearlyEqual(pRetest[12], 0.0f) &&
+         NearlyEqual(pLeave[0], 0.0f) &&
+         NearlyEqual(pRetest[0], 0.0f);
+}
+
 static bool TestApplyTradingAbcStructureMapsCodes()
 {
   const int nCount = 10;
@@ -6727,7 +6808,7 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
   CzscAnalyzer An;
   BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
 
-  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37};
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39};
   for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
   {
     int nOutput = Outputs[i];
@@ -6808,6 +6889,8 @@ static bool TestFunc30DiagnosticOutputsMatchProjections()
       case 35: ApplyTradingSignalAbcBreakoutId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
       case 36: ApplyTradingSignalAbcBreakoutLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
       case 37: ApplyTradingSignalAbcBreakoutRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 38: ApplyTradingSignalSmallTurnLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 39: ApplyTradingSignalSmallTurnRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
       default: return false;
     }
 
@@ -7681,6 +7764,10 @@ int main()
   if (!TestApplyTradingSmallTurnMapsCodes())
   {
     return 128;
+  }
+  if (!TestApplyTradingSmallTurnPointIdsMapCodes())
+  {
+    return 192;
   }
   if (!TestApplyTradingAbcStructureMapsCodes())
   {

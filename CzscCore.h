@@ -418,6 +418,14 @@ void ApplyTradingSignalTrendId(int nCount,
 void ApplyTradingSignalSmallTurn(int nCount,
                                  float *pOut,
                                  const std::vector<TradingSignalCandidate> &Candidates);
+void ApplyTradingSignalSmallTurnLeavePointId(int nCount,
+                                             float *pOut,
+                                             const std::vector<TradingSignalCandidate> &Candidates,
+                                             const std::vector<CenterBreakout> &Breakouts);
+void ApplyTradingSignalSmallTurnRetestPointId(int nCount,
+                                              float *pOut,
+                                              const std::vector<TradingSignalCandidate> &Candidates,
+                                              const std::vector<CenterBreakout> &Breakouts);
 void ApplyTradingSignalAbcStructure(int nCount,
                                     float *pOut,
                                     const std::vector<TradingSignalCandidate> &Candidates);
@@ -501,6 +509,7 @@ void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);
 // Func30 输出 33/34 为胜出买卖点关联突破的离开/回试端点一基编号，0=无关联突破。
 // Func30 输出 35 为一类ABC结构关联的三买/三卖突破一基编号，0=无ABC确认。
 // Func30 输出 36/37 为一类ABC结构关联突破的离开/回试端点一基编号，0=无ABC确认。
+// Func30 输出 38/39 为小转大必要条件关联突破的离开/回试端点一基编号，0=无小转大确认。
 void Func1(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime);
 void Func2(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
 void Func3(int nCount, float *pOut, float *pIn, float *pHigh, float *pLow);
