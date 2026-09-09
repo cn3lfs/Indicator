@@ -6,8 +6,9 @@
 
 ## 项目是什么
 
-通达信（TDX）缠论可视化插件，编译为 32 位 Windows DLL（`CZSC.dll`）。核心算法在
-`CzscCore.cpp/.h`（可测试、无 Windows 依赖）；`Main.cpp` 把函数按编号注册给通达信。
+通达信（TDX）缠论可视化插件，编译为 32 位 Windows DLL（`CZSC.dll`）。核心算法已拆到
+`include/` + `src/`（可测试、无 Windows 依赖）；`CzscCore.h` 是兼容聚合头，`Main.cpp`
+把函数按编号注册给通达信。
 设计目标是尽量贴近缠师原文的线段、中枢、买卖点等概念。
 
 ## TDX DLL 数据契约（官方规范）
@@ -52,14 +53,16 @@ AssignSegmentEnergy / ComputeMacdHistogram 给线段点附 MACD 柱面积(动力
 MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 ```
 
-买卖点判定（第20/21课，CzscCore.h/cpp）：**一类**针对趋势(≥2同向中枢)末端背驰，且**同一趋势只保留价格
-最极端的一个**(去重，否则趋势内每个创新高/低背驰都各成一类→泛滥)；**二类**紧随一类(一买后第一个不
-创新低=二买)；**三类**=中枢被首次离开(突破ZG/ZD)后回试不破ZG/ZD(上升中枢→三买、下降中枢→三卖)。
-数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续等）见 `CzscCore.h` 注释。
+买卖点判定（第20/21课，`include/CzscTrading.h` / `src/CzscTrading.cpp`）：**一类**针对趋势(≥2同向中枢)末端背驰，且**同一中枢区域只保留
+价格最极端的一个**(每个最后中枢至多一个一买/一卖，避免同一中枢内信号泛滥，同时保留连续趋势里后续中枢
+的区域极值)；**二类**紧随一类(一买后第一个不创新低=二买)；**三类**=中枢被首次离开(突破ZG/ZD)后回试
+不破ZG/ZD(上升中枢→三买、下降中枢→三卖)。
+数据结构与买卖点上下文字段（质量/中枢位置/背驰-转折/三买后续、优先级、中枢/突破/端点/走势编号等）
+见 `include/CzscTypes.h` 与 `include/CzscTrading.h` 注释。
 
 ## 架构：CzscAnalyzer + 缓存 + 配置 + Func30
 
-- **中心化 `CzscAnalyzer`**（`CzscCore.h`）一次算成全部结果（Points/Centers/Structures/Breakouts/
+- **中心化 `CzscAnalyzer`**（声明在 `include/CzscTypes.h`，实现与缓存层在 `src/CzscAnalyzer.cpp`）一次算成全部结果（Points/Centers/Structures/Breakouts/
   Candidates/MaShort/MaLong/Kiss）。两个 Build 入口：`BuildAnalyzerFromSignal`（pIn 家族）与
   `BuildAnalyzerFromPrice`（H/L+config 家族），`Points` 就绪后共用私有 `BuildCentersStage`。
   各 Func 只做**投影**，不再各自重跑流水线。
@@ -82,7 +85,7 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 2 / 3 / 4 | Func2-4 | 中枢上沿 / 下沿 / 起止 | 第17/18课 |
 | 5 / 6 | Func5 / Func6 | 三类买卖点 / 形态买卖点 | 第20/21课 |
 | 7 / 8 | Func7 / Func8 | 线段强度 / 斜率 | — |
-| 10 | Func10 | 信号质量(0观察/1确认/2标准背驰) | 第24/27课 |
+| 10 | Func10 | 信号质量(0观察/1确认/2强质量) | 第24/27课 |
 | 11 | Func11 | 相邻中枢关系(1上涨/-1下跌/2扩展) | 第20课中心定理二 |
 | 12 | Func12 | 一类买卖点背驰-转折(1扩展/2盘整/3反趋势) | 第29课 |
 | 13 | Func13 | 三类买卖点后续(1扩张/2新生) | 第21课 |
@@ -91,25 +94,30 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 17 | Func17 | 即时背驰预警(1见顶/-1见底) | 第15课 |
 | 18 / 19 | Func18 / Func19 | 笔(新笔标准) / 线段(特征序列法) | 第62-67课 |
 | 20 | Func20 | 配置驱动端点(笔/线段中枢) | 见上「架构」 |
-| 30 | Func30 | mode 统一入口(配置+输出，一步算全链路) | 见上「架构」 |
+| 30 | Func30 | mode 统一入口(配置+输出，一步算全链路；输出21-28为胜出候选上下文/位置/走势/优先级/编号) | 见上「架构」 |
 | 40 | Func40 | 旁路注册真实 C/V(透传 C)，供后续函数启用 | 见上「旁路注册数据契约」 |
 
-新增输出函数时：在 `CzscCore.h` 声明、`CzscCore.cpp` 实现、`Main.cpp` 注册 `{n,&Funcn}`、
+新增输出函数时：在对应 `include/Czsc*.h` 声明、对应 `src/Czsc*.cpp` 实现；TDX 编号入口放
+`include/CzscTdxExports.h` / `src/CzscTdxExports.cpp`，再在 `Main.cpp` 注册 `{n,&Funcn}`、
 `README.md` 补公式、`tests/` 加用例。可配置的分支优先并入 `CzscConfig` 经 `Func20` 暴露。
 
 ## 本机构建与测试（重要：无 make/g++/mingw）
 
-本 Windows 机器只装了 clang，Makefile 的 `make test` 用不了。跑核心回归（当前 117 用例）：
+本 Windows 机器只装了 clang，Makefile 的 `make test` 用不了。跑核心回归：
 
 ```bash
 cd D:/github/czsc-tdx
 "/c/Program Files/LLVM/bin/clang++" -O2 -finput-charset=UTF-8 \
-  -o tests/CzscCoreTests.exe CzscCore.cpp CzscAnalyzer.cpp tests/CzscCoreTests.cpp
+  -Iinclude -I. \
+  -o tests/CzscCoreTests.exe \
+  src/CzscCommon.cpp src/CzscMorphology.cpp src/CzscCenter.cpp \
+  src/CzscDynamics.cpp src/CzscTrading.cpp src/CzscNestedDivergence.cpp \
+  src/CzscAnalyzer.cpp src/CzscTdxExports.cpp tests/CzscCoreTests.cpp
 ./tests/CzscCoreTests.exe; echo $?   # exit 0 = 全过
 ```
 
-源码已部分模块化：`CzscAnalyzer.cpp` 持有中心化分析器与缓存层（`CzscCore.cpp` 仍含其余流水线
-与 Func 导出）。新增模块时同步 `Makefile` 的 `OBJECT1`/`TEST_OBJECTS` 与上面的 clang 命令。
+源码已按职责模块化：`include/` 放接口与类型，`src/` 放实现，`CzscCore.h` 只做兼容聚合。
+新增模块时同步 `Makefile` 的 `CORE_OBJECTS` 与上面的 clang 命令。
 
 - `Main.cpp` 因 `FxIndicator.h` 含 windows.h，clang 仅能 `-fsyntax-only` 检查；真正的 DLL 构建
   走 WSL2 MinGW（`make mingw32`，本机 `wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make mingw32'`）。
@@ -117,10 +125,12 @@ cd D:/github/czsc-tdx
 - **发布产物统一在 `build/`，32/64 双版本并存**：`make mingw32` → `build/CZSC.dll`（PE32，给 32 位通达信）；
   `make mingw64` → `build/CZSC64.dll`（PE32+，给 64 位通达信，`x86_64-w64-mingw32-` 工具链，`TARGET1` 覆盖为
   CZSC64.dll）。两版同源，导出/公式一致，仅指针宽度不同（`pack(1)`+cdecl 随架构自然移植，无需改头）。
-  链接均加 `-static -static-libgcc -static-libstdc++` 使 DLL 自包含（仅依赖 `KERNEL32`/`msvcrt`），
-  免在通达信机器另装 MinGW 运行时。两个 DLL 作为正式包**已纳入 git 跟踪**（覆盖发布即重新构建提交）。
-  打包/校验：`sh scripts/build-mingw32.sh` / `sh scripts/build-mingw64.sh`（均先 `make clean` 再 check→原生测试→
-  Win 测试构建→打 DLL）；`<prefix>objdump -p build/CZSC*.dll | grep "DLL Name"` 应只剩 KERNEL32/msvcrt。
+  链接均加 `-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp` 使 DLL 自包含（仅依赖
+  `KERNEL32`/`msvcrt`）且 PE 时间戳为 0，免在通达信机器另装 MinGW 运行时，并避免无源码变化时 DLL 漂移。
+  两个 DLL 作为正式包**已纳入 git 跟踪**（覆盖发布即重新构建提交）。
+  打包/校验：优先跑 `make release`（顺序执行 32/64 位构建与 `make release-check`）；也可单独跑
+  `sh scripts/build-mingw32.sh` / `sh scripts/build-mingw64.sh`（均先 `make clean` 再 check→原生测试→
+  Win 测试构建→打 DLL）。`make release-check` 会确认 PE32/PE32+、导入 DLL 仅 KERNEL32/msvcrt、PE 时间戳为 0。
 
 ## 测试约定
 
@@ -128,7 +138,7 @@ cd D:/github/czsc-tdx
 信号编码约定：买 1/2/3、卖 11/12/13；构造测试中枢用 `MakeTestCenter`（4参，自动令 GG=fHigh、
 DD=fLow）或 `MakeTestCenterFull`（6参，可指定 GG/DD）。
 
-**真实数据测试**：`tests/SseIndexDaily.h` 是从通达信拉取的上证指数(000001.SH) 500 根日线(前复权)，
+**真实数据测试**：`tests/SseIndexDaily.h` 是从通达信拉取的上证指数(000001.SH) 日线样本(前复权)，
 笔/线段类测试优先用它验证**结构性质**（顶底交替、方向、严格笔合并跨度≥4、线段是笔端点子集且更高级别），
 而非脆弱的小手工 fixture（手工 fixture 易因笔/线段判据调整而需重算）。刷新数据见 `scripts/fetch-sse-data.py`
 （须在通达信 PYPlugins 环境运行）。新增笔/线段算法改动后，跑诊断看真实数据上笔数/线段数是否合理。

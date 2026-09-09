@@ -3,12 +3,14 @@
 ## Project Structure & Module Organization
 
 This repository builds a TongDaXin CZSC visualization plugin as `CZSC.dll`.
-Source files live at the repository root:
+TDX plugin entrypoints still live at the repository root, while the CZSC core is split by responsibility:
 
 - `Main.cpp` / `Main.h`: exported plugin entrypoints and indicator logic.
 - `CCentroid.cpp` / `CCentroid.h`: legacy centroid state retained for reference.
 - `FxIndicator.h` and `FxSelector.h`: indicator/selector support headers.
-- `CzscCore.cpp` / `CzscCore.h`: testable indicator and CZSC calculation core.
+- `CzscCore.h`: compatibility aggregate header for existing tests and callers.
+- `include/`: self-contained CZSC public/internal headers, with `CzscTypes.h` carrying shared structs/enums.
+- `src/`: testable CZSC calculation core split into morphology, center, dynamics, trading, nested divergence, analyzer, common, and TDX export adapters.
 - `Makefile`: GCC/MinGW-style build rules.
 - `README.md`: user-facing install instructions and TongDaXin formula example.
 - `tests/`: lightweight C++ regression tests for the calculation core.
@@ -17,7 +19,7 @@ There is currently no asset pipeline.
 
 ## Build, Test, and Development Commands
 
-- `make`: builds `CZSC.dll` from `Main.o` and `CzscCore.o`.
+- `make`: builds `CZSC.dll` from `Main.o` and the split `src/*.o` CZSC core objects.
 - `make test`: builds and runs the lightweight core regression test executable.
 - `make clean`: removes generated `.dep` and `.o` files.
 - `make debug`: builds the DLL, then launches `gdb -w CZSC.dll`.
