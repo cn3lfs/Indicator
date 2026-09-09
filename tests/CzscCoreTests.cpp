@@ -57,6 +57,115 @@ static bool TestMergedBarsHandleInclusion()
   return true;
 }
 
+static bool TestMergedBarsTrackExtremeIndexes()
+{
+  {
+    const int nCount = 3;
+    float pHigh[nCount] = {10, 12, 11};
+    float pLow[nCount] = {5, 7, 8};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 2)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 12) || !NearlyEqual(Bars[1].fLow, 8)) return false;
+    if ((Bars[1].nHighIndex != 1) || (Bars[1].nLowIndex != 2)) return false;
+  }
+
+  {
+    const int nCount = 3;
+    float pHigh[nCount] = {12, 10, 11};
+    float pLow[nCount] = {8, 6, 5};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 2)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 10) || !NearlyEqual(Bars[1].fLow, 5)) return false;
+    if ((Bars[1].nHighIndex != 1) || (Bars[1].nLowIndex != 2)) return false;
+  }
+
+  return true;
+}
+
+static bool TestMergedBarsApplySequentialInclusionDirection()
+{
+  {
+    const int nCount = 4;
+    float pHigh[nCount] = {10, 12, 11, 11.5f};
+    float pLow[nCount] = {5, 7, 8, 9};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 3)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 12) || !NearlyEqual(Bars[1].fLow, 9)) return false;
+    if ((Bars[1].nHighIndex != 1) || (Bars[1].nLowIndex != 3)) return false;
+  }
+
+  {
+    const int nCount = 4;
+    float pHigh[nCount] = {12, 10, 11, 9};
+    float pLow[nCount] = {8, 6, 5, 5.5f};
+    std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+
+    if (Bars.size() != 2) return false;
+    if ((Bars[1].nStart != 1) || (Bars[1].nEnd != 3)) return false;
+    if (!NearlyEqual(Bars[1].fHigh, 9) || !NearlyEqual(Bars[1].fLow, 5)) return false;
+    if ((Bars[1].nHighIndex != 3) || (Bars[1].nLowIndex != 2)) return false;
+  }
+
+  return true;
+}
+
+static MergedBar MakeTestMergedBar(int nStart, int nEnd,
+                                   int nHighIndex, int nLowIndex,
+                                   float fHigh, float fLow)
+{
+  MergedBar Bar;
+  Bar.nStart = nStart;
+  Bar.nEnd = nEnd;
+  Bar.nHighIndex = nHighIndex;
+  Bar.nLowIndex = nLowIndex;
+  Bar.fHigh = fHigh;
+  Bar.fLow = fLow;
+  return Bar;
+}
+
+static bool TestFractalsUseMergedExtremeIndexes()
+{
+  {
+    std::vector<MergedBar> Bars;
+    Bars.push_back(MakeTestMergedBar(0, 0, 0, 0, 9, 4));
+    Bars.push_back(MakeTestMergedBar(1, 2, 1, 2, 12, 8));
+    Bars.push_back(MakeTestMergedBar(3, 3, 3, 3, 10, 7));
+
+    std::vector<Fractal> Fractals = BuildFractals(Bars);
+    if ((Fractals.size() != 1) ||
+        (Fractals[0].nType != CZSC_POINT_TOP) ||
+        (Fractals[0].nIndex != 1) ||
+        (Fractals[0].nMergedIndex != 1))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<MergedBar> Bars;
+    Bars.push_back(MakeTestMergedBar(0, 0, 0, 0, 12, 10));
+    Bars.push_back(MakeTestMergedBar(1, 2, 1, 2, 9, 4));
+    Bars.push_back(MakeTestMergedBar(3, 3, 3, 3, 10, 7));
+
+    std::vector<Fractal> Fractals = BuildFractals(Bars);
+    if ((Fractals.size() != 1) ||
+        (Fractals[0].nType != CZSC_POINT_BOTTOM) ||
+        (Fractals[0].nIndex != 2) ||
+        (Fractals[0].nMergedIndex != 1))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFractalsAndStrokes()
 {
   const int nCount = 7;
@@ -137,6 +246,93 @@ static int FindSseDateIndex(const char *pDate)
   return -1;
 }
 
+static float TestPointPrice(const SegmentPoint &Point)
+{
+  return (Point.nType == CZSC_POINT_TOP) ? Point.fHigh : Point.fLow;
+}
+
+static bool TestIntervalsOverlap(float fLeftLow, float fLeftHigh, float fRightLow, float fRightHigh)
+{
+  return (fLeftLow <= fRightHigh) && (fRightLow <= fLeftHigh);
+}
+
+static bool TestFirstThreeStrokePointsOverlap(const std::vector<SegmentPoint> &Points, std::size_t nStart)
+{
+  if (nStart + 3 >= Points.size())
+  {
+    return false;
+  }
+
+  float fLow = TestPointPrice(Points[nStart]);
+  float fHigh = TestPointPrice(Points[nStart + 1]);
+  if (fLow > fHigh)
+  {
+    float fSwap = fLow;
+    fLow = fHigh;
+    fHigh = fSwap;
+  }
+
+  for (std::size_t i = nStart + 1; i < nStart + 3; i++)
+  {
+    float fA = TestPointPrice(Points[i]);
+    float fB = TestPointPrice(Points[i + 1]);
+    float fSegLow = (fA < fB) ? fA : fB;
+    float fSegHigh = (fA > fB) ? fA : fB;
+    if (!TestIntervalsOverlap(fLow, fHigh, fSegLow, fSegHigh))
+    {
+      return false;
+    }
+    if (fSegLow > fLow)
+    {
+      fLow = fSegLow;
+    }
+    if (fSegHigh < fHigh)
+    {
+      fHigh = fSegHigh;
+    }
+  }
+
+  return fLow <= fHigh;
+}
+
+static bool TestRealSseMergedBarsAreWellFormed()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+
+  if (Bars.size() < 10)
+  {
+    return false;
+  }
+  for (std::size_t i = 0; i < Bars.size(); i++)
+  {
+    const MergedBar &B = Bars[i];
+    if ((B.nStart > B.nEnd) ||
+        (B.nHighIndex < B.nStart) || (B.nHighIndex > B.nEnd) ||
+        (B.nLowIndex < B.nStart) || (B.nLowIndex > B.nEnd))
+    {
+      return false;
+    }
+    if (!NearlyEqual(B.fHigh, SSE_DAILY_HIGH[B.nHighIndex]) ||
+        !NearlyEqual(B.fLow, SSE_DAILY_LOW[B.nLowIndex]))
+    {
+      return false;
+    }
+    if (i > 0)
+    {
+      const MergedBar &P = Bars[i - 1];
+      bool bIncluded = ((B.fHigh <= P.fHigh) && (B.fLow >= P.fLow)) ||
+                       ((B.fHigh >= P.fHigh) && (B.fLow <= P.fLow));
+      if (bIncluded)
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // 笔结构良好：顶底异型、方向正确、严格笔合并K线跨度≥4（含顶底≥5根合并K线）、首尾相接且方向交替
 static bool TestRealSseStrokesWellFormed()
 {
@@ -148,7 +344,7 @@ static bool TestRealSseStrokesWellFormed()
 
   if (Strokes.size() < 10)
   {
-    return false;  // 500 根日线应有足够多笔
+    return false;  // 随仓日线样本应有足够多笔
   }
   for (std::size_t i = 0; i < Strokes.size(); i++)
   {
@@ -194,20 +390,23 @@ static bool TestRealSseSegmentsSubsetOfStrokes()
 
   if (SegPts.size() < 2)
   {
-    return false;  // 500 根日线应有若干线段
+    return false;  // 随仓日线样本应有若干线段
   }
   if (SegPts.size() > StrokePts.size())
   {
     return false;  // 线段不多于笔
   }
+  std::size_t nStrokePrev = 0;
   for (std::size_t i = 0; i < SegPts.size(); i++)
   {
     bool bOnStroke = false;
+    std::size_t nStrokeIndex = 0;
     for (std::size_t j = 0; j < StrokePts.size(); j++)
     {
       if (StrokePts[j].nIndex == SegPts[i].nIndex)
       {
         bOnStroke = true;
+        nStrokeIndex = j;
         break;
       }
     }
@@ -215,10 +414,29 @@ static bool TestRealSseSegmentsSubsetOfStrokes()
     {
       return false;  // 线段端点必落在笔端点上
     }
+    if ((StrokePts[nStrokeIndex].nType != SegPts[i].nType) ||
+        !NearlyEqual(StrokePts[nStrokeIndex].fHigh, SegPts[i].fHigh) ||
+        !NearlyEqual(StrokePts[nStrokeIndex].fLow, SegPts[i].fLow))
+    {
+      return false;  // 线段端点必须复用同一个笔端点，而不只是同一天
+    }
     if ((i > 0) && (SegPts[i].nType == SegPts[i - 1].nType))
     {
       return false;  // 线段端点顶底交替
     }
+    if ((i > 0) && (nStrokeIndex <= nStrokePrev))
+    {
+      return false;  // 线段端点顺序必须沿笔端点推进
+    }
+    if ((i > 0) && ((nStrokeIndex - nStrokePrev) < 3))
+    {
+      return false;  // 相邻线段端点之间至少三笔
+    }
+    if ((i > 0) && !TestFirstThreeStrokePointsOverlap(StrokePts, nStrokePrev))
+    {
+      return false;  // 每个线段前三笔必须有重叠
+    }
+    nStrokePrev = nStrokeIndex;
   }
   return true;
 }
@@ -240,7 +458,7 @@ static bool TestRealSseNewBiNotFewerThanStrict()
 }
 
 // 真实上证：买卖点结构良好——编码合法；三买/三卖都存在（曾因中枢首尾相连而全无）；
-// 一类经「每趋势一个」去重后不泛滥（8 年日线远少于笔数）
+// 一类经「每中枢区域一个」去重后不泛滥（8 年日线远少于笔数）
 static bool TestRealSseSignalsWellFormed()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
@@ -279,6 +497,173 @@ static bool TestRealSseSignalsWellFormed()
     return false;  // 一类去重后不泛滥
   }
   return true;
+}
+
+struct SseCandidateSummary
+{
+  int nFirstBuy;
+  int nSecondBuy;
+  int nThirdBuy;
+  int nFirstSell;
+  int nSecondSell;
+  int nThirdSell;
+  int nStrong;
+  int nAbc;
+  int nZeroPull;
+  int nLineWeak;
+  int nStandard;
+  int nSmallTurn;
+  int nOverlapped;
+  int nBreakout;
+};
+
+static SseCandidateSummary CountSseCandidateSummary(const std::vector<TradingSignalCandidate> &Candidates)
+{
+  SseCandidateSummary S;
+  S.nFirstBuy = 0;
+  S.nSecondBuy = 0;
+  S.nThirdBuy = 0;
+  S.nFirstSell = 0;
+  S.nSecondSell = 0;
+  S.nThirdSell = 0;
+  S.nStrong = 0;
+  S.nAbc = 0;
+  S.nZeroPull = 0;
+  S.nLineWeak = 0;
+  S.nStandard = 0;
+  S.nSmallTurn = 0;
+  S.nOverlapped = 0;
+  S.nBreakout = 0;
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (NearlyEqual(C.fSignal, 1.0f))
+    {
+      S.nFirstBuy++;
+    }
+    else if (NearlyEqual(C.fSignal, 2.0f))
+    {
+      S.nSecondBuy++;
+    }
+    else if (NearlyEqual(C.fSignal, 3.0f))
+    {
+      S.nThirdBuy++;
+    }
+    else if (NearlyEqual(C.fSignal, 11.0f))
+    {
+      S.nFirstSell++;
+    }
+    else if (NearlyEqual(C.fSignal, 12.0f))
+    {
+      S.nSecondSell++;
+    }
+    else if (NearlyEqual(C.fSignal, 13.0f))
+    {
+      S.nThirdSell++;
+    }
+
+    int nCtx = BuildTradingSignalContextFlags(C);
+    if ((nCtx & CZSC_SIGNAL_CTX_STRONG_QUALITY) != 0)
+    {
+      S.nStrong++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_ABC_STRUCTURE) != 0)
+    {
+      S.nAbc++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_MACD_ZERO_PULL) != 0)
+    {
+      S.nZeroPull++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_MACD_LINE_WEAK) != 0)
+    {
+      S.nLineWeak++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_STANDARD_DIV) != 0)
+    {
+      S.nStandard++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_SMALL_TURN) != 0)
+    {
+      S.nSmallTurn++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_OVERLAPPED) != 0)
+    {
+      S.nOverlapped++;
+    }
+    if ((nCtx & CZSC_SIGNAL_CTX_CENTER_BREAKOUT) != 0)
+    {
+      S.nBreakout++;
+    }
+  }
+
+  return S;
+}
+
+static bool CheckSseCandidateSummary(const SseCandidateSummary &S,
+                                     int nFirstBuy,
+                                     int nSecondBuy,
+                                     int nThirdBuy,
+                                     int nFirstSell,
+                                     int nSecondSell,
+                                     int nThirdSell,
+                                     int nStrong,
+                                     int nAbc,
+                                     int nZeroPull,
+                                     int nLineWeak,
+                                     int nStandard,
+                                     int nSmallTurn,
+                                     int nOverlapped,
+                                     int nBreakout)
+{
+  return (S.nFirstBuy == nFirstBuy) &&
+         (S.nSecondBuy == nSecondBuy) &&
+         (S.nThirdBuy == nThirdBuy) &&
+         (S.nFirstSell == nFirstSell) &&
+         (S.nSecondSell == nSecondSell) &&
+         (S.nThirdSell == nThirdSell) &&
+         (S.nStrong == nStrong) &&
+         (S.nAbc == nAbc) &&
+         (S.nZeroPull == nZeroPull) &&
+         (S.nLineWeak == nLineWeak) &&
+         (S.nStandard == nStandard) &&
+         (S.nSmallTurn == nSmallTurn) &&
+         (S.nOverlapped == nOverlapped) &&
+         (S.nBreakout == nBreakout);
+}
+
+static bool TestRealSseDiagnosticCounts()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  SseCandidateSummary StrokeSummary = CountSseCandidateSummary(StrokeAn.Candidates);
+  SseCandidateSummary SegmentSummary = CountSseCandidateSummary(SegmentAn.Candidates);
+
+  return (Strokes.size() == 157) &&
+         (StrokeAn.Points.size() == 158) &&
+         (SegmentAn.Points.size() == 15) &&
+         (StrokeAn.Centers.size() == 18) &&
+         (SegmentAn.Centers.size() == 2) &&
+         (StrokeAn.Candidates.size() == 17) &&
+         (SegmentAn.Candidates.size() == 2) &&
+         CheckSseCandidateSummary(StrokeSummary, 0, 0, 9, 0, 0, 8,
+                                  5, 0, 0, 3, 0, 0, 0, 17) &&
+         CheckSseCandidateSummary(SegmentSummary, 0, 0, 1, 0, 0, 1,
+                                  1, 0, 0, 0, 0, 0, 0, 2);
 }
 
 static bool TestRealSsePricePointsStayOnStrictStrokeEndpoints()
@@ -335,6 +720,424 @@ static bool TestRealSseFirstCenterStopsBeforeLeave()
   }
 
   return true;
+}
+
+static bool CheckSseCenter(const Center &C,
+                           int nDirection,
+                           const char *pStart,
+                           const char *pEnd,
+                           float fHigh,
+                           float fLow)
+{
+  int nStart = FindSseDateIndex(pStart);
+  int nEnd = FindSseDateIndex(pEnd);
+  if ((nStart < 0) || (nEnd < 0))
+  {
+    return false;
+  }
+  return (C.nDirection == nDirection) &&
+         (C.nStart == nStart) &&
+         (C.nEnd == nEnd) &&
+         ((C.fHigh - fHigh < 0.011f) && (fHigh - C.fHigh < 0.011f)) &&
+         ((C.fLow - fLow < 0.011f) && (fLow - C.fLow < 0.011f));
+}
+
+static bool ContainsSseCenter(const std::vector<Center> &Centers,
+                              int nDirection,
+                              const char *pStart,
+                              const char *pEnd,
+                              float fHigh,
+                              float fLow)
+{
+  for (std::size_t i = 0; i < Centers.size(); i++)
+  {
+    if (CheckSseCenter(Centers[i], nDirection, pStart, pEnd, fHigh, fLow))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+struct SseCandidateExpectation
+{
+  const char *pDate;
+  float fSignal;
+  int nQuality;
+  int nCenter;
+  int nTrend;
+  int nMovementType;
+  int nPoint;
+  int nBreakout;
+  int nCenterPosition;
+  int nAfterEffect;
+  int nContextFlags;
+};
+
+struct SseBreakoutExpectation
+{
+  int nBreakout;
+  int nCenter;
+  int nDirection;
+  int nLeavePoint;
+  const char *pLeaveDate;
+  int nRetestPoint;
+  const char *pRetestDate;
+  bool bFirstRetest;
+  bool bBackIntoCenter;
+  bool bThirdSignal;
+};
+
+static bool ContainsSseCandidate(const std::vector<TradingSignalCandidate> &Candidates,
+                                 const SseCandidateExpectation &E)
+{
+  int nIndex = FindSseDateIndex(E.pDate);
+  if (nIndex < 0)
+  {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if ((C.nIndex == nIndex) && NearlyEqual(C.fSignal, E.fSignal))
+    {
+      return (C.nQuality == E.nQuality) &&
+             (C.nCenter == E.nCenter) &&
+             (C.nTrend == E.nTrend) &&
+             (C.nMovementType == E.nMovementType) &&
+             (C.nPoint == E.nPoint) &&
+             (C.nBreakout == E.nBreakout) &&
+             (C.nCenterPosition == E.nCenterPosition) &&
+             (C.nAfterEffect == E.nAfterEffect) &&
+             (BuildTradingSignalContextFlags(C) == E.nContextFlags);
+    }
+  }
+  return false;
+}
+
+static bool ContainsAllSseCandidates(const std::vector<TradingSignalCandidate> &Candidates,
+                                     const SseCandidateExpectation *pExpected,
+                                     std::size_t nExpected)
+{
+  if (Candidates.size() != nExpected)
+  {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < nExpected; i++)
+  {
+    if (!ContainsSseCandidate(Candidates, pExpected[i]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool CheckSseBreakout(const std::vector<SegmentPoint> &Points,
+                             const std::vector<CenterBreakout> &Breakouts,
+                             const SseBreakoutExpectation &E)
+{
+  if ((E.nBreakout < 0) || ((std::size_t)E.nBreakout >= Breakouts.size()) ||
+      (E.nLeavePoint < 0) || ((std::size_t)E.nLeavePoint >= Points.size()) ||
+      (E.nRetestPoint < 0) || ((std::size_t)E.nRetestPoint >= Points.size()))
+  {
+    return false;
+  }
+
+  int nLeaveIndex = FindSseDateIndex(E.pLeaveDate);
+  int nRetestIndex = FindSseDateIndex(E.pRetestDate);
+  if ((nLeaveIndex < 0) || (nRetestIndex < 0))
+  {
+    return false;
+  }
+
+  const CenterBreakout &B = Breakouts[(std::size_t)E.nBreakout];
+  return (B.nCenter == E.nCenter) &&
+         (B.nDirection == E.nDirection) &&
+         (B.nLeavePoint == E.nLeavePoint) &&
+         (B.nRetestPoint == E.nRetestPoint) &&
+         (B.bFirstRetest == E.bFirstRetest) &&
+         (B.bBackIntoCenter == E.bBackIntoCenter) &&
+         (B.bThirdSignal == E.bThirdSignal) &&
+         (Points[(std::size_t)E.nLeavePoint].nIndex == nLeaveIndex) &&
+         (Points[(std::size_t)E.nRetestPoint].nIndex == nRetestIndex);
+}
+
+static bool CheckAllSseBreakouts(const std::vector<SegmentPoint> &Points,
+                                 const std::vector<CenterBreakout> &Breakouts,
+                                 const SseBreakoutExpectation *pExpected,
+                                 std::size_t nExpected)
+{
+  for (std::size_t i = 0; i < nExpected; i++)
+  {
+    if (!CheckSseBreakout(Points, Breakouts, pExpected[i]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool CentersAreStrictlySeparated(const std::vector<Center> &Centers)
+{
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    if (Centers[i].nStart <= Centers[i - 1].nEnd)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool TestRealSseGoldenCentersPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() < 6)
+  {
+    return false;
+  }
+
+  return ContainsSseCenter(Centers, 1, "2018-02-26", "2018-07-06", 3128.72f, 3091.46f) &&
+         ContainsSseCenter(Centers, 1, "2018-07-12", "2018-11-30", 2676.48f, 2653.11f) &&
+         ContainsSseCenter(Centers, -1, "2019-01-04", "2019-05-10", 3125.02f, 2987.77f) &&
+         ContainsSseCenter(Centers, 1, "2019-05-17", "2020-03-19", 2922.91f, 2891.54f) &&
+         ContainsSseCenter(Centers, 1, "2020-04-10", "2020-07-09", 2833.02f, 2802.47f) &&
+         ContainsSseCenter(Centers, -1, "2020-07-27", "2021-01-25", 3350.59f, 3325.17f);
+}
+
+static bool TestRealSseCentersDoNotShareEndpoints()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  std::vector<SegmentPoint> StrokePoints = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+  std::vector<Center> StrokeCenters = BuildCenters(StrokePoints);
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  std::vector<SegmentPoint> SegmentPoints = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+  std::vector<Center> SegmentCenters = BuildCenters(SegmentPoints);
+
+  return CentersAreStrictlySeparated(StrokeCenters) &&
+         CentersAreStrictlySeparated(SegmentCenters);
+}
+
+static bool TestRealSseGoldenSegmentCentersPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+  CzscConfig Config = DefaultConfig();
+  Config.nCenterUnit = CZSC_UNIT_SEGMENT;
+  Config.nSegmentMethod = CZSC_SEG_FEATURE;
+  std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, Config);
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() != 2)
+  {
+    return false;
+  }
+
+  return ContainsSseCenter(Centers, 1, "2018-11-19", "2020-07-09", 2822.19f, 2822.19f) &&
+         ContainsSseCenter(Centers, -1, "2020-09-25", "2023-06-26", 3418.95f, 3312.72f);
+}
+
+struct CenterLifecycleCounts
+{
+  int nExtension;
+  int nExpansion;
+  int nNewbornUp;
+  int nNewbornDown;
+  int nUnknown;
+};
+
+static CenterLifecycleCounts CountCenterLifecycles(const std::vector<Center> &Centers)
+{
+  CenterLifecycleCounts Counts = {0, 0, 0, 0, 0};
+  for (std::size_t i = 1; i < Centers.size(); i++)
+  {
+    int nLifecycle = ClassifyCenterLifecycle(Centers[i - 1], Centers[i]);
+    if (nLifecycle == CZSC_CENTER_LIFECYCLE_EXTENSION)
+    {
+      Counts.nExtension++;
+    }
+    else if (nLifecycle == CZSC_CENTER_LIFECYCLE_EXPANSION)
+    {
+      Counts.nExpansion++;
+    }
+    else if (nLifecycle == CZSC_CENTER_LIFECYCLE_NEWBORN_UP)
+    {
+      Counts.nNewbornUp++;
+    }
+    else if (nLifecycle == CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN)
+    {
+      Counts.nNewbornDown++;
+    }
+    else
+    {
+      Counts.nUnknown++;
+    }
+  }
+  return Counts;
+}
+
+static bool TestRealSseRecursiveCenterLifecycleCounts()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  CenterLifecycleCounts StrokeCounts = CountCenterLifecycles(StrokeAn.Centers);
+  CenterLifecycleCounts SegmentCounts = CountCenterLifecycles(SegmentAn.Centers);
+
+  return (StrokeAn.Centers.size() == 18) &&
+         (StrokeCounts.nExtension == 1) &&
+         (StrokeCounts.nExpansion == 16) &&
+         (StrokeCounts.nNewbornUp == 0) &&
+         (StrokeCounts.nNewbornDown == 0) &&
+         (StrokeCounts.nUnknown == 0) &&
+         (SegmentAn.Centers.size() == 2) &&
+         (SegmentCounts.nExtension == 0) &&
+         (SegmentCounts.nExpansion == 1) &&
+         (SegmentCounts.nNewbornUp == 0) &&
+         (SegmentCounts.nNewbornDown == 0) &&
+         (SegmentCounts.nUnknown == 0);
+}
+
+static bool TestRecentSseRecursiveCenterLifecycleCounts()
+{
+  int nStart = FindSseDateIndex("2024-01-02");
+  int nEnd = FindSseDateIndex("2026-06-26");
+  if ((nStart < 0) || (nEnd < nStart))
+  {
+    return false;
+  }
+
+  int nCount = nEnd - nStart + 1;
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH + nStart);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW + nStart);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, nCount, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, nCount, pH, pL, SegmentConfig);
+
+  CenterLifecycleCounts StrokeCounts = CountCenterLifecycles(StrokeAn.Centers);
+  CenterLifecycleCounts SegmentCounts = CountCenterLifecycles(SegmentAn.Centers);
+
+  return (StrokeAn.Centers.size() == 6) &&
+         (StrokeCounts.nExtension == 1) &&
+         (StrokeCounts.nExpansion == 4) &&
+         (StrokeCounts.nNewbornUp == 0) &&
+         (StrokeCounts.nNewbornDown == 0) &&
+         (StrokeCounts.nUnknown == 0) &&
+         SegmentAn.Centers.empty() &&
+         (SegmentCounts.nExtension == 0) &&
+         (SegmentCounts.nExpansion == 0) &&
+         (SegmentCounts.nNewbornUp == 0) &&
+         (SegmentCounts.nNewbornDown == 0) &&
+         (SegmentCounts.nUnknown == 0);
+}
+
+static bool TestRealSseGoldenCandidatesPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  static const SseCandidateExpectation StrokeExpected[] = {
+    {"2018-07-12", 13.0f, 1, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 9, 0, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2018-12-13", 13.0f, 2, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 17, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
+    {"2019-05-17", 13.0f, 1, 2, 2, CZSC_MOVEMENT_CONSOLIDATION, 25, 2, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2020-04-10", 13.0f, 1, 3, 3, CZSC_MOVEMENT_CONSOLIDATION, 43, 3, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2020-07-27", 3.0f, 1, 4, 4, CZSC_MOVEMENT_CONSOLIDATION, 48, 4, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2021-01-29", 3.0f, 2, 5, 5, CZSC_MOVEMENT_CONSOLIDATION, 58, 5, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2021-06-18", 3.0f, 1, 6, 6, CZSC_MOVEMENT_CONSOLIDATION, 68, 6, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2022-03-03", 13.0f, 1, 7, 7, CZSC_MOVEMENT_CONSOLIDATION, 81, 7, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2022-10-18", 13.0f, 1, 8, 8, CZSC_MOVEMENT_CONSOLIDATION, 93, 8, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2023-02-17", 3.0f, 2, 9, 9, CZSC_MOVEMENT_CONSOLIDATION, 100, 9, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
+    {"2023-09-04", 13.0f, 1, 10, 10, CZSC_MOVEMENT_CONSOLIDATION, 113, 10, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-03-28", 3.0f, 1, 11, 11, CZSC_MOVEMENT_CONSOLIDATION, 120, 11, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-10-16", 3.0f, 1, 12, 12, CZSC_MOVEMENT_CONSOLIDATION, 126, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-04-24", 13.0f, 2, 13, 13, CZSC_MOVEMENT_CONSOLIDATION, 135, 13, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2025-09-04", 3.0f, 1, 14, 14, CZSC_MOVEMENT_CONSOLIDATION, 142, 14, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-11-05", 3.0f, 2, 15, 15, CZSC_MOVEMENT_CONSOLIDATION, 146, 15, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2026-02-03", 3.0f, 1, 16, 16, CZSC_MOVEMENT_CONSOLIDATION, 152, 16, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224}
+  };
+
+  static const SseCandidateExpectation SegmentExpected[] = {
+    {"2020-09-25", 3.0f, 2, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 6, 0, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
+    {"2024-05-20", 13.0f, 1, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 13, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_UNKNOWN, 4096}
+  };
+
+  return ContainsAllSseCandidates(StrokeAn.Candidates,
+                                  StrokeExpected,
+                                  sizeof(StrokeExpected) / sizeof(StrokeExpected[0])) &&
+         ContainsAllSseCandidates(SegmentAn.Candidates,
+                                  SegmentExpected,
+                                  sizeof(SegmentExpected) / sizeof(SegmentExpected[0]));
+}
+
+static bool TestRealSseGoldenBreakoutsPresent()
+{
+  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pL = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscAnalyzer StrokeAn;
+  BuildAnalyzerFromPrice(StrokeAn, SSE_DAILY_COUNT, pH, pL, DefaultConfig());
+
+  CzscConfig SegmentConfig = DefaultConfig();
+  SegmentConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  SegmentConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer SegmentAn;
+  BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
+
+  static const SseBreakoutExpectation StrokeExpected[] = {
+    {0, 0, -1, 8, "2018-07-06", 9, "2018-07-12", true, false, true},
+    {5, 5, 1, 57, "2021-01-25", 58, "2021-01-29", true, false, true},
+    {13, 13, -1, 134, "2025-04-07", 135, "2025-04-24", true, false, true},
+    {15, 15, 1, 145, "2025-10-30", 146, "2025-11-05", true, false, true}
+  };
+
+  static const SseBreakoutExpectation SegmentExpected[] = {
+    {0, 0, 1, 5, "2020-07-09", 6, "2020-09-25", true, false, true},
+    {1, 1, -1, 12, "2023-06-26", 13, "2024-05-20", true, false, true}
+  };
+
+  return CheckAllSseBreakouts(StrokeAn.Points,
+                              StrokeAn.Breakouts,
+                              StrokeExpected,
+                              sizeof(StrokeExpected) / sizeof(StrokeExpected[0])) &&
+         CheckAllSseBreakouts(SegmentAn.Points,
+                              SegmentAn.Breakouts,
+                              SegmentExpected,
+                              sizeof(SegmentExpected) / sizeof(SegmentExpected[0]));
 }
 
 static bool TestFunc1WritesCompatibleSignal()
@@ -394,6 +1197,8 @@ static SegmentPoint MakeTestPoint(int nType, int nIndex, float fPrice)
   Point.fHigh = fPrice;
   Point.fLow = fPrice;
   Point.fEnergy = 0;
+  Point.fDif = 0;
+  Point.fDea = 0;
   return Point;
 }
 
@@ -435,12 +1240,25 @@ static TradingSignalCandidate MakeTestCandidate(int nIndex, float fSignal, int n
   C.nCenter = -1;
   C.nBreakout = -1;
   C.nSource = 0;
+  C.nTrend = -1;
+  C.nMovementType = CZSC_MOVEMENT_CONSOLIDATION;
   C.nQuality = CZSC_SIGNAL_QUALITY_WATCH;
   C.nCenterPosition = CZSC_CENTER_POSITION_UNKNOWN;
   C.nReversal = CZSC_REVERSAL_UNKNOWN;
   C.nAfterEffect = CZSC_CENTER_AFTERMATH_UNKNOWN;
+  C.nSecondBasePoint = -1;
+  C.nSecondTurnPoint = -1;
+  C.nSmallTurn = 0;
+  C.nSmallTurnBasePoint = -1;
+  C.nAbcStructure = 0;
+  C.nAbcBreakout = -1;
+  C.nMacdZeroPullback = 0;
   C.bOverlapped = false;
   C.Divergence.nDirection = 0;
+  C.Divergence.nPreviousStartPoint = -1;
+  C.Divergence.nPreviousEndPoint = -1;
+  C.Divergence.nCurrentStartPoint = -1;
+  C.Divergence.nCurrentEndPoint = -1;
   C.Divergence.bNewExtreme = false;
   C.Divergence.bWeakSpace = false;
   C.Divergence.bWeakSpeed = false;
@@ -464,6 +1282,10 @@ static CenterBreakout MakeTestBreakout(int nDirection, int nRetestPoint)
   B.bThirdSignal = true;
   B.bConsolidationDivergence = false;
   B.Divergence.nDirection = nDirection;
+  B.Divergence.nPreviousStartPoint = -1;
+  B.Divergence.nPreviousEndPoint = -1;
+  B.Divergence.nCurrentStartPoint = -1;
+  B.Divergence.nCurrentEndPoint = -1;
   B.Divergence.bNewExtreme = false;
   B.Divergence.bWeakSpace = false;
   B.Divergence.bWeakSpeed = false;
@@ -744,6 +1566,97 @@ static bool TestTrendStructuresSkipOverlappingTrend()
          (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
 }
 
+static bool TestTrendStructuresUseFullCenterExtent()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 10, 4, 12, 2));
+  Centers.push_back(MakeTestCenterFull(16, 28, 16, 11, 18, 8));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 2)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
+}
+
+static bool TestTrendStructuresTreatTouchingFullExtentsAsConsolidation()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 10, 4, 12, 2));
+  Centers.push_back(MakeTestCenterFull(16, 28, 16, 11, 18, 12));
+
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  if (Structures.size() != 2)
+  {
+    return false;
+  }
+  return (Structures[0].nType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (Structures[1].nType == CZSC_MOVEMENT_CONSOLIDATION);
+}
+
+static bool TestTrendStructuresUseNewbornLifecycleBoundaries()
+{
+  {
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenterFull(0, 12, 9, 5, 10, 4));
+    Centers.push_back(MakeTestCenterFull(16, 28, 14, 12, 15, 11));
+    Centers.push_back(MakeTestCenterFull(32, 44, 19, 17, 20, 16));
+
+    if ((ClassifyCenterLifecycle(Centers[0], Centers[1]) != CZSC_CENTER_LIFECYCLE_NEWBORN_UP) ||
+        (ClassifyCenterLifecycle(Centers[1], Centers[2]) != CZSC_CENTER_LIFECYCLE_NEWBORN_UP))
+    {
+      return false;
+    }
+
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    if (Structures.size() != 1)
+    {
+      return false;
+    }
+    if ((Structures[0].nType != CZSC_MOVEMENT_UP) ||
+        (Structures[0].nFirstCenter != 0) ||
+        (Structures[0].nLastCenter != 2) ||
+        (Structures[0].nStart != Centers[0].nStart) ||
+        (Structures[0].nEnd != Centers[2].nEnd))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenterFull(0, 12, 19, 17, 20, 16));
+    Centers.push_back(MakeTestCenterFull(16, 28, 9, 5, 10, 4));
+    Centers.push_back(MakeTestCenterFull(32, 44, 1, -2, 2, -3));
+
+    if ((ClassifyCenterLifecycle(Centers[0], Centers[1]) != CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN) ||
+        (ClassifyCenterLifecycle(Centers[1], Centers[2]) != CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN))
+    {
+      return false;
+    }
+
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    if (Structures.size() != 1)
+    {
+      return false;
+    }
+    if ((Structures[0].nType != CZSC_MOVEMENT_DOWN) ||
+        (Structures[0].nFirstCenter != 0) ||
+        (Structures[0].nLastCenter != 2) ||
+        (Structures[0].nStart != Centers[0].nStart) ||
+        (Structures[0].nEnd != Centers[2].nEnd))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestCenterBreakoutsDetectThirdBuy()
 {
   std::vector<SegmentPoint> Points;
@@ -800,6 +1713,63 @@ static bool TestCenterBreakoutsDetectThirdSell()
          Breakouts[0].bThirdSignal;
 }
 
+static bool TestCenterBreakoutsAllowBoundaryRetest()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 9));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection <= 0) ||
+        (Breakouts[0].nRetestPoint != 6) ||
+        !Breakouts[0].bFirstRetest ||
+        Breakouts[0].bBackIntoCenter ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 2));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 4));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection >= 0) ||
+        (Breakouts[0].nRetestPoint != 6) ||
+        !Breakouts[0].bFirstRetest ||
+        Breakouts[0].bBackIntoCenter ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestCenterBreakoutsUseFirstRetestOnly()
 {
   std::vector<SegmentPoint> Points;
@@ -826,6 +1796,57 @@ static bool TestCenterBreakoutsUseFirstRetestOnly()
          (Breakouts[0].nRetestPoint == 6);
 }
 
+static bool TestCenterBreakoutsUseCenterEndAsLeavePoint()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 12));     // 中枢末端已向上离开
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 9.5f)); // 下一段反向即首次回试
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection != 1) ||
+        (Breakouts[0].nLeavePoint != 3) ||
+        (Breakouts[0].nRetestPoint != 4) ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 2));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 1));   // 中枢末端已向下离开
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 3.5f));   // 下一段反向即首次回试
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(0, 12, 10, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+    if ((Breakouts.size() != 1) ||
+        (Breakouts[0].nDirection != -1) ||
+        (Breakouts[0].nLeavePoint != 3) ||
+        (Breakouts[0].nRetestPoint != 4) ||
+        !Breakouts[0].bThirdSignal)
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestCenterBreakoutsSkipBackIntoCenter()
 {
   std::vector<SegmentPoint> Points;
@@ -847,6 +1868,34 @@ static bool TestCenterBreakoutsSkipBackIntoCenter()
     return false;
   }
   return Breakouts[0].bBackIntoCenter && !Breakouts[0].bThirdSignal;
+}
+
+static bool TestCenterBreakoutsDoNotUseLaterRetestAfterBackIntoCenter()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));      // 首次离开
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 8.5f)); // 首次回试回中枢，不能算三买
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 13));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 9.5f)); // 后续回试不回，也不能补算三买
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(0, 12, 9, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+
+  if (Breakouts.size() != 1)
+  {
+    return false;
+  }
+  return (Breakouts[0].nLeavePoint == 5) &&
+         (Breakouts[0].nRetestPoint == 6) &&
+         Breakouts[0].bBackIntoCenter &&
+         !Breakouts[0].bThirdSignal;
 }
 
 static bool TestCenterBreakoutsSkipWithoutLeave()
@@ -952,8 +2001,8 @@ static bool TestTradingCandidatesGenerateFirstAndSecondBuy()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -984,6 +2033,69 @@ static bool TestTradingCandidatesGenerateFirstAndSecondBuy()
 
   return HasSignalCandidate(Candidates, 32, 1.0f) &&
          HasSignalCandidate(Candidates, 40, 2.0f);
+}
+
+static bool TestTradingCandidatesAllowEqualSecondExtremes()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 8));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 7.5f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 4.2f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 3.8f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 36, 6));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 3.8f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+    Centers.push_back(MakeTestCenter(20, 32, 6, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+    if (!HasSignalCandidate(Candidates, 32, 1.0f) ||
+        !HasSignalCandidate(Candidates, 40, 2.0f))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 12.1f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 13));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 28, 12.8f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 32, 13.2f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 36, 12.6f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 40, 13.2f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+    Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+    if (!HasSignalCandidate(Candidates, 32, 11.0f) ||
+        !HasSignalCandidate(Candidates, 40, 12.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 static bool TestTradingCandidatesGenerateThirdBuy()
@@ -1053,6 +2165,53 @@ static bool TestApplyTradingCandidatesThirdOverridesSecond()
   return NearlyEqual(pOut[2], 3.0f);
 }
 
+static bool TestApplyTradingOutputsSkipInvalidSignals()
+{
+  const int nCount = 4;
+  float pSignal[nCount] = {-1, -1, -1, -1};
+  float pQuality[nCount] = {-1, -1, -1, -1};
+  float pPriority[nCount] = {-1, -1, -1, -1};
+  float pCenter[nCount] = {-1, -1, -1, -1};
+  float pContext[nCount] = {-1, -1, -1, -1};
+
+  TradingSignalCandidate Valid = MakeTestCandidate(2, 3.0f, 20);
+  Valid.nSource = 3;
+  Valid.nPoint = 2;
+  Valid.nQuality = CZSC_SIGNAL_QUALITY_CONFIRMED;
+  Valid.nCenter = 4;
+  Valid.nBreakout = 2;
+  Valid.bOverlapped = true;
+
+  TradingSignalCandidate Invalid = MakeTestCandidate(2, 99.0f, 30);
+  Invalid.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Invalid.nCenter = 8;
+  Invalid.nBreakout = 8;
+  Invalid.bOverlapped = false;
+
+  std::vector<TradingSignalCandidate> Candidates;
+  Candidates.push_back(Valid);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalCandidates(nCount, pSignal, Candidates);
+  ApplyTradingSignalQuality(nCount, pQuality, Candidates);
+  ApplyTradingSignalPriority(nCount, pPriority, Candidates);
+  ApplyTradingSignalCenterId(nCount, pCenter, Candidates);
+  ApplyTradingSignalContextFlags(nCount, pContext, Candidates);
+
+  float fContext = (float)(CZSC_SIGNAL_CTX_OVERLAPPED |
+                           CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  return NearlyEqual(pSignal[2], 3.0f) &&
+         NearlyEqual(pQuality[2], (float)CZSC_SIGNAL_QUALITY_CONFIRMED) &&
+         NearlyEqual(pPriority[2], 20.0f) &&
+         NearlyEqual(pCenter[2], 5.0f) &&
+         NearlyEqual(pContext[2], fContext) &&
+         NearlyEqual(pSignal[0], 0.0f) &&
+         NearlyEqual(pQuality[0], 0.0f) &&
+         NearlyEqual(pPriority[0], 0.0f) &&
+         NearlyEqual(pCenter[0], 0.0f) &&
+         NearlyEqual(pContext[0], 0.0f);
+}
+
 static bool TestFirstCandidateKeepsTrendDivergence()
 {
   const int nCount = 41;
@@ -1080,8 +2239,8 @@ static bool TestFirstCandidateKeepsTrendDivergence()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1110,7 +2269,651 @@ static bool TestFirstCandidateKeepsTrendDivergence()
          pFirst->Divergence.bNewExtreme &&
          pFirst->Divergence.bDivergence &&
          (pFirst->nQuality == CZSC_SIGNAL_QUALITY_STRONG) &&
+         (pFirst->nCenter == 1) &&
+         (pFirst->nTrend == 0) &&
+         (pFirst->nMovementType == CZSC_MOVEMENT_DOWN) &&
          (pFirst->nCenterPosition == CZSC_CENTER_POSITION_BELOW);
+}
+
+static bool TestFirstCandidateRequiresTrendStructure()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 8));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 7.5f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 4.2f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 3.8f));
+
+    std::vector<Center> OneCenter;
+    OneCenter.push_back(MakeTestCenter(4, 16, 10, 8));
+    std::vector<TrendStructure> OneStruct = BuildTrendStructures(OneCenter);
+    std::vector<CenterBreakout> Breakouts;
+    std::vector<TradingSignalCandidate> Single =
+      BuildTradingSignalCandidates(Points, OneCenter, OneStruct, Breakouts);
+    if (HasSignalCandidate(Single, 32, 1.0f))
+    {
+      return false;
+    }
+
+    std::vector<Center> TrendCenters = OneCenter;
+    TrendCenters.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+    std::vector<TrendStructure> TrendStruct = BuildTrendStructures(TrendCenters);
+    std::vector<TradingSignalCandidate> Trend =
+      BuildTradingSignalCandidates(Points, TrendCenters, TrendStruct, Breakouts);
+    if (!HasSignalCandidate(Trend, 32, 1.0f))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 12.1f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 13));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 28, 12.8f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 32, 13.2f));
+
+    std::vector<Center> OneCenter;
+    OneCenter.push_back(MakeTestCenter(4, 16, 9, 7));
+    std::vector<TrendStructure> OneStruct = BuildTrendStructures(OneCenter);
+    std::vector<CenterBreakout> Breakouts;
+    std::vector<TradingSignalCandidate> Single =
+      BuildTradingSignalCandidates(Points, OneCenter, OneStruct, Breakouts);
+    if (HasSignalCandidate(Single, 32, 11.0f))
+    {
+      return false;
+    }
+
+    std::vector<Center> TrendCenters = OneCenter;
+    TrendCenters.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+    std::vector<TrendStructure> TrendStruct = BuildTrendStructures(TrendCenters);
+    std::vector<TradingSignalCandidate> Trend =
+      BuildTradingSignalCandidates(Points, TrendCenters, TrendStruct, Breakouts);
+    if (!HasSignalCandidate(Trend, 32, 11.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFirstCandidateRequiresOutsideLastCenter()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 8));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 7.5f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 4.2f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 3.8f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+    Centers.push_back(MakeTestCenter(20, 32, 4.2f, 3.7f));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts;
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+    if (HasSignalCandidate(Candidates, 32, 1.0f))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 12));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 20, 12.1f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 24, 13));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 28, 12.8f));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 32, 13.2f));
+
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+    Centers.push_back(MakeTestCenter(20, 32, 13.3f, 12.8f));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts;
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+    if (HasSignalCandidate(Candidates, 32, 11.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFirstCandidateMarksAbcStructure()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(-1, 7));
+  Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+
+  return (pFirst != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pFirst->nAbcStructure == 1) &&
+         (pFirst->nAbcBreakout == 0);
+}
+
+static bool TestFirstSellCandidateMarksAbcStructure()
+{
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 7));
+  Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 11.0f);
+
+  return (pFirst != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pFirst->nAbcStructure == -1) &&
+         (pFirst->nAbcBreakout == 0);
+}
+
+static bool TestFirstCandidateRequiresValidAbcBreakout()
+{
+  {
+    const int nCount = 41;
+    float pIn[nCount];
+    float pHigh[nCount];
+    float pLow[nCount];
+
+    for (int i = 0; i < nCount; i++)
+    {
+      pIn[i] = 0;
+      pHigh[i] = 0;
+      pLow[i] = 0;
+    }
+
+    pIn[0] = -1;
+    pHigh[0] = pLow[0] = 7;
+    pIn[4] = 1;
+    pHigh[4] = pLow[4] = 12;
+    pIn[8] = -1;
+    pHigh[8] = pLow[8] = 8;
+    pIn[12] = 1;
+    pHigh[12] = pLow[12] = 10;
+    pIn[16] = -1;
+    pHigh[16] = pLow[16] = 7.5f;
+    pIn[20] = 1;
+    pHigh[20] = pLow[20] = 7;
+    pIn[24] = -1;
+    pHigh[24] = pLow[24] = 4;
+    pIn[28] = 1;
+    pHigh[28] = pLow[28] = 4.2f;
+    pIn[32] = -1;
+    pHigh[32] = pLow[32] = 3.8f;
+
+    std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+    Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts;
+    Breakouts.push_back(MakeTestBreakout(1, 7));   // 一买前必须是三卖，不是三买
+    Breakouts.back().nCenter = 1;
+    Breakouts.push_back(MakeTestBreakout(-1, 7));
+    Breakouts.back().nCenter = 1;
+    Breakouts.back().bThirdSignal = false;
+    Breakouts.push_back(MakeTestBreakout(-1, 7));
+    Breakouts.back().nCenter = 0;                  // 不是一买所属最后中枢
+    Breakouts.push_back(MakeTestBreakout(-1, 6));  // 回试点早于C段起点
+    Breakouts.back().nCenter = 1;
+    Breakouts.back().nLeavePoint = 5;
+    Breakouts.push_back(MakeTestBreakout(-1, 8));  // 回试不早于一买点
+    Breakouts.back().nCenter = 1;
+
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+    const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+    if ((pFirst == 0) || (pFirst->nAbcStructure != 0) || (pFirst->nAbcBreakout != -1))
+    {
+      return false;
+    }
+  }
+
+  {
+    const int nCount = 33;
+    float pIn[nCount];
+    float pHigh[nCount];
+    float pLow[nCount];
+
+    for (int i = 0; i < nCount; i++)
+    {
+      pIn[i] = 0;
+      pHigh[i] = 0;
+      pLow[i] = 0;
+    }
+
+    pIn[0] = 1;
+    pHigh[0] = pLow[0] = 10;
+    pIn[4] = -1;
+    pHigh[4] = pLow[4] = 5;
+    pIn[8] = 1;
+    pHigh[8] = pLow[8] = 9;
+    pIn[12] = -1;
+    pHigh[12] = pLow[12] = 7;
+    pIn[16] = 1;
+    pHigh[16] = pLow[16] = 12;
+    pIn[20] = -1;
+    pHigh[20] = pLow[20] = 12.1f;
+    pIn[24] = 1;
+    pHigh[24] = pLow[24] = 13;
+    pIn[28] = -1;
+    pHigh[28] = pLow[28] = 12.8f;
+    pIn[32] = 1;
+    pHigh[32] = pLow[32] = 13.2f;
+
+    std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+    std::vector<Center> Centers;
+    Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+    Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+    std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+    std::vector<CenterBreakout> Breakouts;
+    Breakouts.push_back(MakeTestBreakout(-1, 7));  // 一卖前必须是三买，不是三卖
+    Breakouts.back().nCenter = 1;
+    Breakouts.push_back(MakeTestBreakout(1, 7));
+    Breakouts.back().nCenter = 1;
+    Breakouts.back().bThirdSignal = false;
+    Breakouts.push_back(MakeTestBreakout(1, 7));
+    Breakouts.back().nCenter = 0;
+    Breakouts.push_back(MakeTestBreakout(1, 6));   // 回试点早于C段起点
+    Breakouts.back().nCenter = 1;
+    Breakouts.back().nLeavePoint = 5;
+    Breakouts.push_back(MakeTestBreakout(1, 8));
+    Breakouts.back().nCenter = 1;
+
+    std::vector<TradingSignalCandidate> Candidates =
+      BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+    const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 11.0f);
+    if ((pFirst == 0) || (pFirst->nAbcStructure != 0) || (pFirst->nAbcBreakout != -1))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFirstCandidateMarksMacdZeroPullback()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  Points[3].fDif = 6.0f;  Points[3].fDea = 5.0f;
+  Points[4].fDif = 2.0f;  Points[4].fDea = 1.0f;
+  Points[5].fDif = 4.0f;  Points[5].fDea = 3.0f;
+  Points[6].fDif = 0.2f;  Points[6].fDea = -0.1f;
+  Points[7].fDif = 2.0f;  Points[7].fDea = 2.0f;
+  Points[8].fDif = 1.0f;  Points[8].fDea = 1.2f;
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+
+  return (pFirst != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pFirst->nMacdZeroPullback == 1);
+}
+
+static bool TestFirstCandidateBuildsStandardMacdDivergence()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  Points[3].fEnergy = 100; Points[3].fDif = 8;   Points[3].fDea = 6;
+  Points[4].fEnergy = 70;  Points[4].fDif = 2;   Points[4].fDea = 1;
+  Points[6].fDif = 0.2f;   Points[6].fDea = -0.1f;
+  Points[7].fEnergy = 50;  Points[7].fDif = 3;   Points[7].fDea = 2;
+  Points[8].fEnergy = 45;  Points[8].fDif = 1;   Points[8].fDea = 1;
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(-1, 7));
+  Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+  ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
+
+  return (pFirst != 0) &&
+         (pFirst->nAbcStructure == 1) &&
+         (pFirst->nMacdZeroPullback == 1) &&
+         pFirst->Divergence.bNewExtreme &&
+         pFirst->Divergence.bWeakMacd &&
+         (pFirst->Divergence.Current.fDifHeight < pFirst->Divergence.Previous.fDifHeight) &&
+         (pFirst->Divergence.Current.fDeaHeight <= pFirst->Divergence.Previous.fDeaHeight) &&
+         NearlyEqual(pOut[32], 1.0f);
+}
+
+static bool TestFirstSellCandidateBuildsStandardMacdDivergence()
+{
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  Points[3].fEnergy = 100; Points[3].fDif = 1;   Points[3].fDea = 1;
+  Points[4].fEnergy = 70;  Points[4].fDif = 8;   Points[4].fDea = 6;
+  Points[6].fDif = 0.2f;   Points[6].fDea = -0.1f;
+  Points[7].fEnergy = 50;  Points[7].fDif = 2;   Points[7].fDea = 1;
+  Points[8].fEnergy = 45;  Points[8].fDif = 3;   Points[8].fDea = 2;
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 7));
+  Breakouts.back().nCenter = 1;
+  Breakouts.back().nLeavePoint = 6;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 11.0f);
+  ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
+
+  return (pFirst != 0) &&
+         (pFirst->nAbcStructure == -1) &&
+         (pFirst->nMacdZeroPullback == -1) &&
+         pFirst->Divergence.bNewExtreme &&
+         pFirst->Divergence.bWeakMacd &&
+         (pFirst->Divergence.Current.fDifHeight < pFirst->Divergence.Previous.fDifHeight) &&
+         (pFirst->Divergence.Current.fDeaHeight <= pFirst->Divergence.Previous.fDeaHeight) &&
+         NearlyEqual(pOut[32], -1.0f);
+}
+
+static bool TestFirstCandidateSkipsAfterLaterCenter()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 3;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = pLow[36] = 4.0f;
+  pIn[40] = -1;
+  pHigh[40] = pLow[40] = 3.7f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  Centers.push_back(MakeTestCenter(36, 44, 4.1f, 3.5f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  return !HasSignalCandidate(Candidates, 40, 1.0f);
+}
+
+static bool TestFirstCandidateUsesPreLastCenterMove()
+{
+  const int nCount = 33;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 8;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;  // A段，弱于后续 C 段
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;     // 最后中枢内部下行段，不能作为 A 段
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.6f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  return !HasSignalCandidate(Candidates, 32, 1.0f);
 }
 
 static bool TestThirdCandidateKeepsBreakoutDivergence()
@@ -1139,7 +2942,113 @@ static bool TestThirdCandidateKeepsBreakoutDivergence()
          pThird->Divergence.bWeakSpace &&
          pThird->Divergence.bDivergence &&
          (pThird->nQuality == CZSC_SIGNAL_QUALITY_STRONG) &&
-         (pThird->nCenterPosition == CZSC_CENTER_POSITION_ABOVE);
+         (pThird->nCenterPosition == CZSC_CENTER_POSITION_ABOVE) &&
+         (pThird->nSmallTurn == 0);
+}
+
+static bool TestThirdCandidateRequiresBreakoutDirection()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 10.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 6));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(0, 6));
+  Breakouts.back().nCenter = 0;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  return !HasSignalCandidate(Candidates, 24, 3.0f) &&
+         !HasSignalCandidate(Candidates, 24, 13.0f);
+}
+
+static bool TestThirdCandidateRequiresValidCenter()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 11));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 8));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 10.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 6));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+
+  std::vector<CenterBreakout> MissingCenter;
+  MissingCenter.push_back(MakeTestBreakout(1, 6));
+  std::vector<TradingSignalCandidate> MissingCandidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, MissingCenter);
+  if (HasSignalCandidate(MissingCandidates, 24, 3.0f))
+  {
+    return false;
+  }
+
+  std::vector<CenterBreakout> OutOfRangeCenter;
+  OutOfRangeCenter.push_back(MakeTestBreakout(1, 6));
+  OutOfRangeCenter.back().nCenter = 1;
+  std::vector<TradingSignalCandidate> OutOfRangeCandidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, OutOfRangeCenter);
+  return !HasSignalCandidate(OutOfRangeCandidates, 24, 3.0f);
+}
+
+static bool TestThirdCandidateUsesOnlyCompletedTrendStructure()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 6));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 9.5f));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 28, 18));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 14));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 36, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 15));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 44, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 48, 17.5f));
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 9, 4, 10, 1));
+  Centers.push_back(MakeTestCenterFull(28, 40, 17, 14, 18, 13));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  if ((Structures.size() != 1) || (Structures[0].nType != CZSC_MOVEMENT_UP))
+  {
+    return false;
+  }
+
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 6));
+  Breakouts.back().nCenter = 0;
+  Breakouts.push_back(MakeTestBreakout(1, 12));
+  Breakouts.back().nCenter = 1;
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+
+  const TradingSignalCandidate *pEarlyThird = FindSignalCandidate(Candidates, 24, 3.0f);
+  const TradingSignalCandidate *pCompletedThird = FindSignalCandidate(Candidates, 48, 3.0f);
+  return (pEarlyThird != 0) &&
+         (pEarlyThird->nCenter == 0) &&
+         (pEarlyThird->nTrend == -1) &&
+         (pEarlyThird->nMovementType == CZSC_MOVEMENT_CONSOLIDATION) &&
+         (pEarlyThird->nAfterEffect == CZSC_CENTER_AFTERMATH_NEWBORN) &&
+         (pCompletedThird != 0) &&
+         (pCompletedThird->nCenter == 1) &&
+         (pCompletedThird->nTrend == 0) &&
+         (pCompletedThird->nMovementType == CZSC_MOVEMENT_UP);
 }
 
 static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
@@ -1149,6 +3058,7 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   float pHigh[nCount];
   float pLow[nCount];
   float pOut[nCount];
+  float pCtx[nCount];
 
   for (int i = 0; i < nCount; i++)
   {
@@ -1156,6 +3066,7 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
     pHigh[i] = 0;
     pLow[i] = 0;
     pOut[i] = -1;
+    pCtx[i] = -1;
   }
 
   pIn[0] = -1;
@@ -1171,8 +3082,8 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1199,19 +3110,30 @@ static bool TestTradingCandidatesMarkSecondThirdBuyOverlap()
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(1, 10));
+  Breakouts.back().nCenter = 1;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
   const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 2.0f);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 3.0f);
   ApplyTradingSignalCandidates(nCount, pOut, Candidates);
+  ApplyTradingSignalContextFlags(nCount, pCtx, Candidates);
 
   return (pSecond != 0) &&
+         (pThird != 0) &&
          pSecond->bOverlapped &&
+         pThird->bOverlapped &&
+         (pThird->nSmallTurn == 1) &&
+         (pThird->nSmallTurnBasePoint == 8) &&
          (pSecond->nBreakout == 0) &&
+         (pSecond->nSecondBasePoint == 8) &&
+         (pSecond->nSecondTurnPoint == 9) &&
+         (pSecond->nPoint == 10) &&
          (pSecond->Divergence.nDirection == 1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          (pSecond->nCenterPosition == CZSC_CENTER_POSITION_ABOVE) &&
-         NearlyEqual(pOut[40], 3.0f);
+         NearlyEqual(pOut[40], 3.0f) &&
+         (((int)pCtx[40] & CZSC_SIGNAL_CTX_OVERLAPPED) != 0);
 }
 
 static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
@@ -1221,6 +3143,7 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   float pHigh[nCount];
   float pLow[nCount];
   float pOut[nCount];
+  float pCtx[nCount];
 
   for (int i = 0; i < nCount; i++)
   {
@@ -1228,6 +3151,7 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
     pHigh[i] = 0;
     pLow[i] = 0;
     pOut[i] = -1;
+    pCtx[i] = -1;
   }
 
   pIn[0] = 1;
@@ -1243,11 +3167,11 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   pHigh[12] = 7;
   pLow[12] = 7;
   pIn[16] = 1;
-  pHigh[16] = 14;
-  pLow[16] = 14;
+  pHigh[16] = 12;
+  pLow[16] = 12;
   pIn[20] = -1;
-  pHigh[20] = 10;
-  pLow[20] = 10;
+  pHigh[20] = 12.1f;
+  pLow[20] = 12.1f;
   pIn[24] = 1;
   pHigh[24] = 13;
   pLow[24] = 13;
@@ -1271,19 +3195,272 @@ static bool TestTradingCandidatesMarkSecondThirdSellOverlap()
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
   Breakouts.push_back(MakeTestBreakout(-1, 10));
+  Breakouts.back().nCenter = 1;
 
   std::vector<TradingSignalCandidate> Candidates =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
   const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 12.0f);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 13.0f);
   ApplyTradingSignalCandidates(nCount, pOut, Candidates);
+  ApplyTradingSignalContextFlags(nCount, pCtx, Candidates);
 
   return (pSecond != 0) &&
+         (pThird != 0) &&
          pSecond->bOverlapped &&
+         pThird->bOverlapped &&
+         (pThird->nSmallTurn == -1) &&
+         (pThird->nSmallTurnBasePoint == 8) &&
          (pSecond->nBreakout == 0) &&
+         (pSecond->nSecondBasePoint == 8) &&
+         (pSecond->nSecondTurnPoint == 9) &&
+         (pSecond->nPoint == 10) &&
          (pSecond->Divergence.nDirection == -1) &&
          (pSecond->nQuality == CZSC_SIGNAL_QUALITY_CONFIRMED) &&
          (pSecond->nCenterPosition == CZSC_CENTER_POSITION_BELOW) &&
-         NearlyEqual(pOut[40], 13.0f);
+         NearlyEqual(pOut[40], 13.0f) &&
+         (((int)pCtx[40] & CZSC_SIGNAL_CTX_OVERLAPPED) != 0);
+}
+
+static bool TestSecondThirdOverlapRequiresFirstCenter()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = pLow[36] = 6;
+  pIn[40] = -1;
+  pHigh[40] = pLow[40] = 4.5f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 10));
+  Breakouts.back().nCenter = 0;  // 同端点三买，但不属于一买的最后中枢
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 2.0f);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 3.0f);
+
+  return (pSecond != 0) &&
+         (pThird != 0) &&
+         !pSecond->bOverlapped &&
+         (pSecond->nBreakout == -1);
+}
+
+static bool TestSecondThirdSellOverlapRequiresFirstCenter()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+  pIn[36] = -1;
+  pHigh[36] = pLow[36] = 11;
+  pIn[40] = 1;
+  pHigh[40] = pLow[40] = 12.5f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(-1, 10));
+  Breakouts.back().nCenter = 0;  // 同端点三卖，但不属于一卖的最后中枢
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 12.0f);
+  const TradingSignalCandidate *pThird = FindSignalCandidate(Candidates, 40, 13.0f);
+
+  return (pSecond != 0) &&
+         (pThird != 0) &&
+         !pSecond->bOverlapped &&
+         (pSecond->nBreakout == -1);
+}
+
+static bool TestSmallTurnRequiresSameCenterAndLaterThird()
+{
+  const int nCount = 45;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = -1;
+  pHigh[0] = pLow[0] = 7;
+  pIn[4] = 1;
+  pHigh[4] = pLow[4] = 12;
+  pIn[8] = -1;
+  pHigh[8] = pLow[8] = 8;
+  pIn[12] = 1;
+  pHigh[12] = pLow[12] = 10;
+  pIn[16] = -1;
+  pHigh[16] = pLow[16] = 7.5f;
+  pIn[20] = 1;
+  pHigh[20] = pLow[20] = 7;
+  pIn[24] = -1;
+  pHigh[24] = pLow[24] = 4;
+  pIn[28] = 1;
+  pHigh[28] = pLow[28] = 4.2f;
+  pIn[32] = -1;
+  pHigh[32] = pLow[32] = 3.8f;
+  pIn[36] = 1;
+  pHigh[36] = pLow[36] = 6;
+  pIn[40] = -1;
+  pHigh[40] = pLow[40] = 4.5f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 10, 8));
+  Centers.push_back(MakeTestCenter(20, 32, 4.2f, 4));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 7));
+  Breakouts.back().nCenter = 1;  // 同一最后中枢，但三买早于一买
+  Breakouts.push_back(MakeTestBreakout(1, 10));
+  Breakouts.back().nCenter = 0;  // 一买之后，但不是最后中枢
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 1.0f);
+  const TradingSignalCandidate *pEarlyThird = FindSignalCandidate(Candidates, 28, 3.0f);
+  const TradingSignalCandidate *pOtherCenterThird = FindSignalCandidate(Candidates, 40, 3.0f);
+
+  return (pFirst != 0) &&
+         (pEarlyThird != 0) &&
+         (pOtherCenterThird != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pEarlyThird->nSmallTurn == 0) &&
+         (pEarlyThird->nSmallTurnBasePoint == -1) &&
+         (pOtherCenterThird->nSmallTurn == 0) &&
+         (pOtherCenterThird->nSmallTurnBasePoint == -1);
+}
+
+static bool TestSmallTurnSellRequiresSameCenterAndLaterThird()
+{
+  const int nCount = 45;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+  pIn[36] = -1;
+  pHigh[36] = pLow[36] = 11;
+  pIn[40] = 1;
+  pHigh[40] = pLow[40] = 12.5f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(-1, 7));
+  Breakouts.back().nCenter = 1;  // 同一最后中枢，但三卖早于一卖
+  Breakouts.push_back(MakeTestBreakout(-1, 10));
+  Breakouts.back().nCenter = 0;  // 一卖之后，但不是最后中枢
+
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pFirst = FindSignalCandidate(Candidates, 32, 11.0f);
+  const TradingSignalCandidate *pEarlyThird = FindSignalCandidate(Candidates, 28, 13.0f);
+  const TradingSignalCandidate *pOtherCenterThird = FindSignalCandidate(Candidates, 40, 13.0f);
+
+  return (pFirst != 0) &&
+         (pEarlyThird != 0) &&
+         (pOtherCenterThird != 0) &&
+         (pFirst->nCenter == 1) &&
+         (pEarlyThird->nSmallTurn == 0) &&
+         (pEarlyThird->nSmallTurnBasePoint == -1) &&
+         (pOtherCenterThird->nSmallTurn == 0) &&
+         (pOtherCenterThird->nSmallTurnBasePoint == -1);
 }
 
 static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
@@ -1315,8 +3492,8 @@ static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1350,6 +3527,61 @@ static bool TestTradingCandidatesMarkSecondBuyInsideCenter()
   return (pSecond != 0) &&
          (pSecond->nCenterPosition == CZSC_CENTER_POSITION_INSIDE) &&
          NearlyEqual(pOut[40], 2.0f);
+}
+
+static bool TestTradingCandidatesMarkSecondSellInsideCenter()
+{
+  const int nCount = 41;
+  float pIn[nCount];
+  float pHigh[nCount];
+  float pLow[nCount];
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pIn[i] = 0;
+    pHigh[i] = 0;
+    pLow[i] = 0;
+    pOut[i] = -1;
+  }
+
+  pIn[0] = 1;
+  pHigh[0] = pLow[0] = 10;
+  pIn[4] = -1;
+  pHigh[4] = pLow[4] = 5;
+  pIn[8] = 1;
+  pHigh[8] = pLow[8] = 9;
+  pIn[12] = -1;
+  pHigh[12] = pLow[12] = 7;
+  pIn[16] = 1;
+  pHigh[16] = pLow[16] = 12;
+  pIn[20] = -1;
+  pHigh[20] = pLow[20] = 12.1f;
+  pIn[24] = 1;
+  pHigh[24] = pLow[24] = 13;
+  pIn[28] = -1;
+  pHigh[28] = pLow[28] = 12.8f;
+  pIn[32] = 1;
+  pHigh[32] = pLow[32] = 13.2f;
+  pIn[36] = -1;
+  pHigh[36] = pLow[36] = 11;
+  pIn[40] = 1;
+  pHigh[40] = pLow[40] = 12.9f;
+
+  std::vector<SegmentPoint> Points = BuildSignalPoints(nCount, pIn, pHigh, pLow);
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenter(4, 16, 9, 7));
+  Centers.push_back(MakeTestCenter(20, 32, 13, 12.8f));
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  const TradingSignalCandidate *pSecond = FindSignalCandidate(Candidates, 40, 12.0f);
+  ApplyTradingSignalCandidates(nCount, pOut, Candidates);
+
+  return (pSecond != 0) &&
+         (pSecond->nCenterPosition == CZSC_CENTER_POSITION_INSIDE) &&
+         NearlyEqual(pOut[40], 12.0f);
 }
 
 // 真实上证日线：Func9 输出有效的线段端点信号（每个非零值为 ±1、顶底交替、至少两个端点）
@@ -1412,6 +3644,45 @@ static bool TestCentersUseThreeOverlappingSegments()
   {
     return false;
   }
+  if (Centers[0].nDirection != 1)
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static bool TestCentersTrackEntryDirection()
+{
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
+
+    std::vector<Center> Centers = BuildCenters(Points);
+    if ((Centers.size() != 1) || (Centers[0].nDirection != 1))
+    {
+      return false;
+    }
+  }
+
+  {
+    std::vector<SegmentPoint> Points;
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 10));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 1));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 7));
+    Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 2));
+    Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 6));
+
+    std::vector<Center> Centers = BuildCenters(Points);
+    if ((Centers.size() != 1) || (Centers[0].nDirection != -1))
+    {
+      return false;
+    }
+  }
 
   return true;
 }
@@ -1441,6 +3712,30 @@ static bool TestCenterExtendsWithOverlappingSegment()
   }
 
   return true;
+}
+
+static bool TestCenterExtendsWithCrossingSegment()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 4));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 9));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 5));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 24, 4));
+
+  std::vector<Center> Centers = BuildCenters(Points);
+
+  if (Centers.size() != 1)
+  {
+    return false;
+  }
+  return (Centers[0].nEnd == 24) &&
+         NearlyEqual(Centers[0].fHigh, 9.0f) &&
+         NearlyEqual(Centers[0].fLow, 5.0f) &&
+         NearlyEqual(Centers[0].fTop, 20.0f) &&
+         NearlyEqual(Centers[0].fBottom, 4.0f);
 }
 
 static bool TestCentersSplitWhenOverlapBreaks()
@@ -1569,8 +3864,8 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1586,9 +3881,9 @@ static bool TestFunc5WritesTrendDivergenceFirstBuy()
 
   Func5(nCount, pOut, pIn, pHigh, pLow);
 
-  // 两个上升中枢[10,8]→[4.2,4]构成下跌趋势。中枢0末端 index16 已跌破 ZD=8，
-  // 离开后第一反向段 index16→20 回试不进 → 三卖在20；一买在趋势末32。
-  return NearlyEqual(pOut[20], 13.0f) && NearlyEqual(pOut[32], 1.0f);
+  // 两个中枢全幅不重叠(GG/DD: [12,7.5]→[7,3.8])构成下跌趋势；
+  // 中枢0离开后的首次回试不回中枢 → 三卖在28；一买在趋势末32。
+  return NearlyEqual(pOut[28], 13.0f) && NearlyEqual(pOut[32], 1.0f);
 }
 
 static bool TestFunc5WritesCenterThirdBuy()
@@ -1693,6 +3988,75 @@ static bool TestFunc5WritesCenterThirdSell()
   return NearlyEqual(pOut[24], 13.0f);
 }
 
+static bool TestFunc5WritesThirdSignalsAtCenterBoundary()
+{
+  {
+    const int nCount = 33;
+    float pIn[nCount];
+    float pHigh[nCount];
+    float pLow[nCount];
+    float pOut[nCount];
+
+    for (int i = 0; i < nCount; i++)
+    {
+      pIn[i] = 0;
+      pHigh[i] = 0;
+      pLow[i] = 0;
+      pOut[i] = -1;
+    }
+
+    pIn[0] = -1;  pHigh[0] = pLow[0] = 1;
+    pIn[4] = 1;   pHigh[4] = pLow[4] = 6;
+    pIn[8] = -1;  pHigh[8] = pLow[8] = 4;
+    pIn[12] = 1;  pHigh[12] = pLow[12] = 5.5f;
+    pIn[16] = -1; pHigh[16] = pLow[16] = 5.6f;
+    pIn[20] = 1;  pHigh[20] = pLow[20] = 7;
+    pIn[24] = -1; pHigh[24] = pLow[24] = 5.5f;  // 回试低点等于 ZG，不跌破
+    pIn[28] = 1;  pHigh[28] = pLow[28] = 8;
+    pIn[32] = -1; pHigh[32] = pLow[32] = 7;
+
+    Func5(nCount, pOut, pIn, pHigh, pLow);
+    if (!NearlyEqual(pOut[24], 3.0f))
+    {
+      return false;
+    }
+  }
+
+  {
+    const int nCount = 33;
+    float pIn[nCount];
+    float pHigh[nCount];
+    float pLow[nCount];
+    float pOut[nCount];
+
+    for (int i = 0; i < nCount; i++)
+    {
+      pIn[i] = 0;
+      pHigh[i] = 0;
+      pLow[i] = 0;
+      pOut[i] = -1;
+    }
+
+    pIn[0] = 1;   pHigh[0] = pLow[0] = 12;
+    pIn[4] = -1;  pHigh[4] = pLow[4] = 9;
+    pIn[8] = 1;   pHigh[8] = pLow[8] = 11;
+    pIn[12] = -1; pHigh[12] = pLow[12] = 9.5f;
+    pIn[16] = 1;  pHigh[16] = pLow[16] = 9.3f;
+    pIn[20] = -1; pHigh[20] = pLow[20] = 7;
+    pIn[24] = 1;  pHigh[24] = pLow[24] = 9.5f;  // 回抽高点等于 ZD，不升破
+    pIn[28] = -1; pHigh[28] = pLow[28] = 6;
+    pIn[32] = 1;  pHigh[32] = pLow[32] = 7;
+
+    Func5(nCount, pOut, pIn, pHigh, pLow);
+    if (!NearlyEqual(pOut[24], 13.0f))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool TestFunc5WritesSecondBuyAfterFirstBuy()
 {
   const int nCount = 41;
@@ -1722,8 +4086,8 @@ static bool TestFunc5WritesSecondBuyAfterFirstBuy()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1777,11 +4141,11 @@ static bool TestFunc5WritesSecondSellAfterFirstSell()
   pHigh[12] = 7;
   pLow[12] = 7;
   pIn[16] = 1;
-  pHigh[16] = 14;
-  pLow[16] = 14;
+  pHigh[16] = 12;
+  pLow[16] = 12;
   pIn[20] = -1;
-  pHigh[20] = 10;
-  pLow[20] = 10;
+  pHigh[20] = 12.1f;
+  pLow[20] = 12.1f;
   pIn[24] = 1;
   pHigh[24] = 13;
   pLow[24] = 13;
@@ -1792,8 +4156,8 @@ static bool TestFunc5WritesSecondSellAfterFirstSell()
   pHigh[32] = 13.2f;
   pLow[32] = 13.2f;
   pIn[36] = -1;
-  pHigh[36] = 11;
-  pLow[36] = 11;
+  pHigh[36] = 12.6f;
+  pLow[36] = 12.6f;
   pIn[40] = 1;
   pHigh[40] = 13.1f;
   pLow[40] = 13.1f;
@@ -1832,11 +4196,11 @@ static bool TestFunc5WritesTrendDivergenceFirstSell()
   pHigh[12] = 7;
   pLow[12] = 7;
   pIn[16] = 1;
-  pHigh[16] = 14;
-  pLow[16] = 14;
+  pHigh[16] = 12;
+  pLow[16] = 12;
   pIn[20] = -1;
-  pHigh[20] = 10;
-  pLow[20] = 10;
+  pHigh[20] = 12.1f;
+  pLow[20] = 12.1f;
   pIn[24] = 1;
   pHigh[24] = 13;
   pLow[24] = 13;
@@ -1893,8 +4257,8 @@ static bool TestFunc5SkipsStrongNewLow()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -1902,8 +4266,8 @@ static bool TestFunc5SkipsStrongNewLow()
   pHigh[24] = 4;
   pLow[24] = 4;
   pIn[28] = 1;
-  pHigh[28] = 8;
-  pLow[28] = 8;
+  pHigh[28] = 7;
+  pLow[28] = 7;
   pIn[32] = -1;
   pHigh[32] = 3.5f;
   pLow[32] = 3.5f;
@@ -2027,6 +4391,32 @@ static bool TestAssignSegmentEnergySetsCumulativeArea()
          (Points[2].fEnergy > 0);
 }
 
+static bool TestAssignSegmentEnergySetsMacdLines()
+{
+  const int nCount = 60;
+  float pHigh[nCount];
+  float pLow[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pHigh[i] = 10.5f + (float)i;
+    pLow[i] = 9.5f + (float)i;
+  }
+
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 30, 40));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 59, 69));
+
+  AssignSegmentEnergy(Points, nCount, pHigh, pLow);
+
+  return NearlyEqual(Points[0].fDif, 0.0f) &&
+         NearlyEqual(Points[0].fDea, 0.0f) &&
+         (Points[1].fDif > 0.0f) &&
+         (Points[1].fDea > 0.0f) &&
+         (Points[2].fDif > Points[1].fDif) &&
+         (Points[2].fDea > Points[1].fDea);
+}
+
 static bool TestStrengthMetricsUseMacdEnergy()
 {
   SegmentPoint Start = MakeTestEnergyPoint(CZSC_POINT_TOP, 2, 10, 100);
@@ -2037,6 +4427,22 @@ static bool TestStrengthMetricsUseMacdEnergy()
   return NearlyEqual(Strength.fMacdArea, 30.0f) &&
          NearlyEqual(Strength.fSpace, 6.0f) &&
          NearlyEqual(Strength.fSpeed, 1.2f);
+}
+
+static bool TestStrengthMetricsUseMacdLineHeight()
+{
+  SegmentPoint Start = MakeTestEnergyPoint(CZSC_POINT_TOP, 2, 10, 100);
+  SegmentPoint End = MakeTestEnergyPoint(CZSC_POINT_BOTTOM, 7, 4, 70);
+  Start.fDif = 1.5f;
+  Start.fDea = -0.5f;
+  End.fDif = -2.0f;
+  End.fDea = 1.0f;
+
+  StrengthMetrics Strength = MeasureStrength(Start, End);
+
+  return NearlyEqual(Strength.fDifHeight, 3.5f) &&
+         NearlyEqual(Strength.fDeaHeight, 1.5f) &&
+         NearlyEqual(Strength.fMacdArea, 30.0f);
 }
 
 static bool TestDivergenceDetectsMacdWeakening()
@@ -2163,8 +4569,8 @@ static bool TestFunc10MatchesFunc5SignalBars()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -2235,8 +4641,8 @@ static bool TestFunc10WritesSignalQuality()
   pHigh[12] = 10;
   pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = 3;
-  pLow[16] = 3;
+  pHigh[16] = 7.5f;
+  pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = 7;
   pLow[20] = 7;
@@ -2253,7 +4659,7 @@ static bool TestFunc10WritesSignalQuality()
   Func10(nCount, pOut, pIn, pHigh, pLow);
 
   // 一类买点(index32)价差与速度同时走弱 → 标准强信号(2)。
-  // 中枢0末端 index16 已跌破 ZD=8，离开后第一反向段 index16→20 回试不进 → 三卖在20(确认级 1)。
+  // 中枢0离开后的首次回试不回中枢 → 三卖在28(确认级 1)。
   for (int i = 0; i < nCount; i++)
   {
     float fExpected = 0.0f;
@@ -2261,7 +4667,7 @@ static bool TestFunc10WritesSignalQuality()
     {
       fExpected = (float)CZSC_SIGNAL_QUALITY_STRONG;
     }
-    else if (i == 20)
+    else if (i == 28)
     {
       fExpected = (float)CZSC_SIGNAL_QUALITY_CONFIRMED;
     }
@@ -2290,20 +4696,16 @@ static bool TestFirstCandidateMacdUpgradesQuality()
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
 
-  // 末段（点4→点5）价差更大但速度更慢：几何上仅速度走弱，质量只能到 CONFIRMED。
+  // 末段（点4→点5）价差更大但速度更慢：仅速度走弱，不构成严格趋势背驰。
   std::vector<TradingSignalCandidate> Plain =
     BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
   const TradingSignalCandidate *pPlain = FindSignalCandidate(Plain, 30, 1.0f);
-  if ((pPlain == 0) ||
-      pPlain->Divergence.bWeakSpace ||
-      !pPlain->Divergence.bWeakSpeed ||
-      pPlain->Divergence.bWeakMacd ||
-      (pPlain->nQuality != CZSC_SIGNAL_QUALITY_CONFIRMED))
+  if (pPlain != 0)
   {
     return false;
   }
 
-  // 注入末段 MACD 面积小于前段：第24课标准背驰，质量升级为 STRONG。
+  // 注入末段 MACD 面积小于前段：动力学走弱后，才生成强一类信号。
   Points[2].fEnergy = 100;
   Points[3].fEnergy = 70;
   Points[4].fEnergy = 50;
@@ -2394,6 +4796,58 @@ static bool TestClassifyCenterRelationExtension()
          (ClassifyCenterRelation(Prev, Next) == CZSC_CENTER_RELATION_EXTENSION);
 }
 
+static bool TestClassifyCenterRelationExtensionAtFullExtentBoundary()
+{
+  {
+    Center Prev = MakeTestCenterFull(0, 12, 9, 5, 12, 4);
+    Center Next = MakeTestCenterFull(16, 28, 15, 10, 16, 12); // 后DD == 前GG
+    if (ClassifyCenterRelation(Prev, Next) != CZSC_CENTER_RELATION_EXTENSION)
+    {
+      return false;
+    }
+  }
+
+  {
+    Center Prev = MakeTestCenterFull(0, 12, 15, 10, 16, 12);
+    Center Next = MakeTestCenterFull(16, 28, 9, 5, 12, 4);    // 后GG == 前DD
+    if (ClassifyCenterRelation(Prev, Next) != CZSC_CENTER_RELATION_EXTENSION)
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestClassifyCenterLifecycleExtension()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 12, 4);
+  Center Next = MakeTestCenterFull(16, 28, 8, 6, 10, 3);
+
+  return ClassifyCenterLifecycle(Prev, Next) == CZSC_CENTER_LIFECYCLE_EXTENSION;
+}
+
+static bool TestClassifyCenterLifecycleExpansion()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 12, 4);
+  Center Next = MakeTestCenterFull(16, 28, 15, 10, 16, 8);
+
+  return (ClassifyCenterRelation(Prev, Next) == CZSC_CENTER_RELATION_EXTENSION) &&
+         (ClassifyCenterLifecycle(Prev, Next) == CZSC_CENTER_LIFECYCLE_EXPANSION);
+}
+
+static bool TestClassifyCenterLifecycleNewborn()
+{
+  Center Prev = MakeTestCenterFull(0, 12, 9, 5, 10, 4);
+  Center Up = MakeTestCenterFull(16, 28, 14, 12, 15, 11);
+  Center Down = MakeTestCenterFull(32, 44, 2, 1, 3, 0);
+
+  return (ClassifyCenterRelation(Prev, Up) == CZSC_CENTER_RELATION_UP) &&
+         (ClassifyCenterLifecycle(Prev, Up) == CZSC_CENTER_LIFECYCLE_NEWBORN_UP) &&
+         (ClassifyCenterRelation(Prev, Down) == CZSC_CENTER_RELATION_DOWN) &&
+         (ClassifyCenterLifecycle(Prev, Down) == CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN);
+}
+
 static bool TestWriteCenterRelationSignalMarks()
 {
   const int nCount = 20;
@@ -2427,6 +4881,52 @@ static bool TestWriteCenterRelationSignalMarks()
       fExpected = 2;   // 中枢扩展
     }
 
+    if (!NearlyEqual(pOut[i], fExpected))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestWriteCenterLifecycleSignalMarks()
+{
+  const int nCount = 30;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 4, 9, 5, 12, 4));
+  Centers.push_back(MakeTestCenterFull(5, 9, 8, 6, 10, 3));       // [ZD,ZG] 重叠 → 延伸
+  Centers.push_back(MakeTestCenterFull(10, 14, 15, 10, 16, 8));   // 全幅重叠 → 扩展
+  Centers.push_back(MakeTestCenterFull(15, 19, 25, 21, 26, 20));  // 全幅上移 → 上涨新生
+  Centers.push_back(MakeTestCenterFull(20, 24, 10, 5, 12, 4));    // 全幅下移 → 下跌新生
+
+  WriteCenterLifecycleSignal(nCount, pOut, Centers);
+
+  for (int i = 0; i < nCount; i++)
+  {
+    float fExpected = 0;
+    if (i == 5)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_EXTENSION;
+    }
+    else if (i == 10)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_EXPANSION;
+    }
+    else if (i == 15)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_NEWBORN_UP;
+    }
+    else if (i == 20)
+    {
+      fExpected = (float)CZSC_CENTER_LIFECYCLE_NEWBORN_DOWN;
+    }
     if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
@@ -2593,7 +5093,7 @@ static bool TestFunc12WritesReversalCode()
   pIn[12] = 1;
   pHigh[12] = pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = pLow[16] = 3;
+  pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = pLow[20] = 7;
   pIn[24] = -1;
@@ -2614,6 +5114,69 @@ static bool TestFunc12WritesReversalCode()
   return bFirstCoded && NearlyEqual(pOut[40], 0.0f) && NearlyEqual(pOut[0], 0.0f);
 }
 
+static bool TestApplyTradingReversalRequiresFirstSignal()
+{
+  const int nCount = 4;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(1, 1.0f, 10);
+  First.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate Third = MakeTestCandidate(2, 3.0f, 20);
+  Third.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate SecondSell = MakeTestCandidate(3, 12.0f, 20);
+  SecondSell.nReversal = CZSC_REVERSAL_EXTENSION;
+  Candidates.push_back(First);
+  Candidates.push_back(Third);
+  Candidates.push_back(SecondSell);
+
+  ApplyTradingSignalReversal(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 3.0f) &&
+         NearlyEqual(pOut[2], 0.0f) &&
+         NearlyEqual(pOut[3], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingReversalPointIdMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(1, 1.0f, 30);
+  First.nPoint = 4;
+  First.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate Unknown = MakeTestCandidate(3, 11.0f, 30);
+  Unknown.nPoint = 5;
+  Unknown.nReversal = CZSC_REVERSAL_UNKNOWN;
+  TradingSignalCandidate Third = MakeTestCandidate(5, 3.0f, 20);
+  Third.nPoint = 6;
+  Third.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate MissingPoint = MakeTestCandidate(7, 1.0f, 30);
+  MissingPoint.nReversal = CZSC_REVERSAL_EXTENSION;
+  Candidates.push_back(First);
+  Candidates.push_back(Unknown);
+  Candidates.push_back(Third);
+  Candidates.push_back(MissingPoint);
+
+  ApplyTradingSignalReversalPointId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 6.0f) &&
+         NearlyEqual(pOut[3], 0.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
 static bool TestCenterAftermathExtended()
 {
   std::vector<Center> Centers;
@@ -2627,7 +5190,13 @@ static bool TestCenterAftermathNewborn()
   std::vector<Center> Centers;
   Centers.push_back(MakeTestCenterFull(0, 12, 9, 5, 10, 4));     // GG=10
   Centers.push_back(MakeTestCenterFull(16, 28, 14, 12, 16, 12)); // DD=12 > 10 → 上涨新生
-  return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_NEWBORN;
+
+  if (ClassifyCenterAftermath(Centers, 0, 3.0f) != CZSC_CENTER_AFTERMATH_NEWBORN)
+  {
+    return false;
+  }
+  // 三卖 + 上涨(反向) → 未知
+  return ClassifyCenterAftermath(Centers, 0, 13.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN;
 }
 
 static bool TestCenterAftermathUnknownNoNext()
@@ -2652,9 +5221,19 @@ static bool TestCenterAftermathSell()
   return ClassifyCenterAftermath(Centers, 0, 3.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN;
 }
 
+static bool TestCenterAftermathRequiresThirdSignal()
+{
+  std::vector<Center> Centers;
+  Centers.push_back(MakeTestCenterFull(0, 12, 10, 5, 12, 4));
+  Centers.push_back(MakeTestCenterFull(16, 28, 13, 9, 14, 8));   // 与前全幅重叠 → 扩展
+
+  return (ClassifyCenterAftermath(Centers, 0, 1.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN) &&
+         (ClassifyCenterAftermath(Centers, 0, 12.0f) == CZSC_CENTER_AFTERMATH_UNKNOWN);
+}
+
 static bool TestApplyTradingAftermathMapsCodes()
 {
-  const int nCount = 6;
+  const int nCount = 8;
   float pOut[nCount];
   for (int i = 0; i < nCount; i++)
   {
@@ -2667,14 +5246,1832 @@ static bool TestApplyTradingAftermathMapsCodes()
   TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
   Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
   TradingSignalCandidate Unknown = MakeTestCandidate(5, 3.0f, 20);
+  TradingSignalCandidate NonThird = MakeTestCandidate(7, 1.0f, 20);
+  NonThird.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
   Candidates.push_back(Extended);
   Candidates.push_back(Newborn);
   Candidates.push_back(Unknown);
+  Candidates.push_back(NonThird);
 
   ApplyTradingSignalAftermath(nCount, pOut, Candidates);
 
   return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], 2.0f) &&
-         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[0], 0.0f);
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingCenterPositionMapsCodes()
+{
+  const int nCount = 6;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -9;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Below = MakeTestCandidate(1, 1.0f, 20);
+  Below.nCenterPosition = CZSC_CENTER_POSITION_BELOW;
+  TradingSignalCandidate Inside = MakeTestCandidate(3, 2.0f, 20);
+  Inside.nCenterPosition = CZSC_CENTER_POSITION_INSIDE;
+  TradingSignalCandidate Above = MakeTestCandidate(5, 3.0f, 20);
+  Above.nCenterPosition = CZSC_CENTER_POSITION_ABOVE;
+  Candidates.push_back(Below);
+  Candidates.push_back(Inside);
+  Candidates.push_back(Above);
+
+  ApplyTradingSignalCenterPosition(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], -1.0f) &&
+         NearlyEqual(pOut[3], 0.0f) &&
+         NearlyEqual(pOut[5], 1.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingMovementTypeMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -9;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 1.0f, 10);
+  Low.nMovementType = CZSC_MOVEMENT_UP;
+  TradingSignalCandidate High = MakeTestCandidate(2, 2.0f, 20);
+  High.nMovementType = CZSC_MOVEMENT_DOWN;
+  TradingSignalCandidate Flat = MakeTestCandidate(4, 3.0f, 20);
+  Flat.nMovementType = CZSC_MOVEMENT_CONSOLIDATION;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Flat);
+
+  ApplyTradingSignalMovementType(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], -1.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingPriorityMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  TradingSignalCandidate First = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(First);
+
+  ApplyTradingSignalPriority(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 20.0f) &&
+         NearlyEqual(pOut[4], 30.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingCenterIdMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nCenter = 4;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nCenter = 7;
+  TradingSignalCandidate Unknown = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Unknown);
+
+  ApplyTradingSignalCenterId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 8.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingBreakoutIdMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nBreakout = 1;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nBreakout = 5;
+  TradingSignalCandidate None = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(None);
+
+  ApplyTradingSignalBreakoutId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 6.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingBreakoutPointIdsMapCodes()
+{
+  const int nCount = 6;
+  float pLeave[nCount];
+  float pRetest[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pLeave[i] = -1;
+    pRetest[i] = -1;
+  }
+
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 4));
+  Breakouts.back().nLeavePoint = 3;
+  Breakouts.push_back(MakeTestBreakout(-1, 8));
+  Breakouts.back().nLeavePoint = 7;
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nBreakout = 0;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nBreakout = 1;
+  TradingSignalCandidate Missing = MakeTestCandidate(4, 1.0f, 30);
+  Missing.nBreakout = 8;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Missing);
+
+  ApplyTradingSignalBreakoutLeavePointId(nCount, pLeave, Candidates, Breakouts);
+  ApplyTradingSignalBreakoutRetestPointId(nCount, pRetest, Candidates, Breakouts);
+
+  return NearlyEqual(pLeave[2], 8.0f) &&
+         NearlyEqual(pRetest[2], 9.0f) &&
+         NearlyEqual(pLeave[4], 0.0f) &&
+         NearlyEqual(pRetest[4], 0.0f) &&
+         NearlyEqual(pLeave[0], 0.0f) &&
+         NearlyEqual(pRetest[0], 0.0f);
+}
+
+static bool TestApplyTradingPointIdMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nPoint = 4;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nPoint = 8;
+  TradingSignalCandidate Unknown = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Unknown);
+
+  ApplyTradingSignalPointId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 9.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingTrendIdMapsCodes()
+{
+  const int nCount = 5;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 2.0f, 10);
+  Low.nTrend = 1;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nTrend = 5;
+  TradingSignalCandidate None = MakeTestCandidate(4, 1.0f, 30);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(None);
+
+  ApplyTradingSignalTrendId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], 6.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingSecondContextPointIdsMapCodes()
+{
+  const int nCount = 14;
+  float pBase[nCount];
+  float pTurn[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pBase[i] = -1;
+    pTurn[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(3, 2.0f, 10);
+  Buy.nSource = 2;
+  Buy.nPoint = 6;
+  Buy.nSecondBasePoint = 4;
+  Buy.nSecondTurnPoint = 5;
+  TradingSignalCandidate Sell = MakeTestCandidate(5, 12.0f, 10);
+  Sell.nSource = 2;
+  Sell.nPoint = 9;
+  Sell.nSecondBasePoint = 7;
+  Sell.nSecondTurnPoint = 8;
+  TradingSignalCandidate MissingBase = MakeTestCandidate(7, 2.0f, 10);
+  MissingBase.nSource = 2;
+  MissingBase.nPoint = 10;
+  MissingBase.nSecondTurnPoint = 9;
+  TradingSignalCandidate WrongOrder = MakeTestCandidate(9, 2.0f, 10);
+  WrongOrder.nSource = 2;
+  WrongOrder.nPoint = 12;
+  WrongOrder.nSecondBasePoint = 11;
+  WrongOrder.nSecondTurnPoint = 10;
+  TradingSignalCandidate NonSecond = MakeTestCandidate(11, 3.0f, 20);
+  NonSecond.nSource = 3;
+  NonSecond.nPoint = 13;
+  NonSecond.nSecondBasePoint = 10;
+  NonSecond.nSecondTurnPoint = 12;
+  TradingSignalCandidate LowerPrioritySecond = MakeTestCandidate(12, 2.0f, 10);
+  LowerPrioritySecond.nSource = 2;
+  LowerPrioritySecond.nPoint = 6;
+  LowerPrioritySecond.nSecondBasePoint = 4;
+  LowerPrioritySecond.nSecondTurnPoint = 5;
+  TradingSignalCandidate HigherPriorityThird = MakeTestCandidate(12, 3.0f, 20);
+  HigherPriorityThird.nSource = 3;
+  HigherPriorityThird.nPoint = 6;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(MissingBase);
+  Candidates.push_back(WrongOrder);
+  Candidates.push_back(NonSecond);
+  Candidates.push_back(LowerPrioritySecond);
+  Candidates.push_back(HigherPriorityThird);
+
+  ApplyTradingSignalSecondBasePointId(nCount, pBase, Candidates);
+  ApplyTradingSignalSecondTurnPointId(nCount, pTurn, Candidates);
+
+  return NearlyEqual(pBase[3], 5.0f) &&
+         NearlyEqual(pTurn[3], 6.0f) &&
+         NearlyEqual(pBase[5], 8.0f) &&
+         NearlyEqual(pTurn[5], 9.0f) &&
+         NearlyEqual(pBase[7], 0.0f) &&
+         NearlyEqual(pTurn[7], 0.0f) &&
+         NearlyEqual(pBase[9], 0.0f) &&
+         NearlyEqual(pTurn[9], 0.0f) &&
+         NearlyEqual(pBase[11], 0.0f) &&
+         NearlyEqual(pTurn[11], 0.0f) &&
+         NearlyEqual(pBase[12], 0.0f) &&
+         NearlyEqual(pTurn[12], 0.0f) &&
+         NearlyEqual(pBase[0], 0.0f) &&
+         NearlyEqual(pTurn[0], 0.0f);
+}
+
+static bool TestApplyTradingSmallTurnMapsCodes()
+{
+  const int nCount = 18;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 3.0f, 20);
+  Buy.nSource = 3;
+  Buy.nPoint = 1;
+  Buy.nCenter = 0;
+  Buy.nBreakout = 0;
+  Buy.nSmallTurn = 1;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
+  Sell.nSource = 3;
+  Sell.nPoint = 3;
+  Sell.nCenter = 0;
+  Sell.nBreakout = 1;
+  Sell.nSmallTurn = -1;
+  TradingSignalCandidate None = MakeTestCandidate(5, 3.0f, 20);
+  None.nSource = 3;
+  None.nPoint = 5;
+  None.nCenter = 0;
+  None.nBreakout = 2;
+  TradingSignalCandidate WrongBuy = MakeTestCandidate(7, 3.0f, 20);
+  WrongBuy.nSource = 3;
+  WrongBuy.nPoint = 7;
+  WrongBuy.nCenter = 0;
+  WrongBuy.nBreakout = 3;
+  WrongBuy.nSmallTurn = -1;
+  TradingSignalCandidate WrongSell = MakeTestCandidate(9, 13.0f, 20);
+  WrongSell.nSource = 3;
+  WrongSell.nPoint = 9;
+  WrongSell.nCenter = 0;
+  WrongSell.nBreakout = 4;
+  WrongSell.nSmallTurn = 1;
+  TradingSignalCandidate NonThird = MakeTestCandidate(11, 1.0f, 20);
+  NonThird.nSource = 1;
+  NonThird.nPoint = 11;
+  NonThird.nCenter = 0;
+  NonThird.nBreakout = 5;
+  NonThird.nSmallTurn = 1;
+  TradingSignalCandidate MissingSource = MakeTestCandidate(13, 3.0f, 20);
+  MissingSource.nPoint = 13;
+  MissingSource.nCenter = 0;
+  MissingSource.nBreakout = 6;
+  MissingSource.nSmallTurn = 1;
+  TradingSignalCandidate MissingBreakout = MakeTestCandidate(15, 3.0f, 20);
+  MissingBreakout.nSource = 3;
+  MissingBreakout.nPoint = 15;
+  MissingBreakout.nCenter = 0;
+  MissingBreakout.nSmallTurn = 1;
+  TradingSignalCandidate MissingCenter = MakeTestCandidate(17, 3.0f, 20);
+  MissingCenter.nSource = 3;
+  MissingCenter.nPoint = 17;
+  MissingCenter.nBreakout = 7;
+  MissingCenter.nSmallTurn = 1;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(None);
+  Candidates.push_back(WrongBuy);
+  Candidates.push_back(WrongSell);
+  Candidates.push_back(NonThird);
+  Candidates.push_back(MissingSource);
+  Candidates.push_back(MissingBreakout);
+  Candidates.push_back(MissingCenter);
+
+  ApplyTradingSignalSmallTurn(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) && NearlyEqual(pOut[11], 0.0f) &&
+         NearlyEqual(pOut[13], 0.0f) && NearlyEqual(pOut[15], 0.0f) &&
+         NearlyEqual(pOut[17], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingSmallTurnPointIdsMapCodes()
+{
+  const int nCount = 14;
+  float pBase[nCount];
+  float pLeave[nCount];
+  float pRetest[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pBase[i] = -1;
+    pLeave[i] = -1;
+    pRetest[i] = -1;
+  }
+
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(1, 4));
+  Breakouts.back().nLeavePoint = 2;
+  Breakouts.push_back(MakeTestBreakout(-1, 8));
+  Breakouts.back().nLeavePoint = 6;
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 3.0f, 20);
+  Buy.nSource = 3;
+  Buy.nPoint = 1;
+  Buy.nCenter = 0;
+  Buy.nBreakout = 0;
+  Buy.nSmallTurn = 1;
+  Buy.nSmallTurnBasePoint = 0;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 13.0f, 20);
+  Sell.nSource = 3;
+  Sell.nPoint = 3;
+  Sell.nCenter = 0;
+  Sell.nBreakout = 1;
+  Sell.nSmallTurn = -1;
+  Sell.nSmallTurnBasePoint = 2;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(5, 3.0f, 20);
+  WrongDirection.nSource = 3;
+  WrongDirection.nPoint = 5;
+  WrongDirection.nCenter = 0;
+  WrongDirection.nBreakout = 0;
+  WrongDirection.nSmallTurn = -1;
+  WrongDirection.nSmallTurnBasePoint = 4;
+  TradingSignalCandidate MissingBreakout = MakeTestCandidate(7, 3.0f, 20);
+  MissingBreakout.nSource = 3;
+  MissingBreakout.nPoint = 7;
+  MissingBreakout.nCenter = 0;
+  MissingBreakout.nSmallTurn = 1;
+  MissingBreakout.nSmallTurnBasePoint = 6;
+  TradingSignalCandidate LowerPrioritySmallTurn = MakeTestCandidate(10, 3.0f, 10);
+  LowerPrioritySmallTurn.nSource = 3;
+  LowerPrioritySmallTurn.nPoint = 10;
+  LowerPrioritySmallTurn.nCenter = 0;
+  LowerPrioritySmallTurn.nBreakout = 0;
+  LowerPrioritySmallTurn.nSmallTurn = 1;
+  LowerPrioritySmallTurn.nSmallTurnBasePoint = 9;
+  TradingSignalCandidate HigherPriorityNonThird = MakeTestCandidate(10, 2.0f, 20);
+  HigherPriorityNonThird.nSource = 2;
+  TradingSignalCandidate MissingCenter = MakeTestCandidate(12, 3.0f, 20);
+  MissingCenter.nSource = 3;
+  MissingCenter.nPoint = 12;
+  MissingCenter.nBreakout = 0;
+  MissingCenter.nSmallTurn = 1;
+  MissingCenter.nSmallTurnBasePoint = 11;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(MissingBreakout);
+  Candidates.push_back(LowerPrioritySmallTurn);
+  Candidates.push_back(HigherPriorityNonThird);
+  Candidates.push_back(MissingCenter);
+
+  ApplyTradingSignalSmallTurnBasePointId(nCount, pBase, Candidates);
+  ApplyTradingSignalSmallTurnLeavePointId(nCount, pLeave, Candidates, Breakouts);
+  ApplyTradingSignalSmallTurnRetestPointId(nCount, pRetest, Candidates, Breakouts);
+
+  return NearlyEqual(pBase[1], 1.0f) &&
+         NearlyEqual(pLeave[1], 3.0f) &&
+         NearlyEqual(pRetest[1], 5.0f) &&
+         NearlyEqual(pBase[3], 3.0f) &&
+         NearlyEqual(pLeave[3], 7.0f) &&
+         NearlyEqual(pRetest[3], 9.0f) &&
+         NearlyEqual(pBase[5], 0.0f) &&
+         NearlyEqual(pLeave[5], 0.0f) &&
+         NearlyEqual(pRetest[5], 0.0f) &&
+         NearlyEqual(pBase[7], 0.0f) &&
+         NearlyEqual(pLeave[7], 0.0f) &&
+         NearlyEqual(pRetest[7], 0.0f) &&
+         NearlyEqual(pBase[10], 0.0f) &&
+         NearlyEqual(pLeave[10], 0.0f) &&
+         NearlyEqual(pRetest[10], 0.0f) &&
+         NearlyEqual(pBase[12], 0.0f) &&
+         NearlyEqual(pLeave[12], 0.0f) &&
+         NearlyEqual(pRetest[12], 0.0f) &&
+         NearlyEqual(pBase[0], 0.0f) &&
+         NearlyEqual(pLeave[0], 0.0f) &&
+         NearlyEqual(pRetest[0], 0.0f);
+}
+
+static bool TestApplyTradingAbcStructureMapsCodes()
+{
+  const int nCount = 10;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.nAbcStructure = 1;
+  Buy.nAbcBreakout = 0;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  Sell.nAbcStructure = -1;
+  Sell.nAbcBreakout = 1;
+  TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  WrongDirection.nAbcStructure = -1;
+  WrongDirection.nAbcBreakout = 2;
+  TradingSignalCandidate NonFirst = MakeTestCandidate(9, 3.0f, 30);
+  NonFirst.nAbcStructure = 1;
+  NonFirst.nAbcBreakout = 3;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(None);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(NonFirst);
+
+  ApplyTradingSignalAbcStructure(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) && NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingAbcBreakoutIdMapsCodes()
+{
+  const int nCount = 12;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.nAbcStructure = 1;
+  Buy.nAbcBreakout = 2;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  Sell.nAbcStructure = -1;
+  Sell.nAbcBreakout = 0;
+  TradingSignalCandidate MissingBreakout = MakeTestCandidate(5, 1.0f, 30);
+  MissingBreakout.nAbcStructure = 1;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  WrongDirection.nAbcStructure = -1;
+  WrongDirection.nAbcBreakout = 4;
+  TradingSignalCandidate NonFirst = MakeTestCandidate(9, 3.0f, 30);
+  NonFirst.nAbcStructure = 1;
+  NonFirst.nAbcBreakout = 5;
+  TradingSignalCandidate LowerPriorityAbc = MakeTestCandidate(10, 1.0f, 10);
+  LowerPriorityAbc.nAbcStructure = 1;
+  LowerPriorityAbc.nAbcBreakout = 1;
+  TradingSignalCandidate HigherPriorityNonFirst = MakeTestCandidate(10, 2.0f, 20);
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(MissingBreakout);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(NonFirst);
+  Candidates.push_back(LowerPriorityAbc);
+  Candidates.push_back(HigherPriorityNonFirst);
+
+  ApplyTradingSignalAbcBreakoutId(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 3.0f) && NearlyEqual(pOut[3], 1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) && NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) && NearlyEqual(pOut[10], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingAbcBreakoutPointIdsMapCodes()
+{
+  const int nCount = 12;
+  float pLeave[nCount];
+  float pRetest[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pLeave[i] = -1;
+    pRetest[i] = -1;
+  }
+
+  std::vector<CenterBreakout> Breakouts;
+  Breakouts.push_back(MakeTestBreakout(-1, 4));
+  Breakouts.back().nLeavePoint = 3;
+  Breakouts.push_back(MakeTestBreakout(1, 8));
+  Breakouts.back().nLeavePoint = 7;
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 1.0f, 10);
+  Low.nAbcStructure = 1;
+  Low.nAbcBreakout = 0;
+  TradingSignalCandidate High = MakeTestCandidate(2, 11.0f, 20);
+  High.nAbcStructure = -1;
+  High.nAbcBreakout = 1;
+  TradingSignalCandidate Missing = MakeTestCandidate(4, 1.0f, 30);
+  Missing.nAbcStructure = 1;
+  Missing.nAbcBreakout = 8;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(6, 1.0f, 30);
+  WrongDirection.nAbcStructure = -1;
+  WrongDirection.nAbcBreakout = 0;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Missing);
+  Candidates.push_back(WrongDirection);
+
+  ApplyTradingSignalAbcBreakoutLeavePointId(nCount, pLeave, Candidates, Breakouts);
+  ApplyTradingSignalAbcBreakoutRetestPointId(nCount, pRetest, Candidates, Breakouts);
+
+  return NearlyEqual(pLeave[2], 8.0f) &&
+         NearlyEqual(pRetest[2], 9.0f) &&
+         NearlyEqual(pLeave[4], 0.0f) &&
+         NearlyEqual(pRetest[4], 0.0f) &&
+         NearlyEqual(pLeave[6], 0.0f) &&
+         NearlyEqual(pRetest[6], 0.0f) &&
+         NearlyEqual(pLeave[0], 0.0f) &&
+         NearlyEqual(pRetest[0], 0.0f);
+}
+
+static bool TestApplyTradingStrictAbcFiltersFirstSignals()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate MissingAbc = MakeTestCandidate(1, 1.0f, 30);
+  MissingAbc.nSource = 1;
+  MissingAbc.nAbcStructure = 0;
+  TradingSignalCandidate ConfirmedAbc = MakeTestCandidate(2, 11.0f, 30);
+  ConfirmedAbc.nSource = 1;
+  ConfirmedAbc.nAbcStructure = -1;
+  ConfirmedAbc.nAbcBreakout = 0;
+  TradingSignalCandidate Third = MakeTestCandidate(3, 3.0f, 20);
+  Third.nSource = 3;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(4, 1.0f, 30);
+  WrongDirection.nSource = 1;
+  WrongDirection.nAbcStructure = -1;
+  WrongDirection.nAbcBreakout = 1;
+  TradingSignalCandidate Second = MakeTestCandidate(5, 2.0f, 10);
+  Second.nSource = 2;
+  TradingSignalCandidate MismatchedSource = MakeTestCandidate(6, 1.0f, 30);
+  MismatchedSource.nSource = 2;
+  MismatchedSource.nAbcStructure = 0;
+  Candidates.push_back(MissingAbc);
+  Candidates.push_back(ConfirmedAbc);
+  Candidates.push_back(Third);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(Second);
+  Candidates.push_back(MismatchedSource);
+
+  ApplyTradingSignalStrictAbcCandidates(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 0.0f) &&
+         NearlyEqual(pOut[2], 11.0f) &&
+         NearlyEqual(pOut[3], 3.0f) &&
+         NearlyEqual(pOut[4], 0.0f) &&
+         NearlyEqual(pOut[5], 2.0f) &&
+         NearlyEqual(pOut[6], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingMacdLineWeaknessMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.Previous.fDifHeight = 5;
+  Buy.Divergence.Previous.fDeaHeight = 4;
+  Buy.Divergence.Current.fDifHeight = 3;
+  Buy.Divergence.Current.fDeaHeight = 2;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  Sell.Divergence.Previous.fDifHeight = 6;
+  Sell.Divergence.Previous.fDeaHeight = 5;
+  Sell.Divergence.Current.fDifHeight = 4;
+  Sell.Divergence.Current.fDeaHeight = 5;
+  TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
+  None.Divergence.Previous.fDifHeight = 2;
+  None.Divergence.Previous.fDeaHeight = 2;
+  None.Divergence.Current.fDifHeight = 3;
+  None.Divergence.Current.fDeaHeight = 1;
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.Previous.fDifHeight = 6;
+  Invalid.Divergence.Previous.fDeaHeight = 5;
+  Invalid.Divergence.Current.fDifHeight = 4;
+  Invalid.Divergence.Current.fDeaHeight = 3;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(None);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalMacdLineWeakness(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) &&
+         NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingMacdZeroPullbackMapsCodes()
+{
+  const int nCount = 10;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.nMacdZeroPullback = 1;
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  Sell.nMacdZeroPullback = -1;
+  TradingSignalCandidate None = MakeTestCandidate(5, 1.0f, 30);
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  WrongDirection.nMacdZeroPullback = -1;
+  TradingSignalCandidate NonFirst = MakeTestCandidate(9, 3.0f, 30);
+  NonFirst.nMacdZeroPullback = 1;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(None);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(NonFirst);
+
+  ApplyTradingSignalMacdZeroPullback(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) &&
+         NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static void MakeStandardDivergence(TradingSignalCandidate *pC, int nSign)
+{
+  pC->nSource = 1;
+  pC->nTrend = 0;
+  pC->nMovementType = (nSign > 0) ? CZSC_MOVEMENT_DOWN : CZSC_MOVEMENT_UP;
+  pC->nAbcStructure = nSign;
+  pC->nAbcBreakout = 0;
+  pC->nMacdZeroPullback = nSign;
+  pC->Divergence.nDirection = -nSign;
+  pC->Divergence.bNewExtreme = true;
+  pC->Divergence.bWeakMacd = true;
+  pC->Divergence.bDivergence = true;
+  pC->Divergence.Previous.fDifHeight = 6;
+  pC->Divergence.Previous.fDeaHeight = 5;
+  pC->Divergence.Current.fDifHeight = 4;
+  pC->Divergence.Current.fDeaHeight = 3;
+}
+
+static bool TestApplyTradingStandardDivergenceMapsCodes()
+{
+  const int nCount = 30;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  MakeStandardDivergence(&Buy, 1);
+  TradingSignalCandidate Sell = MakeTestCandidate(3, 11.0f, 30);
+  MakeStandardDivergence(&Sell, -1);
+  TradingSignalCandidate MissingAbc = MakeTestCandidate(5, 1.0f, 30);
+  MakeStandardDivergence(&MissingAbc, 1);
+  MissingAbc.nAbcStructure = 0;
+  TradingSignalCandidate MissingAbcBreakout = MakeTestCandidate(29, 1.0f, 30);
+  MakeStandardDivergence(&MissingAbcBreakout, 1);
+  MissingAbcBreakout.nAbcBreakout = -1;
+  TradingSignalCandidate MissingZeroPull = MakeTestCandidate(7, 1.0f, 30);
+  MakeStandardDivergence(&MissingZeroPull, 1);
+  MissingZeroPull.nMacdZeroPullback = 0;
+  TradingSignalCandidate MissingMacdArea = MakeTestCandidate(9, 1.0f, 30);
+  MakeStandardDivergence(&MissingMacdArea, 1);
+  MissingMacdArea.Divergence.bWeakMacd = false;
+  TradingSignalCandidate MissingLineWeak = MakeTestCandidate(11, 1.0f, 30);
+  MakeStandardDivergence(&MissingLineWeak, 1);
+  MissingLineWeak.Divergence.Current.fDeaHeight = 6;
+  TradingSignalCandidate WrongAbcDirection = MakeTestCandidate(13, 1.0f, 30);
+  MakeStandardDivergence(&WrongAbcDirection, 1);
+  WrongAbcDirection.nAbcStructure = -1;
+  TradingSignalCandidate WrongPullbackDirection = MakeTestCandidate(15, 11.0f, 30);
+  MakeStandardDivergence(&WrongPullbackDirection, -1);
+  WrongPullbackDirection.nMacdZeroPullback = 1;
+  TradingSignalCandidate MissingBaseDivergence = MakeTestCandidate(17, 1.0f, 30);
+  MakeStandardDivergence(&MissingBaseDivergence, 1);
+  MissingBaseDivergence.Divergence.bDivergence = false;
+  TradingSignalCandidate WrongDivergenceDirection = MakeTestCandidate(19, 1.0f, 30);
+  MakeStandardDivergence(&WrongDivergenceDirection, 1);
+  WrongDivergenceDirection.Divergence.nDirection = 1;
+  TradingSignalCandidate NonFirstSource = MakeTestCandidate(21, 1.0f, 30);
+  MakeStandardDivergence(&NonFirstSource, 1);
+  NonFirstSource.nSource = 2;
+  TradingSignalCandidate MissingNewExtreme = MakeTestCandidate(23, 1.0f, 30);
+  MakeStandardDivergence(&MissingNewExtreme, 1);
+  MissingNewExtreme.Divergence.bNewExtreme = false;
+  TradingSignalCandidate MissingTrend = MakeTestCandidate(25, 1.0f, 30);
+  MakeStandardDivergence(&MissingTrend, 1);
+  MissingTrend.nTrend = -1;
+  TradingSignalCandidate WrongMovement = MakeTestCandidate(27, 1.0f, 30);
+  MakeStandardDivergence(&WrongMovement, 1);
+  WrongMovement.nMovementType = CZSC_MOVEMENT_UP;
+
+  Candidates.push_back(Buy);
+  Candidates.push_back(Sell);
+  Candidates.push_back(MissingAbc);
+  Candidates.push_back(MissingZeroPull);
+  Candidates.push_back(MissingMacdArea);
+  Candidates.push_back(MissingLineWeak);
+  Candidates.push_back(WrongAbcDirection);
+  Candidates.push_back(WrongPullbackDirection);
+  Candidates.push_back(MissingBaseDivergence);
+  Candidates.push_back(WrongDivergenceDirection);
+  Candidates.push_back(NonFirstSource);
+  Candidates.push_back(MissingNewExtreme);
+  Candidates.push_back(MissingTrend);
+  Candidates.push_back(WrongMovement);
+  Candidates.push_back(MissingAbcBreakout);
+
+  ApplyTradingSignalStandardDivergence(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 1.0f) &&
+         NearlyEqual(pOut[3], -1.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[9], 0.0f) &&
+         NearlyEqual(pOut[11], 0.0f) &&
+         NearlyEqual(pOut[13], 0.0f) &&
+         NearlyEqual(pOut[15], 0.0f) &&
+         NearlyEqual(pOut[17], 0.0f) &&
+         NearlyEqual(pOut[19], 0.0f) &&
+         NearlyEqual(pOut[21], 0.0f) &&
+         NearlyEqual(pOut[23], 0.0f) &&
+         NearlyEqual(pOut[25], 0.0f) &&
+         NearlyEqual(pOut[27], 0.0f) &&
+         NearlyEqual(pOut[29], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingMacdAreaRatioMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.Previous.fMacdArea = 200;
+  Buy.Divergence.Current.fMacdArea = 80;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.Previous.fMacdArea = 300;
+  Low.Divergence.Current.fMacdArea = 120;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.Previous.fMacdArea = 300;
+  High.Divergence.Current.fMacdArea = 90;
+  TradingSignalCandidate MissingBase = MakeTestCandidate(5, 11.0f, 30);
+  MissingBase.Divergence.Previous.fMacdArea = 0;
+  MissingBase.Divergence.Current.fMacdArea = 50;
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.Previous.fMacdArea = 100;
+  Invalid.Divergence.Current.fMacdArea = 10;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(MissingBase);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalMacdAreaRatio(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], 40.0f) &&
+         NearlyEqual(pOut[3], 30.0f) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingStrengthRatiosMapCodes()
+{
+  const int nCount = 8;
+  float pSpace[nCount];
+  float pSpeed[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pSpace[i] = -1;
+    pSpeed[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.Previous.fSpace = 120;
+  Buy.Divergence.Current.fSpace = 60;
+  Buy.Divergence.Previous.fSpeed = 6;
+  Buy.Divergence.Current.fSpeed = 3;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.Previous.fSpace = 200;
+  Low.Divergence.Current.fSpace = 100;
+  Low.Divergence.Previous.fSpeed = 5;
+  Low.Divergence.Current.fSpeed = 4;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.Previous.fSpace = 160;
+  High.Divergence.Current.fSpace = 40;
+  High.Divergence.Previous.fSpeed = 8;
+  High.Divergence.Current.fSpeed = 2;
+  TradingSignalCandidate MissingBase = MakeTestCandidate(5, 11.0f, 30);
+  MissingBase.Divergence.Previous.fSpace = 0;
+  MissingBase.Divergence.Current.fSpace = 50;
+  MissingBase.Divergence.Previous.fSpeed = 0;
+  MissingBase.Divergence.Current.fSpeed = 2;
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.Previous.fSpace = 100;
+  Invalid.Divergence.Current.fSpace = 10;
+  Invalid.Divergence.Previous.fSpeed = 10;
+  Invalid.Divergence.Current.fSpeed = 1;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(MissingBase);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalSpaceRatio(nCount, pSpace, Candidates);
+  ApplyTradingSignalSpeedRatio(nCount, pSpeed, Candidates);
+
+  return NearlyEqual(pSpace[1], 50.0f) &&
+         NearlyEqual(pSpeed[1], 50.0f) &&
+         NearlyEqual(pSpace[3], 25.0f) &&
+         NearlyEqual(pSpeed[3], 25.0f) &&
+         NearlyEqual(pSpace[5], 0.0f) &&
+         NearlyEqual(pSpeed[5], 0.0f) &&
+         NearlyEqual(pSpace[7], 0.0f) &&
+         NearlyEqual(pSpeed[7], 0.0f) &&
+         NearlyEqual(pSpace[0], 0.0f) &&
+         NearlyEqual(pSpeed[0], 0.0f);
+}
+
+static bool TestApplyTradingDivergenceFlagsMapCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.bNewExtreme = true;
+  Buy.Divergence.bWeakSpace = true;
+  Buy.Divergence.bWeakMacd = true;
+  Buy.Divergence.bDivergence = true;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.bNewExtreme = true;
+  Low.Divergence.bWeakSpace = true;
+  Low.Divergence.bWeakSpeed = true;
+  Low.Divergence.bWeakMacd = true;
+  Low.Divergence.bDivergence = true;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.bNewExtreme = true;
+  High.Divergence.bWeakSpeed = true;
+  TradingSignalCandidate None = MakeTestCandidate(5, 11.0f, 30);
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.bNewExtreme = true;
+  Invalid.Divergence.bWeakSpace = true;
+  Invalid.Divergence.bWeakSpeed = true;
+  Invalid.Divergence.bWeakMacd = true;
+  Invalid.Divergence.bDivergence = true;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(None);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalDivergenceFlags(nCount, pOut, Candidates);
+
+  float fBuyExpected = (float)(CZSC_DIVERGENCE_NEW_EXTREME |
+                               CZSC_DIVERGENCE_WEAK_SPACE |
+                               CZSC_DIVERGENCE_WEAK_MACD |
+                               CZSC_DIVERGENCE_CONFIRMED);
+  float fHighExpected = (float)(CZSC_DIVERGENCE_NEW_EXTREME |
+                                CZSC_DIVERGENCE_WEAK_SPEED);
+
+  return NearlyEqual(pOut[1], fBuyExpected) &&
+         NearlyEqual(pOut[3], fHighExpected) &&
+         NearlyEqual(pOut[5], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingDivergencePointIdsMapCodes()
+{
+  const int nCount = 12;
+  float pPrevStart[nCount];
+  float pPrevEnd[nCount];
+  float pCurrStart[nCount];
+  float pCurrEnd[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pPrevStart[i] = -1;
+    pPrevEnd[i] = -1;
+    pCurrStart[i] = -1;
+    pCurrEnd[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  Buy.Divergence.nPreviousStartPoint = 0;
+  Buy.Divergence.nPreviousEndPoint = 1;
+  Buy.Divergence.nCurrentStartPoint = 2;
+  Buy.Divergence.nCurrentEndPoint = 3;
+  TradingSignalCandidate Low = MakeTestCandidate(3, 2.0f, 10);
+  Low.Divergence.nPreviousStartPoint = 8;
+  Low.Divergence.nPreviousEndPoint = 9;
+  Low.Divergence.nCurrentStartPoint = 10;
+  Low.Divergence.nCurrentEndPoint = 11;
+  TradingSignalCandidate High = MakeTestCandidate(3, 3.0f, 20);
+  High.Divergence.nPreviousStartPoint = 4;
+  High.Divergence.nPreviousEndPoint = 5;
+  High.Divergence.nCurrentStartPoint = 6;
+  High.Divergence.nCurrentEndPoint = 7;
+  TradingSignalCandidate Missing = MakeTestCandidate(5, 11.0f, 30);
+  TradingSignalCandidate Invalid = MakeTestCandidate(7, 99.0f, 30);
+  Invalid.Divergence.nPreviousStartPoint = 0;
+  Invalid.Divergence.nPreviousEndPoint = 1;
+  Invalid.Divergence.nCurrentStartPoint = 2;
+  Invalid.Divergence.nCurrentEndPoint = 3;
+  TradingSignalCandidate Shadowed = MakeTestCandidate(9, 1.0f, 10);
+  Shadowed.Divergence.nPreviousStartPoint = 0;
+  Shadowed.Divergence.nPreviousEndPoint = 1;
+  Shadowed.Divergence.nCurrentStartPoint = 2;
+  Shadowed.Divergence.nCurrentEndPoint = 3;
+  TradingSignalCandidate EmptyWinner = MakeTestCandidate(9, 2.0f, 20);
+  Candidates.push_back(Buy);
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+  Candidates.push_back(Missing);
+  Candidates.push_back(Invalid);
+  Candidates.push_back(Shadowed);
+  Candidates.push_back(EmptyWinner);
+
+  ApplyTradingSignalDivergencePreviousStartPointId(nCount, pPrevStart, Candidates);
+  ApplyTradingSignalDivergencePreviousEndPointId(nCount, pPrevEnd, Candidates);
+  ApplyTradingSignalDivergenceCurrentStartPointId(nCount, pCurrStart, Candidates);
+  ApplyTradingSignalDivergenceCurrentEndPointId(nCount, pCurrEnd, Candidates);
+
+  return NearlyEqual(pPrevStart[1], 1.0f) &&
+         NearlyEqual(pPrevEnd[1], 2.0f) &&
+         NearlyEqual(pCurrStart[1], 3.0f) &&
+         NearlyEqual(pCurrEnd[1], 4.0f) &&
+         NearlyEqual(pPrevStart[3], 5.0f) &&
+         NearlyEqual(pPrevEnd[3], 6.0f) &&
+         NearlyEqual(pCurrStart[3], 7.0f) &&
+         NearlyEqual(pCurrEnd[3], 8.0f) &&
+         NearlyEqual(pPrevStart[5], 0.0f) &&
+         NearlyEqual(pPrevEnd[5], 0.0f) &&
+         NearlyEqual(pCurrStart[5], 0.0f) &&
+         NearlyEqual(pCurrEnd[5], 0.0f) &&
+         NearlyEqual(pPrevStart[7], 0.0f) &&
+         NearlyEqual(pCurrEnd[7], 0.0f) &&
+         NearlyEqual(pPrevStart[9], 0.0f) &&
+         NearlyEqual(pCurrEnd[9], 0.0f) &&
+         NearlyEqual(pPrevStart[0], 0.0f) &&
+         NearlyEqual(pCurrEnd[0], 0.0f);
+}
+
+static bool TestBuildDivergenceFlagsMapsBits()
+{
+  DivergenceResult D;
+  D.nDirection = 1;
+  D.bNewExtreme = true;
+  D.bWeakSpace = false;
+  D.bWeakSpeed = true;
+  D.bWeakMacd = false;
+  D.bDivergence = true;
+  D.Previous = MeasureStrength(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 1),
+                               MakeTestPoint(CZSC_POINT_TOP, 4, 10));
+  D.Current = MeasureStrength(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 2),
+                              MakeTestPoint(CZSC_POINT_TOP, 12, 11));
+
+  int nFlags = BuildDivergenceFlags(D);
+  int nExpected = CZSC_DIVERGENCE_NEW_EXTREME |
+                  CZSC_DIVERGENCE_WEAK_SPEED |
+                  CZSC_DIVERGENCE_CONFIRMED;
+  if (nFlags != nExpected)
+  {
+    return false;
+  }
+
+  D.bNewExtreme = false;
+  D.bWeakSpeed = false;
+  D.bDivergence = false;
+  return BuildDivergenceFlags(D) == 0;
+}
+
+static bool TestApplyTradingContextFlagsMapsCodes()
+{
+  const int nCount = 12;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Buy = MakeTestCandidate(1, 1.0f, 30);
+  MakeStandardDivergence(&Buy, 1);
+  Buy.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Buy.nSmallTurn = 1;
+  Buy.nReversal = CZSC_REVERSAL_TREND;
+  Buy.bOverlapped = true;
+  Buy.nBreakout = 0;
+  TradingSignalCandidate Newborn = MakeTestCandidate(3, 3.0f, 20);
+  Newborn.nSource = 3;
+  Newborn.nPoint = 3;
+  Newborn.nCenter = 0;
+  Newborn.nAfterEffect = CZSC_CENTER_AFTERMATH_NEWBORN;
+  Newborn.nSmallTurn = 1;
+  Newborn.nReversal = CZSC_REVERSAL_CONSOLIDATION;
+  Newborn.nBreakout = 1;
+  TradingSignalCandidate Extended = MakeTestCandidate(5, 13.0f, 20);
+  Extended.nSource = 3;
+  Extended.nPoint = 5;
+  Extended.nCenter = 0;
+  Extended.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
+  Extended.nSmallTurn = -1;
+  Extended.nReversal = CZSC_REVERSAL_EXTENSION;
+  Extended.nBreakout = 2;
+  TradingSignalCandidate SecondOverlap = MakeTestCandidate(10, 2.0f, 10);
+  SecondOverlap.nSource = 2;
+  SecondOverlap.nPoint = 10;
+  SecondOverlap.nCenter = 0;
+  SecondOverlap.nBreakout = 5;
+  SecondOverlap.bOverlapped = true;
+  TradingSignalCandidate WrongDirection = MakeTestCandidate(7, 1.0f, 30);
+  MakeStandardDivergence(&WrongDirection, 1);
+  WrongDirection.nAbcStructure = -1;
+  WrongDirection.nMacdZeroPullback = -1;
+  WrongDirection.nAfterEffect = CZSC_CENTER_AFTERMATH_EXTENDED;
+  TradingSignalCandidate Invalid = MakeTestCandidate(9, 99.0f, 30);
+  MakeStandardDivergence(&Invalid, 1);
+  Invalid.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Invalid.bOverlapped = true;
+  Invalid.nBreakout = 3;
+  TradingSignalCandidate WrongSmallTurn = MakeTestCandidate(11, 3.0f, 20);
+  WrongSmallTurn.nSource = 3;
+  WrongSmallTurn.nPoint = 11;
+  WrongSmallTurn.nCenter = 0;
+  WrongSmallTurn.nBreakout = 4;
+  WrongSmallTurn.nSmallTurn = -1;
+  Candidates.push_back(Buy);
+  Candidates.push_back(Newborn);
+  Candidates.push_back(Extended);
+  Candidates.push_back(SecondOverlap);
+  Candidates.push_back(WrongDirection);
+  Candidates.push_back(Invalid);
+  Candidates.push_back(WrongSmallTurn);
+
+  ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
+
+  float fBuyExpected = (float)(CZSC_SIGNAL_CTX_STRONG_QUALITY |
+                               CZSC_SIGNAL_CTX_ABC_STRUCTURE |
+                               CZSC_SIGNAL_CTX_MACD_ZERO_PULL |
+                               CZSC_SIGNAL_CTX_MACD_LINE_WEAK |
+                               CZSC_SIGNAL_CTX_STANDARD_DIV |
+                               CZSC_SIGNAL_CTX_REVERSAL_TREND |
+                               CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  float fNewbornExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_NEWBORN |
+                                   CZSC_SIGNAL_CTX_SMALL_TURN |
+                                   CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  float fExtendedExpected = (float)(CZSC_SIGNAL_CTX_AFTERMATH_EXTEND |
+                                    CZSC_SIGNAL_CTX_SMALL_TURN |
+                                    CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  float fSecondOverlapExpected = (float)(CZSC_SIGNAL_CTX_OVERLAPPED |
+                                         CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  float fWrongDirectionExpected = (float)CZSC_SIGNAL_CTX_MACD_LINE_WEAK;
+  float fWrongSmallTurnExpected = (float)CZSC_SIGNAL_CTX_CENTER_BREAKOUT;
+
+  return NearlyEqual(pOut[1], fBuyExpected) &&
+         NearlyEqual(pOut[3], fNewbornExpected) &&
+         NearlyEqual(pOut[5], fExtendedExpected) &&
+         NearlyEqual(pOut[7], fWrongDirectionExpected) &&
+         NearlyEqual(pOut[9], 0.0f) &&
+         NearlyEqual(pOut[10], fSecondOverlapExpected) &&
+         (BuildTradingSignalContextFlags(Invalid) == 0) &&
+         NearlyEqual(pOut[11], fWrongSmallTurnExpected) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingContextFlagsUsesWinningPriority()
+{
+  const int nCount = 4;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 1.0f, 10);
+  MakeStandardDivergence(&Low, 1);
+  Low.nQuality = CZSC_SIGNAL_QUALITY_STRONG;
+  Low.nReversal = CZSC_REVERSAL_TREND;
+  TradingSignalCandidate High = MakeTestCandidate(2, 3.0f, 20);
+  High.nSource = 3;
+  High.nPoint = 2;
+  High.nCenter = 0;
+  High.bOverlapped = true;
+  High.nBreakout = 0;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+
+  ApplyTradingSignalContextFlags(nCount, pOut, Candidates);
+
+  float fExpected = (float)(CZSC_SIGNAL_CTX_OVERLAPPED |
+                            CZSC_SIGNAL_CTX_CENTER_BREAKOUT);
+  return NearlyEqual(pOut[2], fExpected) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingDivergenceSemanticMapsCodes()
+{
+  const int nCount = 9;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Trend = MakeTestCandidate(1, 1.0f, 30);
+  MakeStandardDivergence(&Trend, 1);
+  TradingSignalCandidate Consolidation = MakeTestCandidate(3, 2.0f, 10);
+  Consolidation.nSource = 2;
+  Consolidation.nBreakout = 0;
+  Consolidation.Divergence.bDivergence = true;
+  TradingSignalCandidate SmallTurn = MakeTestCandidate(5, 3.0f, 20);
+  SmallTurn.nSource = 3;
+  SmallTurn.nPoint = 5;
+  SmallTurn.nCenter = 0;
+  SmallTurn.nBreakout = 1;
+  SmallTurn.nSmallTurn = 1;
+  SmallTurn.Divergence.bDivergence = true;
+  TradingSignalCandidate MissingExtreme = MakeTestCandidate(7, 1.0f, 30);
+  MakeStandardDivergence(&MissingExtreme, 1);
+  MissingExtreme.Divergence.bNewExtreme = false;
+  TradingSignalCandidate Invalid = MakeTestCandidate(8, 99.0f, 30);
+  Invalid.Divergence.bDivergence = true;
+
+  Candidates.push_back(Trend);
+  Candidates.push_back(Consolidation);
+  Candidates.push_back(SmallTurn);
+  Candidates.push_back(MissingExtreme);
+  Candidates.push_back(Invalid);
+
+  ApplyTradingSignalDivergenceSemantic(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[1], (float)CZSC_DIVERGENCE_SEM_TREND) &&
+         NearlyEqual(pOut[3], (float)CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         NearlyEqual(pOut[5], (float)CZSC_DIVERGENCE_SEM_SMALL_TURN) &&
+         NearlyEqual(pOut[7], 0.0f) &&
+         NearlyEqual(pOut[8], 0.0f) &&
+         (BuildTradingSignalDivergenceSemantic(Invalid) == CZSC_DIVERGENCE_SEM_NONE) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingDivergenceSemanticUsesWinningPriority()
+{
+  const int nCount = 4;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate Low = MakeTestCandidate(2, 1.0f, 10);
+  MakeStandardDivergence(&Low, 1);
+  TradingSignalCandidate High = MakeTestCandidate(2, 12.0f, 20);
+  High.nSource = 2;
+  High.nBreakout = 0;
+  High.Divergence.bDivergence = true;
+  Candidates.push_back(Low);
+  Candidates.push_back(High);
+
+  ApplyTradingSignalDivergenceSemantic(nCount, pOut, Candidates);
+
+  return NearlyEqual(pOut[2], (float)CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestApplyTradingFilterReasonsMapsCodes()
+{
+  const int nCount = 8;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<int> Reasons((std::size_t)nCount, CZSC_FILTER_NONE);
+  Reasons[1] = CZSC_FILTER_NO_TREND;
+  Reasons[3] = CZSC_FILTER_RETEST_BACK_CENTER;
+
+  ApplyTradingFilterReasons(nCount, pOut, Reasons);
+
+  return NearlyEqual(pOut[1], (float)CZSC_FILTER_NO_TREND) &&
+         NearlyEqual(pOut[3], (float)CZSC_FILTER_RETEST_BACK_CENTER) &&
+         NearlyEqual(pOut[0], 0.0f) &&
+         NearlyEqual(pOut[7], 0.0f);
+}
+
+static bool TestBuildTradingFilterReasonsMarksNoTrend()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 9));
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<TradingSignalCandidate> Candidates;
+
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 16 &&
+         Reasons[16] == CZSC_FILTER_NO_TREND &&
+         Reasons[0] == CZSC_FILTER_NONE;
+}
+
+static bool TestBuildTradingFilterReasonsMarksSecondOrder()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 22));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 8));
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(4, 1.0f, 30);
+  First.nPoint = 1;
+  First.nSource = 1;
+  Candidates.push_back(First);
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<CenterBreakout> Breakouts;
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 12 &&
+         Reasons[12] == CZSC_FILTER_SECOND_ORDER;
+}
+
+static bool TestBuildTradingFilterReasonsMarksThirdRetestFailures()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));
+
+  std::vector<CenterBreakout> Breakouts;
+  CenterBreakout NotFirst = MakeTestBreakout(1, 2);
+  NotFirst.nCenter = 0;
+  NotFirst.bFirstRetest = false;
+  Breakouts.push_back(NotFirst);
+  CenterBreakout BackIntoCenter = MakeTestBreakout(-1, 3);
+  BackIntoCenter.nCenter = 0;
+  BackIntoCenter.bBackIntoCenter = true;
+  Breakouts.push_back(BackIntoCenter);
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<TradingSignalCandidate> Candidates;
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 12 &&
+         Reasons[8] == CZSC_FILTER_NOT_FIRST_RETEST &&
+         Reasons[12] == CZSC_FILTER_RETEST_BACK_CENTER;
+}
+
+static bool TestBuildTradingFilterReasonsMarksAbcNotAligned()
+{
+  std::vector<SegmentPoint> Points;
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 4, 20));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 8, 12));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 12, 18));
+  Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 16, 9));
+
+  std::vector<TradingSignalCandidate> Candidates;
+  TradingSignalCandidate First = MakeTestCandidate(16, 1.0f, 30);
+  First.nPoint = 4;
+  First.nSource = 1;
+  First.nCenter = 0;
+  First.nAbcBreakout = -1;
+  Candidates.push_back(First);
+
+  std::vector<CenterBreakout> Breakouts;
+  CenterBreakout B = MakeTestBreakout(-1, 3);
+  B.nCenter = 0;
+  Breakouts.push_back(B);
+
+  std::vector<Center> Centers;
+  std::vector<TrendStructure> Structures;
+  std::vector<int> Reasons =
+    BuildTradingFilterReasons(Points, Centers, Structures, Breakouts, Candidates);
+
+  return Reasons.size() > 16 &&
+         Reasons[16] == CZSC_FILTER_ABC_NOT_ALIGNED;
+}
+
+static bool TestNestedDivergenceMarksLowerSegmentInsideHigher()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 52, 8));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 58, 6));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 1.0f, 30);
+  High.nPoint = 1;
+  MakeStandardDivergence(&High, 1);
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Inside = MakeTestCandidate(32, 1.0f, 30);
+  Inside.nPoint = 1;
+  MakeStandardDivergence(&Inside, 1);
+  TradingSignalCandidate Outside = MakeTestCandidate(58, 1.0f, 30);
+  Outside.nPoint = 3;
+  MakeStandardDivergence(&Outside, 1);
+  LowCandidates.push_back(Inside);
+  LowCandidates.push_back(Outside);
+
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+
+  return NearlyEqual(pOut[20], 1.0f) &&
+         NearlyEqual(pOut[32], 2.0f) &&
+         NearlyEqual(pOut[52], 0.0f) &&
+         NearlyEqual(pOut[58], 0.0f);
+}
+
+static bool TestNestedDivergenceMarksSellDirection()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 10, 4));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 50, 12));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 18, 6));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 40, 10));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 11.0f, 30);
+  High.nPoint = 1;
+  MakeStandardDivergence(&High, -1);
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(40, 11.0f, 30);
+  Low.nPoint = 1;
+  MakeStandardDivergence(&Low, -1);
+  LowCandidates.push_back(Low);
+
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+
+  return NearlyEqual(pOut[18], -1.0f) &&
+         NearlyEqual(pOut[40], -2.0f);
+}
+
+static bool TestNestedDivergenceRequiresFirstSignalCode()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 3.0f, 30);
+  High.nSource = 1;
+  High.nPoint = 1;
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(32, 3.0f, 30);
+  Low.nSource = 1;
+  Low.nPoint = 1;
+  LowCandidates.push_back(Low);
+
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+
+  return NearlyEqual(pOut[20], 0.0f) &&
+         NearlyEqual(pOut[32], 0.0f) &&
+         NearlyEqual(pOut[0], 0.0f);
+}
+
+static bool TestNestedDivergenceWithoutNewExtremeIsConsolidationOnly()
+{
+  const int nCount = 61;
+  float pOut[nCount];
+  float pSemantic[nCount];
+  float pFlags[nCount];
+  float pLevel[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = -1;
+    pSemantic[i] = -1;
+    pFlags[i] = -1;
+    pLevel[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 1.0f, 30);
+  High.nPoint = 1;
+  MakeStandardDivergence(&High, 1);
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(32, 1.0f, 30);
+  Low.nPoint = 1;
+  MakeStandardDivergence(&Low, 1);
+  Low.Divergence.bNewExtreme = false;
+  LowCandidates.push_back(Low);
+
+  std::vector<NestedDivergenceContext> Contexts =
+    BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  WriteNestedDivergenceSignal(nCount, pOut, HighPoints, HighCandidates, LowPoints, LowCandidates);
+  ApplyNestedDivergenceSemantic(nCount, pSemantic, Contexts);
+  ApplyNestedDivergenceConfirmFlags(nCount, pFlags, Contexts);
+  ApplyNestedDivergenceLevel(nCount, pLevel, Contexts);
+
+  return (Contexts.size() == 1) &&
+         (Contexts[0].nLevel == 0) &&
+         (Contexts[0].nSemantic == CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         (Contexts[0].nConfirmFlags == (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                        CZSC_NESTED_CONFIRMED_DIVERGENCE)) &&
+         NearlyEqual(pOut[20], 0.0f) &&
+         NearlyEqual(pOut[32], 0.0f) &&
+         NearlyEqual(pSemantic[32], (float)CZSC_DIVERGENCE_SEM_CONSOLIDATION) &&
+         NearlyEqual(pFlags[32], (float)(CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                         CZSC_NESTED_CONFIRMED_DIVERGENCE)) &&
+         NearlyEqual(pLevel[32], 0.0f);
+}
+
+static bool TestNestedDivergenceContextOutputs()
+{
+  const int nCount = 61;
+  float pLevel[nCount];
+  float pSource[nCount];
+  float pStart[nCount];
+  float pEnd[nCount];
+  float pSemantic[nCount];
+  float pFlags[nCount];
+  float pDirection[nCount];
+  for (int i = 0; i < nCount; i++)
+  {
+    pLevel[i] = -1;
+    pSource[i] = -1;
+    pStart[i] = -1;
+    pEnd[i] = -1;
+    pSemantic[i] = -1;
+    pFlags[i] = -1;
+    pDirection[i] = -1;
+  }
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 50, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 44, 8));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(50, 1.0f, 30);
+  High.nPoint = 1;
+  MakeStandardDivergence(&High, 1);
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(32, 1.0f, 30);
+  Low.nPoint = 1;
+  MakeStandardDivergence(&Low, 1);
+  TradingSignalCandidate Third = MakeTestCandidate(44, 3.0f, 20);
+  Third.nSource = 3;
+  Third.nPoint = 2;
+  Third.nCenter = 0;
+  Third.nBreakout = 0;
+  Third.nSmallTurn = 1;
+  Third.nSmallTurnBasePoint = 1;
+  LowCandidates.push_back(Low);
+  LowCandidates.push_back(Third);
+
+  std::vector<NestedDivergenceContext> Contexts =
+    BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  ApplyNestedDivergenceLevel(nCount, pLevel, Contexts);
+  ApplyNestedDivergenceSourceId(nCount, pSource, Contexts);
+  ApplyNestedDivergenceStartPointId(nCount, pStart, Contexts);
+  ApplyNestedDivergenceEndPointId(nCount, pEnd, Contexts);
+  ApplyNestedDivergenceSemantic(nCount, pSemantic, Contexts);
+  ApplyNestedDivergenceConfirmFlags(nCount, pFlags, Contexts);
+  ApplyNestedDivergenceDirection(nCount, pDirection, Contexts);
+
+  return (Contexts.size() == 1) &&
+         Contexts[0].bSmallTurnSatisfied &&
+         (Contexts[0].nDirection == 1) &&
+         (Contexts[0].nSemantic == CZSC_DIVERGENCE_SEM_SMALL_TURN) &&
+         (Contexts[0].nConfirmFlags == (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                        CZSC_NESTED_CONFIRMED_DIVERGENCE |
+                                        CZSC_NESTED_NEW_EXTREME |
+                                        CZSC_NESTED_SMALL_TURN)) &&
+         NearlyEqual(pLevel[32], 2.0f) &&
+         NearlyEqual(pSource[32], 1.0f) &&
+         NearlyEqual(pStart[32], 1.0f) &&
+         NearlyEqual(pEnd[32], 2.0f) &&
+         NearlyEqual(pSemantic[32], (float)CZSC_DIVERGENCE_SEM_SMALL_TURN) &&
+         NearlyEqual(pFlags[32], (float)(CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                                         CZSC_NESTED_CONFIRMED_DIVERGENCE |
+                                         CZSC_NESTED_NEW_EXTREME |
+                                         CZSC_NESTED_SMALL_TURN)) &&
+         NearlyEqual(pDirection[32], 1.0f) &&
+         NearlyEqual(pLevel[0], 0.0f);
+}
+
+static bool TestNestedDivergenceOutputInvariants()
+{
+  const int nCount = 70;
+  float pLevel[nCount];
+  float pSource[nCount];
+  float pStart[nCount];
+  float pEnd[nCount];
+  float pSemantic[nCount];
+  float pFlags[nCount];
+  float pDirection[nCount];
+
+  std::vector<SegmentPoint> HighPoints;
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 10, 12));
+  HighPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 60, 4));
+
+  std::vector<SegmentPoint> LowPoints;
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 20, 9));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 32, 5));
+  LowPoints.push_back(MakeTestPoint(CZSC_POINT_TOP, 44, 8));
+
+  std::vector<TradingSignalCandidate> HighCandidates;
+  TradingSignalCandidate High = MakeTestCandidate(60, 1.0f, 30);
+  High.nPoint = 1;
+  MakeStandardDivergence(&High, 1);
+  HighCandidates.push_back(High);
+
+  std::vector<TradingSignalCandidate> LowCandidates;
+  TradingSignalCandidate Low = MakeTestCandidate(32, 1.0f, 30);
+  Low.nPoint = 1;
+  MakeStandardDivergence(&Low, 1);
+  TradingSignalCandidate Third = MakeTestCandidate(44, 3.0f, 20);
+  Third.nSource = 3;
+  Third.nPoint = 2;
+  Third.nCenter = 0;
+  Third.nBreakout = 0;
+  Third.nSmallTurn = 1;
+  Third.nSmallTurnBasePoint = 1;
+  LowCandidates.push_back(Low);
+  LowCandidates.push_back(Third);
+
+  std::vector<NestedDivergenceContext> Contexts =
+    BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  ApplyNestedDivergenceLevel(nCount, pLevel, Contexts);
+  ApplyNestedDivergenceSourceId(nCount, pSource, Contexts);
+  ApplyNestedDivergenceStartPointId(nCount, pStart, Contexts);
+  ApplyNestedDivergenceEndPointId(nCount, pEnd, Contexts);
+  ApplyNestedDivergenceSemantic(nCount, pSemantic, Contexts);
+  ApplyNestedDivergenceConfirmFlags(nCount, pFlags, Contexts);
+  ApplyNestedDivergenceDirection(nCount, pDirection, Contexts);
+
+  bool bSawSmallTurn = false;
+  for (int i = 0; i < nCount; i++)
+  {
+    int nLevel = (int)pLevel[i];
+    int nSemantic = (int)pSemantic[i];
+    int nFlags = (int)pFlags[i];
+    int nDirection = (int)pDirection[i];
+    if (nSemantic == CZSC_DIVERGENCE_SEM_NONE)
+    {
+      continue;
+    }
+    if ((nDirection != -1) && (nDirection != 1))
+    {
+      return false;
+    }
+    if (nLevel > 0)
+    {
+      if (((int)pSource[i] <= 0) || ((int)pStart[i] <= 0) || ((int)pEnd[i] <= (int)pStart[i]))
+      {
+        return false;
+      }
+      if ((nSemantic != CZSC_DIVERGENCE_SEM_TREND) &&
+          (nSemantic != CZSC_DIVERGENCE_SEM_SMALL_TURN))
+      {
+        return false;
+      }
+      if ((nFlags & (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                     CZSC_NESTED_CONFIRMED_DIVERGENCE |
+                     CZSC_NESTED_NEW_EXTREME)) !=
+          (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+           CZSC_NESTED_CONFIRMED_DIVERGENCE |
+           CZSC_NESTED_NEW_EXTREME))
+      {
+        return false;
+      }
+    }
+    if (nSemantic == CZSC_DIVERGENCE_SEM_SMALL_TURN)
+    {
+      if ((nLevel != 2) || ((nFlags & CZSC_NESTED_SMALL_TURN) == 0))
+      {
+        return false;
+      }
+      bSawSmallTurn = true;
+    }
+  }
+
+  if (!bSawSmallTurn)
+  {
+    return false;
+  }
+
+  LowCandidates.clear();
+  Low = MakeTestCandidate(32, 1.0f, 30);
+  Low.nPoint = 1;
+  MakeStandardDivergence(&Low, 1);
+  Low.Divergence.bNewExtreme = false;
+  LowCandidates.push_back(Low);
+  Contexts = BuildNestedDivergenceContexts(HighPoints, HighCandidates, LowPoints, LowCandidates);
+  ApplyNestedDivergenceLevel(nCount, pLevel, Contexts);
+  ApplyNestedDivergenceSourceId(nCount, pSource, Contexts);
+  ApplyNestedDivergenceStartPointId(nCount, pStart, Contexts);
+  ApplyNestedDivergenceEndPointId(nCount, pEnd, Contexts);
+  ApplyNestedDivergenceSemantic(nCount, pSemantic, Contexts);
+  ApplyNestedDivergenceConfirmFlags(nCount, pFlags, Contexts);
+  ApplyNestedDivergenceDirection(nCount, pDirection, Contexts);
+
+  bool bSawConsolidation = false;
+  for (int i = 0; i < nCount; i++)
+  {
+    int nSemantic = (int)pSemantic[i];
+    if (nSemantic == CZSC_DIVERGENCE_SEM_NONE)
+    {
+      continue;
+    }
+    int nLevel = (int)pLevel[i];
+    int nFlags = (int)pFlags[i];
+    if (nSemantic != CZSC_DIVERGENCE_SEM_CONSOLIDATION)
+    {
+      return false;
+    }
+    if ((nLevel != 0) || ((nFlags & CZSC_NESTED_NEW_EXTREME) != 0))
+    {
+      return false;
+    }
+    if ((nFlags & (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+                   CZSC_NESTED_CONFIRMED_DIVERGENCE)) !=
+        (CZSC_NESTED_INSIDE_HIGH_SEGMENT |
+         CZSC_NESTED_CONFIRMED_DIVERGENCE))
+    {
+      return false;
+    }
+    if (((int)pSource[i] != 0) || ((int)pStart[i] != 0) ||
+        ((int)pEnd[i] != 0) || ((int)pDirection[i] != 1))
+    {
+      return false;
+    }
+    bSawConsolidation = true;
+  }
+
+  return bSawConsolidation;
 }
 
 static bool TestFunc13HandlesEmptyInput()
@@ -2696,7 +7093,7 @@ static bool TestSecondBuyConsolidationDivergence()
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 20));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 14));
-  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 22));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 12));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 15));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 30, 8));    // 一买
@@ -2704,7 +7101,7 @@ static bool TestSecondBuyConsolidationDivergence()
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 9));    // 二买，回抽段(11→9)弱于前段(15→8)
 
   std::vector<Center> Centers;
-  Centers.push_back(MakeTestCenter(0, 12, 18, 13));
+  Centers.push_back(MakeTestCenter(0, 12, 22, 13));
   Centers.push_back(MakeTestCenter(16, 24, 12, 9));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
@@ -2724,7 +7121,7 @@ static bool TestSecondBuyStrongPullbackConfirmed()
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 20));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 14));
-  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 17));
+  Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 8, 22));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 12, 12));
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 16, 15));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 30, 8));    // 一买
@@ -2732,7 +7129,7 @@ static bool TestSecondBuyStrongPullbackConfirmed()
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 40, 8.5f)); // 二买，回抽段(17→8.5)强于前段 → 非背驰
 
   std::vector<Center> Centers;
-  Centers.push_back(MakeTestCenter(0, 12, 18, 13));
+  Centers.push_back(MakeTestCenter(0, 12, 22, 13));
   Centers.push_back(MakeTestCenter(16, 24, 12, 9));
   std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
   std::vector<CenterBreakout> Breakouts;
@@ -2772,7 +7169,7 @@ static bool TestFunc14MarksDivergenceSegment()
   pIn[12] = 1;
   pHigh[12] = pLow[12] = 10;
   pIn[16] = -1;
-  pHigh[16] = pLow[16] = 3;
+  pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1;
   pHigh[20] = pLow[20] = 7;
   pIn[24] = -1;
@@ -2936,7 +7333,7 @@ static bool TestInstantDivergenceWarnsWeakNewLow()
   // 末段从 @12 缓慢下行创新低（慢 → 力度走弱）
   for (int i = 12; i < nCount; i++)
   {
-    float fValue = 18.0f - (float)(i - 12) * 0.7f;
+    float fValue = 18.0f - (float)(i - 12) * 0.58f;
     pHigh[i] = fValue + 0.5f;
     pLow[i] = fValue;
   }
@@ -3012,27 +7409,24 @@ static bool TestStrictStrokeUsesMergedGap()
   return true;
 }
 
-// 下降线段被 higher high + higher low 破坏：逆向(向上)笔顶创新高(92>88)、其后回调底不创新低(75>70)
-// → 下降线段在该逆向笔的底(idx20)结束。终点是逆向笔内端，不必是全局最低点（第64/67课）。
+// 向上线段的特征序列出现无缺口顶分型：线段在该顶分型高点结束（第67课第一种情况）。
 static bool TestFeatureLineSegmentEndsAtTopFractal()
 {
   std::vector<Fractal> F;
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 0, 100, 95));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 4, 92, 90));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 8, 95, 88));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 12, 82, 80));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 16, 88, 82));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 20, 72, 70));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 24, 92, 82));   // 顶92 > 前顶88（higher high）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 28, 77, 75)); // 底75 > 前底70（higher low）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 32, 85, 78));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));   // X1=[14,20]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 21));     // X2=[19,25] 顶分型高点
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 22, 19));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 23, 20));     // X3=[17,23]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 19, 17));
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
   std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
   return (Line.size() >= 2) &&
-         (Line[0].nType == CZSC_POINT_TOP) && (Line[0].nIndex == 0) &&
-         (Line[1].nType == CZSC_POINT_BOTTOM) && (Line[1].nIndex == 20);
+         (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12);
 }
 
 static bool TestFeatureLineSegmentNeedsFourPoints()
@@ -3045,58 +7439,124 @@ static bool TestFeatureLineSegmentNeedsFourPoints()
   return LinePoints.empty();  // 不足四个笔端点 → 无法划分线段
 }
 
-// 上升线段被 lower low + lower high 破坏：逆向(向下)笔底创新低(12<18)、其后反弹顶不创新高(22<30)
-// → 上升线段在该逆向笔的顶(idx20)结束（对称于下降线段）。
-static bool TestFeatureSegmentExtendsPastRelay()
+static bool TestFeatureLineSegmentRequiresFirstThreeOverlap()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 2, 1));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 4, 3));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 8, 7));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 10, 9));     // 前三笔无公共重叠
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 14, 13));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 16, 15));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 20, 19));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 22, 21));
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+  return Line.empty();
+}
+
+// 向下线段的特征序列出现无缺口底分型：线段在该底分型低点结束（第67课第一种情况）。
+static bool TestFeatureLineSegmentEndsAtBottomFractal()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 0, 100, 96));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 4, 92, 85));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 8, 95, 90));      // S1=[85,95]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 12, 88, 80));  // S2=[80,90] 底分型低点
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 16, 90, 84));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 20, 89, 84));  // S3=[84,92]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 24, 92, 88));
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return (Line.size() >= 2) &&
+         (Line[0].nType == CZSC_POINT_TOP) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_BOTTOM) && (Line[1].nIndex == 12);
+}
+
+// 有缺口的特征序列顶分型，必须等反向特征序列出现底分型确认（第67课第二种情况）。
+static bool TestFeatureSegmentGapConfirmedByReversal()
 {
   std::vector<Fractal> F;
   F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
   F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 15));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 25, 20));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 20, 18));
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 30, 24));     // 顶30（创 lower low 的回调起点）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 14, 12));  // 底12 < 前底18（lower low）
-  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 22, 18));     // 顶22 < 30（lower high）
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 17, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));   // X1=[14,20]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // X2=[25,30]，与 X1 有缺口
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));     // 反向序列 S1=[25,28]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // X3=[22,28]，确认原顶分型
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 26, 24));     // 反向序列 S2=[22,26]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 25, 23));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 27, 25));     // 反向序列 S3=[23,27]，S2 为底分型
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
   std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
 
   return (Line.size() >= 2) &&
          (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
-         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 20);
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12);
 }
 
-// 真实上证：线段终点不一定是全局极值——存在某下降线段端点(底)，其后续笔端点里仍有更低的底
-// （如 2.5 年下跌实终于 2863，而其后才到 2635）
-static bool TestFeatureSegmentGapConfirmedByReversal()
+static bool TestFeatureSegmentGapRequiresReversalFractal()
 {
-  float *pH = const_cast<float *>(SSE_DAILY_HIGH);
-  float *pL = const_cast<float *>(SSE_DAILY_LOW);
-  std::vector<MergedBar> Bars = BuildMergedBars(SSE_DAILY_COUNT, pH, pL);
-  std::vector<Fractal> Fractals = BuildFractals(Bars);
-  std::vector<Stroke> Strokes = BuildStrokes(Fractals);
-  std::vector<SegmentPoint> StrokePts = BuildSegmentPoints(Strokes);
-  std::vector<SegmentPoint> Seg = BuildLineSegmentPointsByFeature(Strokes);
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));   // X1=[14,20]
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // X2=[25,30]，与 X1 有缺口
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // X3=[22,28]，原序列顶分型成立
 
-  for (std::size_t i = 0; i < Seg.size(); i++)
-  {
-    if (Seg[i].nType != CZSC_POINT_BOTTOM)
-    {
-      continue;
-    }
-    for (std::size_t j = 0; j < StrokePts.size(); j++)
-    {
-      if ((StrokePts[j].nIndex > Seg[i].nIndex) &&
-          (StrokePts[j].nType == CZSC_POINT_BOTTOM) &&
-          (StrokePts[j].fLow < Seg[i].fLow))
-      {
-        return true;  // 该线段终点(底)之后还有更低的底 → 终点非全局最低
-      }
-    }
-  }
-  return false;
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return Line.size() == 1;  // 未出现反向底分型，不确认线段结束
+}
+
+static bool TestFeatureSegmentGapConfirmationStartsNextSegment()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // 有缺口顶分型，旧线段终点
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));  // 新向下线段第一笔
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // 第三笔破第一笔结束位置，新线段成立
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 26, 24));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 25, 23));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 27, 25));
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return (Line.size() >= 3) &&
+         (Line[0].nType == CZSC_POINT_BOTTOM) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 12) &&
+         (Line[2].nType == CZSC_POINT_BOTTOM) && (Line[2].nIndex == 24);
+}
+
+static bool TestFeatureSegmentGapWithoutReverseFractalKeepsOldSegment()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 12, 10));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 16));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 18, 14));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 30, 26));     // X2 与 X1 有缺口
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 16, 27, 25));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 20, 28, 26));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 24, 24, 22));  // X3 使原序列顶分型成立
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 28, 27, 24));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 32, 23, 21));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 36, 29, 25));     // 反向序列没有底分型确认
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+
+  return Line.size() == 1;
 }
 
 static bool TestDecodeConfig()
@@ -3192,6 +7652,34 @@ static bool TestFunc20DrivesConfig()
   return true;
 }
 
+static bool TestFunc20FeatureSegmentModeMatchesFunc19()
+{
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> Legacy((std::size_t)SSE_DAILY_COUNT);
+  std::vector<float> Configured((std::size_t)SSE_DAILY_COUNT);
+  float fUnused = 0;
+  float fFeatureSegmentCode = 1100;
+
+  Func19(SSE_DAILY_COUNT, &Legacy[0], &High[0], &Low[0], &fUnused);
+  Func20(SSE_DAILY_COUNT, &Configured[0], &High[0], &Low[0], &fFeatureSegmentCode);
+
+  int nNonZero = 0;
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (!NearlyEqual(Legacy[(std::size_t)i], Configured[(std::size_t)i]))
+    {
+      return false;
+    }
+    if (!NearlyEqual(Configured[(std::size_t)i], 0.0f))
+    {
+      nNonZero++;
+    }
+  }
+
+  return nNonZero > 2;
+}
+
 static bool TestFunc20HandlesEmptyInput()
 {
   Func20(0, 0, 0, 0, 0);
@@ -3224,7 +7712,7 @@ static bool TestAnalyzerFromSignalAggregates()
   pIn[4] = 1; pHigh[4] = pLow[4] = 12;
   pIn[8] = -1; pHigh[8] = pLow[8] = 8;
   pIn[12] = 1; pHigh[12] = pLow[12] = 10;
-  pIn[16] = -1; pHigh[16] = pLow[16] = 3;
+  pIn[16] = -1; pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1; pHigh[20] = pLow[20] = 7;
   pIn[24] = -1; pHigh[24] = pLow[24] = 4;
   pIn[28] = 1; pHigh[28] = pLow[28] = 4.2f;
@@ -3265,7 +7753,7 @@ static bool TestSignalCacheHitAndInvalidate()
   pIn[4] = 1; pHigh[4] = pLow[4] = 12;
   pIn[8] = -1; pHigh[8] = pLow[8] = 8;
   pIn[12] = 1; pHigh[12] = pLow[12] = 10;
-  pIn[16] = -1; pHigh[16] = pLow[16] = 3;
+  pIn[16] = -1; pHigh[16] = pLow[16] = 7.5f;
   pIn[20] = 1; pHigh[20] = pLow[20] = 7;
   pIn[24] = -1; pHigh[24] = pLow[24] = 4;
   pIn[28] = 1; pHigh[28] = pLow[28] = 4.2f;
@@ -3298,6 +7786,41 @@ static bool TestSignalCacheHitAndInvalidate()
   // 再查 A → 仍是 A 的正确结果（非 stale B）
   std::size_t candA3 = GetOrBuildSignalAnalyzer(nCount, pIn, pHigh, pLow).Candidates.size();
   return candA3 == candA1;
+}
+
+static bool TestPriceAnalyzerCacheInvalidatesOnConfig()
+{
+  float *pHigh = const_cast<float *>(SSE_DAILY_HIGH);
+  float *pLow = const_cast<float *>(SSE_DAILY_LOW);
+
+  CzscConfig Default = DefaultConfig();
+  const CzscAnalyzer &DefaultA1 = GetOrBuildPriceAnalyzer(SSE_DAILY_COUNT, pHigh, pLow, Default);
+  std::size_t nDefaultPoints = DefaultA1.Points.size();
+  int nDefaultUnit = DefaultA1.Config.nCenterUnit;
+  int nDefaultSegment = DefaultA1.Config.nSegmentMethod;
+
+  CzscConfig Feature = DefaultConfig();
+  Feature.nCenterUnit = CZSC_UNIT_SEGMENT;
+  Feature.nSegmentMethod = CZSC_SEG_FEATURE;
+  const CzscAnalyzer &FeatureA = GetOrBuildPriceAnalyzer(SSE_DAILY_COUNT, pHigh, pLow, Feature);
+  CzscAnalyzer ManualFeature;
+  BuildAnalyzerFromPrice(ManualFeature, SSE_DAILY_COUNT, pHigh, pLow, Feature);
+  if ((FeatureA.Config.nCenterUnit != CZSC_UNIT_SEGMENT) ||
+      (FeatureA.Config.nSegmentMethod != CZSC_SEG_FEATURE) ||
+      (FeatureA.Points.size() != ManualFeature.Points.size()))
+  {
+    return false;
+  }
+
+  const CzscAnalyzer &DefaultA2 = GetOrBuildPriceAnalyzer(SSE_DAILY_COUNT, pHigh, pLow, Default);
+  CzscAnalyzer ManualDefault;
+  BuildAnalyzerFromPrice(ManualDefault, SSE_DAILY_COUNT, pHigh, pLow, Default);
+  return (nDefaultUnit == CZSC_UNIT_STROKE) &&
+         (nDefaultSegment == CZSC_SEG_HEURISTIC) &&
+         (DefaultA2.Config.nCenterUnit == CZSC_UNIT_STROKE) &&
+         (DefaultA2.Config.nSegmentMethod == CZSC_SEG_HEURISTIC) &&
+         (DefaultA2.Points.size() == nDefaultPoints) &&
+         (DefaultA2.Points.size() == ManualDefault.Points.size());
 }
 
 static bool TestFunc30MatchesLegacyPipeline()
@@ -3348,6 +7871,281 @@ static bool TestFunc30MatchesLegacyPipeline()
   for (int i = 0; i < nCount; i++)
   {
     if (!NearlyEqual(pFunc30[i], pLegacy[i]))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFunc30FeatureSegmentModeMatchesFunc19()
+{
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> Legacy((std::size_t)SSE_DAILY_COUNT);
+  std::vector<float> Unified((std::size_t)SSE_DAILY_COUNT);
+  float fUnused = 0;
+  float fMode = 1100000;
+
+  Func19(SSE_DAILY_COUNT, &Legacy[0], &High[0], &Low[0], &fUnused);
+  Func30(SSE_DAILY_COUNT, &Unified[0], &High[0], &Low[0], &fMode);
+
+  int nNonZero = 0;
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (!NearlyEqual(Legacy[(std::size_t)i], Unified[(std::size_t)i]))
+    {
+      return false;
+    }
+    if (!NearlyEqual(Unified[(std::size_t)i], 0.0f))
+    {
+      nNonZero++;
+    }
+  }
+
+  return nNonZero > 2;
+}
+
+static bool TestFunc30DiagnosticOutputsMatchProjections()
+{
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> Expected((std::size_t)SSE_DAILY_COUNT);
+  std::vector<float> Unified((std::size_t)SSE_DAILY_COUNT);
+
+  CzscAnalyzer An;
+  BuildAnalyzerFromPrice(An, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
+
+  const int Outputs[] = {10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58};
+  for (std::size_t i = 0; i < sizeof(Outputs) / sizeof(Outputs[0]); i++)
+  {
+    int nOutput = Outputs[i];
+    switch (nOutput)
+    {
+      case 10:
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        if ((int)An.MaShort.size() >= SSE_DAILY_COUNT && (int)An.MaLong.size() >= SSE_DAILY_COUNT)
+        {
+          for (int n = 0; n < SSE_DAILY_COUNT; n++)
+          {
+            Expected[(std::size_t)n] = An.MaShort[(std::size_t)n] - An.MaLong[(std::size_t)n];
+          }
+        }
+        break;
+      case 11:
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        if ((int)An.Kiss.size() >= SSE_DAILY_COUNT)
+        {
+          for (int n = 0; n < SSE_DAILY_COUNT; n++)
+          {
+            Expected[(std::size_t)n] = (float)An.Kiss[(std::size_t)n];
+          }
+        }
+        break;
+      case 12:
+      {
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        int nWarn = DetectInstantDivergence(An.Points, SSE_DAILY_COUNT, &High[0], &Low[0]);
+        if (nWarn != 0)
+        {
+          Expected[(std::size_t)(SSE_DAILY_COUNT - 1)] = (float)nWarn;
+        }
+        break;
+      }
+      case 13:
+        for (int n = 0; n < SSE_DAILY_COUNT; n++)
+        {
+          Expected[(std::size_t)n] = 0.0f;
+        }
+        if ((int)An.KissVol.size() >= SSE_DAILY_COUNT)
+        {
+          for (int n = 0; n < SSE_DAILY_COUNT; n++)
+          {
+            Expected[(std::size_t)n] = (float)An.KissVol[(std::size_t)n];
+          }
+        }
+        break;
+      case 14: ApplyTradingSignalSmallTurn(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 15: ApplyTradingSignalAbcStructure(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 16: ApplyTradingSignalStrictAbcCandidates(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 18: ApplyTradingSignalMacdLineWeakness(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 19: ApplyTradingSignalMacdZeroPullback(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 20: ApplyTradingSignalStandardDivergence(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 21: ApplyTradingSignalContextFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 22: ApplyTradingSignalCenterPosition(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 23: ApplyTradingSignalMovementType(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 24: ApplyTradingSignalPriority(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 25: ApplyTradingSignalCenterId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 26: ApplyTradingSignalBreakoutId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 27: ApplyTradingSignalPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 28: ApplyTradingSignalTrendId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 29: ApplyTradingSignalMacdAreaRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 30: ApplyTradingSignalSpaceRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 31: ApplyTradingSignalSpeedRatio(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 32: ApplyTradingSignalDivergenceFlags(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 33: ApplyTradingSignalBreakoutLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 34: ApplyTradingSignalBreakoutRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 35: ApplyTradingSignalAbcBreakoutId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 36: ApplyTradingSignalAbcBreakoutLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 37: ApplyTradingSignalAbcBreakoutRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 38: ApplyTradingSignalSmallTurnLeavePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 39: ApplyTradingSignalSmallTurnRetestPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Breakouts); break;
+      case 40: ApplyTradingSignalSecondBasePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 41: ApplyTradingSignalSecondTurnPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 42: ApplyTradingSignalSmallTurnBasePointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 43: ApplyTradingSignalDivergencePreviousStartPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 44: ApplyTradingSignalDivergencePreviousEndPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 45: ApplyTradingSignalDivergenceCurrentStartPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 46: ApplyTradingSignalDivergenceCurrentEndPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 47: ApplyTradingSignalCenterLifecycle(SSE_DAILY_COUNT, &Expected[0], An.Candidates, An.Centers); break;
+      case 48: WriteCenterLifecycleSignal(SSE_DAILY_COUNT, &Expected[0], An.Centers); break;
+      case 49:
+      case 50:
+      case 51:
+      case 52:
+      case 56:
+      case 57:
+      case 58:
+      {
+        CzscConfig HighConfig = DefaultConfig();
+        HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+        HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+        CzscAnalyzer HighAn;
+        BuildAnalyzerFromPrice(HighAn, SSE_DAILY_COUNT, &High[0], &Low[0], HighConfig);
+        CzscAnalyzer LowAn;
+        BuildAnalyzerFromPrice(LowAn, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
+        std::vector<NestedDivergenceContext> Contexts =
+          BuildNestedDivergenceContexts(HighAn.Points, HighAn.Candidates,
+                                        LowAn.Points, LowAn.Candidates);
+        if (nOutput == 49)
+        {
+          ApplyNestedDivergenceLevel(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 50)
+        {
+          ApplyNestedDivergenceSourceId(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 51)
+        {
+          ApplyNestedDivergenceStartPointId(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 52)
+        {
+          ApplyNestedDivergenceEndPointId(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 56)
+        {
+          ApplyNestedDivergenceSemantic(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else if (nOutput == 57)
+        {
+          ApplyNestedDivergenceConfirmFlags(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        else
+        {
+          ApplyNestedDivergenceDirection(SSE_DAILY_COUNT, &Expected[0], Contexts);
+        }
+        break;
+      }
+      case 53: ApplyTradingSignalDivergenceSemantic(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 54: ApplyTradingSignalReversalPointId(SSE_DAILY_COUNT, &Expected[0], An.Candidates); break;
+      case 55: ApplyTradingFilterReasons(SSE_DAILY_COUNT, &Expected[0], An.TradingFilterReasons); break;
+      default: return false;
+    }
+
+    float fMode = (float)(nOutput * 10);
+    Func30(SSE_DAILY_COUNT, &Unified[0], &High[0], &Low[0], &fMode);
+
+    for (int n = 0; n < SSE_DAILY_COUNT; n++)
+    {
+      if (!NearlyEqual(Unified[(std::size_t)n], Expected[(std::size_t)n]))
+      {
+        return false;
+      }
+    }
+  }
+
+  CzscConfig HighConfig = DefaultConfig();
+  HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  CzscAnalyzer HighAn;
+  BuildAnalyzerFromPrice(HighAn, SSE_DAILY_COUNT, &High[0], &Low[0], HighConfig);
+  CzscAnalyzer LowAn;
+  BuildAnalyzerFromPrice(LowAn, SSE_DAILY_COUNT, &High[0], &Low[0], DefaultConfig());
+
+  WriteNestedDivergenceSignal(SSE_DAILY_COUNT, &Expected[0],
+                              HighAn.Points, HighAn.Candidates,
+                              LowAn.Points, LowAn.Candidates);
+  float fNestedMode = 170;
+  Func30(SSE_DAILY_COUNT, &Unified[0], &High[0], &Low[0], &fNestedMode);
+  for (int n = 0; n < SSE_DAILY_COUNT; n++)
+  {
+    if (!NearlyEqual(Unified[(std::size_t)n], Expected[(std::size_t)n]))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool TestFunc30RejectsInvalidMode()
+{
+  const int nCount = 5;
+  float pHigh[nCount] = {5, 6, 7, 6, 5};
+  float pLow[nCount] = {1, 2, 3, 2, 1};
+  float pOut[nCount];
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = 9;
+  }
+  float fBadTail = 11;
+  Func30(nCount, pOut, pHigh, pLow, &fBadTail);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pOut[i], 0.0f))
+    {
+      return false;
+    }
+  }
+
+  for (int i = 0; i < nCount; i++)
+  {
+    pOut[i] = 9;
+  }
+  float fUnknownOutput = 290;
+  Func30(nCount, pOut, pHigh, pLow, &fUnknownOutput);
+  for (int i = 0; i < nCount; i++)
+  {
+    if (!NearlyEqual(pOut[i], 0.0f))
+    {
+      return false;
+    }
+  }
+
+  std::vector<float> High(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT);
+  std::vector<float> Low(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT);
+  std::vector<float> InvalidConfig((std::size_t)SSE_DAILY_COUNT);
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    InvalidConfig[(std::size_t)i] = 9.0f;
+  }
+  float fInvalidConfig = 2000;
+  Func30(SSE_DAILY_COUNT, &InvalidConfig[0], &High[0], &Low[0], &fInvalidConfig);
+  for (int i = 0; i < SSE_DAILY_COUNT; i++)
+  {
+    if (!NearlyEqual(InvalidConfig[(std::size_t)i], 0.0f))
     {
       return false;
     }
@@ -3466,6 +8264,85 @@ static bool TestAuxCloseAffectsEnergy()
   float eA = A[1].fEnergy - A[0].fEnergy;
   float eB = B[1].fEnergy - B[0].fEnergy;
   return !NearlyEqual(eA, eB);  // 真实收盘价改变了 MACD 面积
+}
+
+static bool TestFunc30AuxCloseInvalidatesPriceCache()
+{
+  RegisterAuxData(0, 0, 0);
+
+  const int n = 30;
+  float pHigh[n];
+  float pLow[n];
+  float close[n];
+  float badClose[n];
+  float pOut[n];
+  float fMode = 100;  // Func30 输出10：短长均线差
+  for (int i = 0; i < n; i++)
+  {
+    pLow[i] = 10;
+    pHigh[i] = 20;
+    close[i] = 10.0f + 10.0f * ((float)i / (float)(n - 1));
+    badClose[i] = close[i];
+    pOut[i] = -1;
+  }
+  badClose[15] = 99;  // 内容校验失败，须回落到 (H+L)/2
+
+  Func30(n, pOut, pHigh, pLow, &fMode);
+  float fProxy = pOut[n - 1];
+
+  RegisterAuxData(n, close, 0);
+  Func30(n, pOut, pHigh, pLow, &fMode);
+  float fReal = pOut[n - 1];
+
+  RegisterAuxData(n, badClose, 0);
+  Func30(n, pOut, pHigh, pLow, &fMode);
+  float fFallback = pOut[n - 1];
+
+  RegisterAuxData(0, 0, 0);
+  return NearlyEqual(fProxy, 0.0f) &&
+         (fReal > 0.1f) &&
+         NearlyEqual(fFallback, fProxy);
+}
+
+static bool TestSignalCacheInvalidatesOnAuxClose()
+{
+  RegisterAuxData(0, 0, 0);
+
+  const int n = 30;
+  float pIn[n];
+  float pHigh[n];
+  float pLow[n];
+  float close[n];
+  for (int i = 0; i < n; i++)
+  {
+    pIn[i] = 0;
+    pLow[i] = 10;
+    pHigh[i] = 20;
+    close[i] = 10.0f + 10.0f * ((float)i / (float)(n - 1));
+  }
+  pIn[5] = -1;
+  pIn[25] = 1;
+
+  const CzscAnalyzer &Proxy = GetOrBuildSignalAnalyzer(n, pIn, pHigh, pLow);
+  if (Proxy.Points.size() != 2)
+  {
+    RegisterAuxData(0, 0, 0);
+    return false;
+  }
+  float fProxyEnergy = Proxy.Points[1].fEnergy - Proxy.Points[0].fEnergy;
+
+  RegisterAuxData(n, close, 0);
+  const CzscAnalyzer &Real = GetOrBuildSignalAnalyzer(n, pIn, pHigh, pLow);
+  if (Real.Points.size() != 2)
+  {
+    RegisterAuxData(0, 0, 0);
+    return false;
+  }
+  float fRealEnergy = Real.Points[1].fEnergy - Real.Points[0].fEnergy;
+
+  RegisterAuxData(0, 0, 0);
+  return NearlyEqual(fProxyEnergy, 0.0f) &&
+         !NearlyEqual(fRealEnergy, fProxyEnergy);
 }
 
 static bool TestFunc40Registers()
@@ -3596,6 +8473,18 @@ int main()
   {
     return 2;
   }
+  if (!TestMergedBarsTrackExtremeIndexes())
+  {
+    return 122;
+  }
+  if (!TestMergedBarsApplySequentialInclusionDirection())
+  {
+    return 171;
+  }
+  if (!TestFractalsUseMergedExtremeIndexes())
+  {
+    return 123;
+  }
   if (!TestFractalsAndStrokes())
   {
     return 3;
@@ -3603,6 +8492,10 @@ int main()
   if (!TestStrokeRequiresFiveBars())
   {
     return 4;
+  }
+  if (!TestRealSseMergedBarsAreWellFormed())
+  {
+    return 172;
   }
   if (!TestRealSseStrokesWellFormed())
   {
@@ -3620,6 +8513,10 @@ int main()
   {
     return 118;
   }
+  if (!TestRealSseDiagnosticCounts())
+  {
+    return 155;
+  }
   if (!TestRealSsePricePointsStayOnStrictStrokeEndpoints())
   {
     return 119;
@@ -3627,6 +8524,34 @@ int main()
   if (!TestRealSseFirstCenterStopsBeforeLeave())
   {
     return 120;
+  }
+  if (!TestRealSseGoldenCentersPresent())
+  {
+    return 121;
+  }
+  if (!TestRealSseCentersDoNotShareEndpoints())
+  {
+    return 156;
+  }
+  if (!TestRealSseGoldenSegmentCentersPresent())
+  {
+    return 154;
+  }
+  if (!TestRealSseRecursiveCenterLifecycleCounts())
+  {
+    return 203;
+  }
+  if (!TestRecentSseRecursiveCenterLifecycleCounts())
+  {
+    return 204;
+  }
+  if (!TestRealSseGoldenCandidatesPresent())
+  {
+    return 158;
+  }
+  if (!TestRealSseGoldenBreakoutsPresent())
+  {
+    return 188;
   }
   if (!TestFunc1WritesCompatibleSignal())
   {
@@ -3676,6 +8601,18 @@ int main()
   {
     return 16;
   }
+  if (!TestTrendStructuresUseFullCenterExtent())
+  {
+    return 124;
+  }
+  if (!TestTrendStructuresTreatTouchingFullExtentsAsConsolidation())
+  {
+    return 174;
+  }
+  if (!TestTrendStructuresUseNewbornLifecycleBoundaries())
+  {
+    return 212;
+  }
   if (!TestCenterBreakoutsDetectThirdBuy())
   {
     return 17;
@@ -3684,13 +8621,25 @@ int main()
   {
     return 18;
   }
+  if (!TestCenterBreakoutsAllowBoundaryRetest())
+  {
+    return 178;
+  }
   if (!TestCenterBreakoutsUseFirstRetestOnly())
   {
     return 19;
   }
+  if (!TestCenterBreakoutsUseCenterEndAsLeavePoint())
+  {
+    return 153;
+  }
   if (!TestCenterBreakoutsSkipBackIntoCenter())
   {
     return 20;
+  }
+  if (!TestCenterBreakoutsDoNotUseLaterRetestAfterBackIntoCenter())
+  {
+    return 175;
   }
   if (!TestCenterBreakoutsSkipWithoutLeave())
   {
@@ -3712,6 +8661,10 @@ int main()
   {
     return 25;
   }
+  if (!TestTradingCandidatesAllowEqualSecondExtremes())
+  {
+    return 183;
+  }
   if (!TestTradingCandidatesGenerateThirdBuy())
   {
     return 26;
@@ -3728,13 +8681,69 @@ int main()
   {
     return 29;
   }
+  if (!TestApplyTradingOutputsSkipInvalidSignals())
+  {
+    return 170;
+  }
   if (!TestFirstCandidateKeepsTrendDivergence())
   {
     return 30;
   }
+  if (!TestFirstCandidateRequiresTrendStructure())
+  {
+    return 151;
+  }
+  if (!TestFirstCandidateRequiresOutsideLastCenter())
+  {
+    return 176;
+  }
+  if (!TestFirstCandidateMarksAbcStructure())
+  {
+    return 129;
+  }
+  if (!TestFirstSellCandidateMarksAbcStructure())
+  {
+    return 130;
+  }
+  if (!TestFirstCandidateRequiresValidAbcBreakout())
+  {
+    return 165;
+  }
+  if (!TestFirstCandidateMarksMacdZeroPullback())
+  {
+    return 138;
+  }
+  if (!TestFirstCandidateBuildsStandardMacdDivergence())
+  {
+    return 160;
+  }
+  if (!TestFirstSellCandidateBuildsStandardMacdDivergence())
+  {
+    return 161;
+  }
+  if (!TestFirstCandidateSkipsAfterLaterCenter())
+  {
+    return 125;
+  }
+  if (!TestFirstCandidateUsesPreLastCenterMove())
+  {
+    return 126;
+  }
   if (!TestThirdCandidateKeepsBreakoutDivergence())
   {
     return 31;
+  }
+  if (!TestThirdCandidateRequiresBreakoutDirection())
+  {
+    return 181;
+  }
+  if (!TestThirdCandidateRequiresValidCenter())
+  {
+    return 182;
+  }
+  if (!TestThirdCandidateUsesOnlyCompletedTrendStructure())
+  {
+    return 157;
   }
   if (!TestTradingCandidatesMarkSecondThirdBuyOverlap())
   {
@@ -3744,9 +8753,29 @@ int main()
   {
     return 33;
   }
+  if (!TestSecondThirdOverlapRequiresFirstCenter())
+  {
+    return 163;
+  }
+  if (!TestSecondThirdSellOverlapRequiresFirstCenter())
+  {
+    return 164;
+  }
+  if (!TestSmallTurnRequiresSameCenterAndLaterThird())
+  {
+    return 162;
+  }
+  if (!TestSmallTurnSellRequiresSameCenterAndLaterThird())
+  {
+    return 179;
+  }
   if (!TestTradingCandidatesMarkSecondBuyInsideCenter())
   {
     return 34;
+  }
+  if (!TestTradingCandidatesMarkSecondSellInsideCenter())
+  {
+    return 152;
   }
   if (!TestFunc9WritesLineSegmentSignal())
   {
@@ -3756,9 +8785,17 @@ int main()
   {
     return 36;
   }
+  if (!TestCentersTrackEntryDirection())
+  {
+    return 177;
+  }
   if (!TestCenterExtendsWithOverlappingSegment())
   {
     return 37;
+  }
+  if (!TestCenterExtendsWithCrossingSegment())
+  {
+    return 159;
   }
   if (!TestCentersSplitWhenOverlapBreaks())
   {
@@ -3779,6 +8816,10 @@ int main()
   if (!TestFunc5WritesCenterThirdSell())
   {
     return 42;
+  }
+  if (!TestFunc5WritesThirdSignalsAtCenterBoundary())
+  {
+    return 162;
   }
   if (!TestFunc5WritesSecondBuyAfterFirstBuy())
   {
@@ -3816,9 +8857,17 @@ int main()
   {
     return 51;
   }
+  if (!TestAssignSegmentEnergySetsMacdLines())
+  {
+    return 135;
+  }
   if (!TestStrengthMetricsUseMacdEnergy())
   {
     return 52;
+  }
+  if (!TestStrengthMetricsUseMacdLineHeight())
+  {
+    return 136;
   }
   if (!TestDivergenceDetectsMacdWeakening())
   {
@@ -3876,9 +8925,29 @@ int main()
   {
     return 66;
   }
+  if (!TestClassifyCenterRelationExtensionAtFullExtentBoundary())
+  {
+    return 173;
+  }
+  if (!TestClassifyCenterLifecycleExtension())
+  {
+    return 196;
+  }
+  if (!TestClassifyCenterLifecycleExpansion())
+  {
+    return 197;
+  }
+  if (!TestClassifyCenterLifecycleNewborn())
+  {
+    return 198;
+  }
   if (!TestWriteCenterRelationSignalMarks())
   {
     return 67;
+  }
+  if (!TestWriteCenterLifecycleSignalMarks())
+  {
+    return 199;
   }
   if (!TestFunc11WritesCenterRelation())
   {
@@ -3928,9 +8997,165 @@ int main()
   {
     return 79;
   }
+  if (!TestCenterAftermathRequiresThirdSignal())
+  {
+    return 167;
+  }
   if (!TestApplyTradingAftermathMapsCodes())
   {
     return 80;
+  }
+  if (!TestApplyTradingCenterPositionMapsCodes())
+  {
+    return 144;
+  }
+  if (!TestApplyTradingMovementTypeMapsCodes())
+  {
+    return 145;
+  }
+  if (!TestApplyTradingPriorityMapsCodes())
+  {
+    return 146;
+  }
+  if (!TestApplyTradingCenterIdMapsCodes())
+  {
+    return 147;
+  }
+  if (!TestApplyTradingBreakoutIdMapsCodes())
+  {
+    return 148;
+  }
+  if (!TestApplyTradingBreakoutPointIdsMapCodes())
+  {
+    return 189;
+  }
+  if (!TestApplyTradingPointIdMapsCodes())
+  {
+    return 149;
+  }
+  if (!TestApplyTradingTrendIdMapsCodes())
+  {
+    return 150;
+  }
+  if (!TestApplyTradingSecondContextPointIdsMapCodes())
+  {
+    return 193;
+  }
+  if (!TestApplyTradingSmallTurnMapsCodes())
+  {
+    return 128;
+  }
+  if (!TestApplyTradingSmallTurnPointIdsMapCodes())
+  {
+    return 192;
+  }
+  if (!TestApplyTradingAbcStructureMapsCodes())
+  {
+    return 131;
+  }
+  if (!TestApplyTradingAbcBreakoutIdMapsCodes())
+  {
+    return 190;
+  }
+  if (!TestApplyTradingAbcBreakoutPointIdsMapCodes())
+  {
+    return 191;
+  }
+  if (!TestApplyTradingStrictAbcFiltersFirstSignals())
+  {
+    return 132;
+  }
+  if (!TestApplyTradingMacdLineWeaknessMapsCodes())
+  {
+    return 137;
+  }
+  if (!TestApplyTradingMacdZeroPullbackMapsCodes())
+  {
+    return 139;
+  }
+  if (!TestApplyTradingStandardDivergenceMapsCodes())
+  {
+    return 140;
+  }
+  if (!TestApplyTradingMacdAreaRatioMapsCodes())
+  {
+    return 184;
+  }
+  if (!TestApplyTradingStrengthRatiosMapCodes())
+  {
+    return 185;
+  }
+  if (!TestApplyTradingDivergenceFlagsMapCodes())
+  {
+    return 186;
+  }
+  if (!TestApplyTradingDivergencePointIdsMapCodes())
+  {
+    return 196;
+  }
+  if (!TestBuildDivergenceFlagsMapsBits())
+  {
+    return 187;
+  }
+  if (!TestApplyTradingContextFlagsMapsCodes())
+  {
+    return 141;
+  }
+  if (!TestApplyTradingContextFlagsUsesWinningPriority())
+  {
+    return 142;
+  }
+  if (!TestApplyTradingDivergenceSemanticMapsCodes())
+  {
+    return 197;
+  }
+  if (!TestApplyTradingDivergenceSemanticUsesWinningPriority())
+  {
+    return 198;
+  }
+  if (!TestApplyTradingFilterReasonsMapsCodes())
+  {
+    return 205;
+  }
+  if (!TestBuildTradingFilterReasonsMarksNoTrend())
+  {
+    return 206;
+  }
+  if (!TestBuildTradingFilterReasonsMarksSecondOrder())
+  {
+    return 207;
+  }
+  if (!TestBuildTradingFilterReasonsMarksThirdRetestFailures())
+  {
+    return 208;
+  }
+  if (!TestBuildTradingFilterReasonsMarksAbcNotAligned())
+  {
+    return 209;
+  }
+  if (!TestNestedDivergenceMarksLowerSegmentInsideHigher())
+  {
+    return 133;
+  }
+  if (!TestNestedDivergenceMarksSellDirection())
+  {
+    return 134;
+  }
+  if (!TestNestedDivergenceRequiresFirstSignalCode())
+  {
+    return 169;
+  }
+  if (!TestNestedDivergenceWithoutNewExtremeIsConsolidationOnly())
+  {
+    return 200;
+  }
+  if (!TestNestedDivergenceContextOutputs())
+  {
+    return 201;
+  }
+  if (!TestNestedDivergenceOutputInvariants())
+  {
+    return 211;
   }
   if (!TestFunc13HandlesEmptyInput())
   {
@@ -3992,6 +9217,10 @@ int main()
   {
     return 95;
   }
+  if (!TestFeatureLineSegmentRequiresFirstThreeOverlap())
+  {
+    return 123;
+  }
   if (!TestDecodeConfig())
   {
     return 96;
@@ -4008,6 +9237,10 @@ int main()
   {
     return 99;
   }
+  if (!TestFunc20FeatureSegmentModeMatchesFunc19())
+  {
+    return 166;
+  }
   if (!TestFunc20HandlesEmptyInput())
   {
     return 100;
@@ -4020,9 +9253,25 @@ int main()
   {
     return 102;
   }
+  if (!TestPriceAnalyzerCacheInvalidatesOnConfig())
+  {
+    return 210;
+  }
   if (!TestFunc30MatchesLegacyPipeline())
   {
     return 103;
+  }
+  if (!TestFunc30FeatureSegmentModeMatchesFunc19())
+  {
+    return 127;
+  }
+  if (!TestFunc30DiagnosticOutputsMatchProjections())
+  {
+    return 143;
+  }
+  if (!TestFunc30RejectsInvalidMode())
+  {
+    return 180;
   }
   if (!TestFunc30HandlesEmptyInput())
   {
@@ -4039,6 +9288,14 @@ int main()
   if (!TestAuxCloseAffectsEnergy())
   {
     return 107;
+  }
+  if (!TestFunc30AuxCloseInvalidatesPriceCache())
+  {
+    return 194;
+  }
+  if (!TestSignalCacheInvalidatesOnAuxClose())
+  {
+    return 195;
   }
   if (!TestFunc40Registers())
   {
@@ -4060,13 +9317,33 @@ int main()
   {
     return 112;
   }
-  if (!TestFeatureSegmentExtendsPastRelay())
+  if (!TestFeatureLineSegmentEndsAtBottomFractal())
   {
     return 113;
   }
   if (!TestFeatureSegmentGapConfirmedByReversal())
   {
     return 114;
+  }
+  if (!TestFeatureSegmentGapRequiresReversalFractal())
+  {
+    return 189;
+  }
+  if (!TestFeatureSegmentGapConfirmationStartsNextSegment())
+  {
+    return 201;
+  }
+  if (!TestFeatureSegmentGapWithoutReverseFractalKeepsOldSegment())
+  {
+    return 202;
+  }
+  if (!TestApplyTradingReversalRequiresFirstSignal())
+  {
+    return 168;
+  }
+  if (!TestApplyTradingReversalPointIdMapsCodes())
+  {
+    return 199;
   }
 
   return 0;
