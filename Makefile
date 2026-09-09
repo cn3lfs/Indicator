@@ -27,38 +27,48 @@ AS=$(CROSS_PREFIX)as
 FC=$(CROSS_PREFIX)g77
 WINDRES=$(CROSS_PREFIX)windres
 RM=rm -f
-INCLUDE=
+INCLUDE=-Iinclude
 CHARSETFLAGS=-finput-charset=UTF-8
 ASFLAGS=$(INCLUDE) -O2
 CCFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
 CXFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
 FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
+DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
 
 # Objectives
 BUILD_DIR=build
-OBJECT1=Main.o CzscCore.o CzscAnalyzer.o
+CORE_OBJECTS=src/CzscCommon.o src/CzscMorphology.o src/CzscCenter.o \
+             src/CzscDynamics.o src/CzscTrading.o src/CzscNestedDivergence.o \
+             src/CzscAnalyzer.o src/CzscTdxExports.o
+OBJECT1=Main.o $(CORE_OBJECTS)
 TARGET1=$(BUILD_DIR)/CZSC.dll
-TEST_OBJECTS=CzscCore.o CzscAnalyzer.o tests/CzscCoreTests.o
+TEST_OBJECTS=$(CORE_OBJECTS) tests/CzscCoreTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
 TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
+SSE_DUMP_OBJECTS=$(CORE_OBJECTS) tests/DumpSseResult.o
+SSE_DUMP_TARGET=tests/dump_sse$(EXEEXT)
+SSE_DUMP_TARGETS=tests/dump_sse tests/dump_sse.exe
+SSE_RESULT=tests/czsc_sse_result.txt
 LEGACY_OBJECTS=CCentroid.o
 LEGACY_DEPENDS=CCentroid.dep
 OBJECTS=$(OBJECT1)
 TARGETS=$(TARGET1)
-DEPENDS=$(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep)
+ALL_OBJECTS=$(sort $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS))
+DEPENDS=$(sort $(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep))
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
-        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build run clean debug
+        mingw64 mingw64-test mingw64-test-build check-mingw64 test test-build formula-test sse-result sse-result-check release release-check run clean debug
 
 all : $(TARGETS)
 
 mingw32: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX)
+	@$(MAKE) clean
 
 mingw32-test:
-	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) test
+	@$(MAKE) mingw32-test-build
 
 check-mingw32:
 	@command -v make
@@ -69,9 +79,10 @@ check-mingw32:
 # 64 位通达信版本：x86_64 工具链，产物 build/CZSC64.dll（指针随架构变 8 字节，pack/cdecl 不变）
 mingw64: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) TARGET1=$(BUILD_DIR)/CZSC64.dll
+	@$(MAKE) clean
 
 mingw64-test:
-	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) test
+	@$(MAKE) mingw64-test-build
 
 check-mingw64:
 	@command -v make
@@ -82,28 +93,53 @@ check-mingw64:
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
-# 静态链接 libgcc/libstdc++(+winpthread)，使 DLL 自包含，免在通达信机器另装 MinGW 运行时
+# 静态链接 libgcc/libstdc++(+winpthread)，并清零 PE 时间戳，避免无源码变化时 DLL 漂移
 $(TARGET1) : $(OBJECTS) | $(BUILD_DIR)
 	@echo [LD] $@
-	@$(CXX) -shared -o $@ $^ -static -static-libgcc -static-libstdc++ $(LDFLAGS)
+	@$(CXX) -shared -o $@ $^ $(DLL_LDFLAGS) $(LDFLAGS)
 
 debug: all
 	@echo [DB] $(TARGETS)
 	@gdb -w $(TARGETS)
 
-test: $(TEST_TARGET)
+test: $(TEST_TARGET) formula-test sse-result-check
 	@echo [TE] $(TEST_TARGET)
 	@$(TEST_TARGET)
 
 test-build: $(TEST_TARGET)
 
+formula-test:
+	@echo [TF] formulas
+	@python3 tests/check_formulas.py --self-test
+	@python3 tests/check_formulas.py
+
+sse-result: clean $(SSE_DUMP_TARGET)
+	@echo [SE] $(SSE_RESULT)
+	@$(SSE_DUMP_TARGET) $(SSE_RESULT)
+
+sse-result-check: $(SSE_DUMP_TARGET)
+	@echo [SC] $(SSE_RESULT)
+	@python3 tests/check_sse_result.py $(SSE_DUMP_TARGET) $(SSE_RESULT)
+
+release-check:
+	@sh scripts/check-release-dlls.sh
+
+release:
+	@sh scripts/build-release.sh
+
 mingw32-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW32_PREFIX) EXEEXT=.exe test-build
+	@$(MAKE) clean
 
 mingw64-test-build: clean
 	@$(MAKE) CROSS_PREFIX=$(MINGW64_PREFIX) EXEEXT=.exe test-build
+	@$(MAKE) clean
 
 $(TEST_TARGET) : $(TEST_OBJECTS)
+	@echo [LD] $@
+	@$(CXX) -o $@ $^ $(LDFLAGS)
+
+$(SSE_DUMP_TARGET) : $(SSE_DUMP_OBJECTS)
 	@echo [LD] $@
 	@$(CXX) -o $@ $^ $(LDFLAGS)
 
@@ -112,8 +148,8 @@ run: all
 	@$(TARGETS)
 
 clean:
-	@echo [RM] $(OBJECTS) $(TEST_OBJECTS) $(LEGACY_OBJECTS)
-	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(OBJECTS) $(TEST_OBJECTS) $(LEGACY_OBJECTS) $(TEST_TARGETS)
+	@echo [RM] $(ALL_OBJECTS)
+	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(ALL_OBJECTS) $(TEST_TARGETS) $(SSE_DUMP_TARGETS)
 
 # Standard Procedures
 %.dep : %.s
