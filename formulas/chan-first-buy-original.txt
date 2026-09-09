@@ -1,0 +1,7 @@
+{缠论 原文口径一买 条件选股}
+{最近10个交易日内出现一买，且位于中枢下方、所属走势为下跌}
+XC:=TDXDLL1(40,C,V,0);
+BSP:=TDXDLL1(30,H,L,40);
+POS:=TDXDLL1(30,H,L,220);
+MOV:=TDXDLL1(30,H,L,230);
+BARSLAST(BSP=1 AND POS=-1 AND MOV=-1)<10;

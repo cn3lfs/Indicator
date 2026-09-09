@@ -1,0 +1,6 @@
+{缠论 中枢扩张三买 条件选股}
+{最近10个交易日内出现三买，且后续中枢扩张}
+XC:=TDXDLL1(40,C,V,0);
+BSP:=TDXDLL1(30,H,L,40);
+AFT:=TDXDLL1(30,H,L,80);
+BARSLAST(BSP=3 AND AFT=1)<10;
