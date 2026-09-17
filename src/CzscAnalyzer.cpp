@@ -23,11 +23,17 @@
 //=============================================================================
 
 // 从线段点一次算成 中枢→走势→突破→买卖点候选（统一赋 MACD 能量；不读能量的输出不受影响）
-static void BuildCentersStage(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow)
+static void BuildCentersStage(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow,
+                              const TrendAnchorContract *pAnchor = 0)
 {
   AssignSegmentEnergy(An.Points, nCount, pHigh, pLow);
   An.Centers = BuildCenters(An.Points);
   An.Structures = BuildTrendStructures(An.Centers);
+  An.Hierarchy = pAnchor ? BuildSubTrendHierarchy(nCount, pHigh, pLow, *pAnchor) : SubTrendHierarchy();
+  An.CompletionEvidence = BuildTrendCompletionEvidence(An.Points, An.Centers, An.Structures,
+                                                       An.Hierarchy, nCount);
+  An.ZhongYin = BuildZhongYinEvidence(An.CompletionEvidence, nCount,
+                                     GetValidatedClose(nCount, pHigh, pLow));
   An.Breakouts = BuildCenterBreakouts(An.Points, An.Centers, An.Structures);
   An.Candidates = BuildTradingSignalCandidates(An.Points, An.Centers, An.Structures, An.Breakouts);
   An.TradingFilterReasons = BuildTradingFilterReasons(An.Points,
@@ -55,12 +61,12 @@ void BuildAnalyzerFromSignal(CzscAnalyzer &An, int nCount, float *pIn, float *pH
 }
 
 // 原始 H/L+config 家族：按配置直接算出 Points，再走统一下游，并附带均线序列与吻
-void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow, const CzscConfig &Config)
+void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow, const CzscConfig &Config, const TrendAnchorContract *pAnchor)
 {
   An.nCount = nCount;
   An.Config = Config;
   An.Points = BuildConfiguredPoints(nCount, pHigh, pLow, Config);
-  BuildCentersStage(An, nCount, pHigh, pLow);
+  BuildCentersStage(An, nCount, pHigh, pLow, pAnchor);
   ComputeShortLongMa(nCount, pHigh, pLow, &An.MaShort, &An.MaLong);
   An.Kiss = ClassifyMaKisses(An.MaShort, An.MaLong);
   FillAuxVolume(An, nCount, pHigh, pLow);

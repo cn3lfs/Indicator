@@ -2,6 +2,12 @@
 #include "SseIndexDaily.h"
 #include <cstring>
 
+bool TestNativeProjectionIntegerBounds();
+bool TestNativeStructureMemberships();
+bool TestNativeCandidateSlots();
+bool TestNativeProjectionSseRouting();
+bool TestNativeCompletedSequenceUnavailable();
+
 static bool NearlyEqual(float a, float b)
 {
   float fDiff = a - b;
@@ -8463,8 +8469,17 @@ static bool TestStrokeBrokenByNewExtreme()
   return true;
 }
 
+bool TestTrendCompletionSuite();
+
 int main()
 {
+  if (!TestTrendCompletionSuite()) return 218;
+
+  if (!TestNativeProjectionIntegerBounds()) return 213;
+  if (!TestNativeStructureMemberships()) return 214;
+  if (!TestNativeCandidateSlots()) return 215;
+  if (!TestNativeProjectionSseRouting()) return 216;
+  if (!TestNativeCompletedSequenceUnavailable()) return 217;
   if (!TestOutputIsCleared())
   {
     return 1;

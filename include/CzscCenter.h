@@ -34,4 +34,15 @@ int ClassifyReversalStrength(const std::vector<SegmentPoint> &Points,
 void WriteCenterRelationSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 void WriteCenterLifecycleSignal(int nCount, float *pOut, const std::vector<Center> &Centers);
 
+// 第17/33课具名旁路分解；原始价格非法时拒绝，不把填补价格当递归证据。
+SubTrendHierarchy BuildSubTrendHierarchy(int nCount, const float *pHigh, const float *pLow,
+                                         const TrendAnchorContract &Contract);
+std::vector<TrendCompletionEvidence> BuildTrendCompletionEvidence(
+  const std::vector<SegmentPoint> &Points, const std::vector<Center> &Centers,
+  const std::vector<TrendStructure> &Structures, const SubTrendHierarchy &Hierarchy,
+  int nCount);
+std::vector<ZhongYinEvidence> BuildZhongYinEvidence(
+  const std::vector<TrendCompletionEvidence> &Evidence, int nCount,
+  const std::vector<float> *pClose);
+
 #endif

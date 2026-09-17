@@ -744,6 +744,37 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   CzscConfig Config = DecodeConfig((float)nConfig);
   int nOutput = (nMode % 1000) / 10;
 
+  // 93-99 是显式带锚快照表：pTime 必须有 nCount+4 个 float。
+  // [mode, slot, field, anchor, ...每根日期(YYYYMMDD-20000000)]。
+  // 普通常量 mode 公式不能调用；裸指针 ABI 无法检测调用方缓冲区长度。
+  if (nOutput >= 93 && nOutput <= 99)
+  {
+    int nSlot = 0, nField = 0, nAnchor = 0;
+    bool bValid = nCount <= CZSC_PROJECTION_MAX_INTEGER && pTime &&
+      DecodeProjectionSlot(pTime[1], &nSlot) &&
+      DecodeProjectionSlot(pTime[2], &nField) && DecodeProjectionSlot(pTime[3], &nAnchor) &&
+      (nAnchor == 1 || nAnchor == 2);
+    TrendAnchorContract Contract;
+    Contract.nVersion = nAnchor;
+    for (int i = 0; bValid && i < nCount; i++)
+    {
+      float fDate = pTime[i+4];
+      if (!(fDate >= -1000000 && fDate <= 2000000)) { bValid = false; break; }
+      int nDate = static_cast<int>(fDate);
+      if (static_cast<float>(nDate) != fDate) { bValid = false; break; }
+      Contract.Dates.push_back(nDate + 20000000);
+    }
+    if (!bValid)
+    {
+      for (int i = 0; i < nCount; i++) pOut[i] = -1;
+      return;
+    }
+    CzscAnalyzer EvidenceAn;
+    BuildAnalyzerFromPrice(EvidenceAn, nCount, pHigh, pLow, Config, &Contract);
+    ApplyTrendEvidenceProjection(nCount, pOut, EvidenceAn, nOutput, nSlot, nField);
+    return;
+  }
+
   const CzscAnalyzer &An = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, Config);
 
   switch (nOutput)
@@ -893,6 +924,48 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     case 53: ApplyTradingSignalDivergenceSemantic(nCount, pOut, An.Candidates); break; // 胜出候选背驰语义
     case 54: ApplyTradingSignalReversalPointId(nCount, pOut, An.Candidates); break; // 一类背驰后首段回拉端点编号
     case 55: ApplyTradingFilterReasons(nCount, pOut, An.TradingFilterReasons); break; // 买卖点候选过滤原因
+    case 59: case 60: case 61: case 62: case 63: case 64:
+    case 65: case 66: case 67: case 68: case 69:
+    case 70: case 71: case 72: case 73: case 74: case 75:
+    case 76: case 77: case 78: case 79: case 80: case 81:
+    case 82: case 83: case 84: case 85: case 86: case 87:
+    case 88: case 89: case 90: case 91:
+    {
+      // NEW outputs require pTime to contain nCount floats. pTime[0] is mode,
+      // pTime[1] is the zero-based slot. Old outputs still read ONLY pTime[0].
+      int nSlot = 0;
+      if ((nCount > 1) && !DecodeProjectionSlot(pTime[1], &nSlot))
+      {
+        for (int i = 0; i < nCount; i++)
+        {
+          pOut[i] = -1.0f;
+        }
+        break;
+      }
+      if (nOutput <= 69)
+      {
+        ApplyNativeStructureProjection(nCount, pOut, An, nOutput, nSlot);
+      }
+      else
+      {
+        CzscConfig HighConfig = DefaultConfig();
+        HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+        HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+        const CzscAnalyzer &HighAn = GetOrBuildPriceAnalyzer(nCount, pHigh, pLow, HighConfig);
+        ApplyNativeCandidateProjection(nCount, pOut, HighAn, nOutput, nSlot);
+      }
+      break;
+    }
+    case 93: case 94: case 95: case 96: case 97: case 98: case 99:
+      break; // 带锚快照表已在上方独立处理
+    case 92:
+      // N3 availability, NOT an empty completed sequence. TrendStructure has
+      // no completion evidence or connection/confirmation fields to project.
+      for (int i = 0; i < nCount; i++)
+      {
+        pOut[i] = -1.0f;
+      }
+      break;
     default: ClearOutput(nCount, pOut); break;
   }
 }

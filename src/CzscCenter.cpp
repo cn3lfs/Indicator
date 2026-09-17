@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 #include "CzscInternal.h"
+#include <algorithm>
+#include <cmath>
 
 static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::size_t nStart, Center *pCenter)
 {
@@ -461,3 +463,282 @@ void WriteCenterLifecycleSignal(int nCount, float *pOut, const std::vector<Cente
   }
 }
 
+
+// C3：第17课末端定义/递归定义；第33课结合律的具名分解之一，不声称唯一。
+// leftmost-core-first-departure-v1：从左至右取首个三单位交集；交集固定，
+// 重叠单位延伸末端。离开后至少再有一个同侧、不触及闭区间的完整单位，
+// 才有当前分解的“不再返回”证据。首次离开端点连接下一走势，确认端点不回填。
+// 完成后的返回属于后继；这不是对未来永不返回的预言。
+namespace
+{
+struct RecursiveUnit
+{
+  int nStart;
+  int nEnd;
+  int nAvailable;
+  int nChild;
+  float fHigh;
+  float fLow;
+};
+
+bool ValidAnchorDate(int nDate)
+{
+  int y = nDate / 10000, m = (nDate / 100) % 100, d = nDate % 100;
+  if (y < 1900 || y > 2199 || m < 1 || m > 12) return false;
+  const int Days[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+  int nDays = Days[m - 1];
+  if (m == 2 && y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) nDays++;
+  return d >= 1 && d <= nDays;
+}
+
+int OutsideSide(float fLow, float fHigh, float fCenterLow, float fCenterHigh)
+{
+  return fLow > fCenterHigh ? 1 : (fHigh < fCenterLow ? -1 : 0);
+}
+
+std::vector<int> BuildSubTrendLevel(const std::vector<RecursiveUnit> &Units,
+                                    int nLevel, SubTrendHierarchy *pHierarchy,
+                                    const float *pHigh, const float *pLow)
+{
+  std::vector<int> Completed;
+  int nCursor = 0, nPrevious = -1, nConnection = -1;
+  const int nSize = static_cast<int>(Units.size());
+  while (nCursor + 2 < nSize)
+  {
+    int nCore = nCursor;
+    float fLow = 0, fHigh = 0;
+    for (; nCore + 2 < nSize; nCore++)
+    {
+      fLow = std::max(Units[nCore].fLow, std::max(Units[nCore+1].fLow, Units[nCore+2].fLow));
+      fHigh = std::min(Units[nCore].fHigh, std::min(Units[nCore+1].fHigh, Units[nCore+2].fHigh));
+      if (fLow <= fHigh) break; // 闭区间，接触也算重叠
+    }
+    if (nCore + 2 >= nSize) break;
+    SubTrendNode Node = {};
+    Node.nLevel = nLevel;
+    Node.nStart = nConnection >= 0 ? nConnection : Units[nCursor].nStart;
+    Node.nCenterStart = Units[nCore].nStart;
+    Node.nCenterEnd = Units[nCore+2].nEnd;
+    Node.nEstablishedAt = Units[nCore+2].nAvailable;
+    Node.nConnection = Node.nCompletedAt = Node.nSuccessor = -1;
+    Node.fCenterHigh = fHigh;
+    Node.fCenterLow = fLow;
+    int nLeave = -1, nSide = 0, nLast = nSize - 1;
+    for (int j = nCore + 3; j < nSize; j++)
+    {
+      int nNow = OutsideSide(Units[j].fLow, Units[j].fHigh, fLow, fHigh);
+      if (nNow == 0)
+      {
+        Node.nCenterEnd = Units[j].nEnd;
+        nLeave = -1;
+        nSide = 0;
+      }
+      else if (nLeave >= 0 && nSide == nNow)
+      {
+        Node.nConnection = Units[nLeave].nEnd;
+        Node.nCompletedAt = std::max(Node.nEstablishedAt, Units[j].nAvailable);
+        nLast = nLeave;
+        break;
+      }
+      else
+      {
+        // 跨越到另一侧意味着价格段穿越中枢，不能当作同侧不返回。
+        nLeave = j;
+        nSide = nNow;
+      }
+    }
+    Node.nEnd = Units[nLast].nEnd;
+    Node.fHigh = Units[nCursor].fHigh;
+    Node.fLow = Units[nCursor].fLow;
+    if (nCursor > 0 && nConnection >= 0)
+    {
+      // 共享连接K线的价格包络也属于下一走势，不能丢掉时间起点的价格。
+      Node.fHigh = std::max(Node.fHigh, pHigh[nConnection]);
+      Node.fLow = std::min(Node.fLow, pLow[nConnection]);
+    }
+    for (int j = nCursor; j <= nLast; j++)
+    {
+      Node.fHigh = std::max(Node.fHigh, Units[j].fHigh);
+      Node.fLow = std::min(Node.fLow, Units[j].fLow);
+      if (Units[j].nChild >= 0) Node.Children.push_back(Units[j].nChild);
+    }
+    int nNode = static_cast<int>(pHierarchy->Nodes.size());
+    pHierarchy->Nodes.push_back(Node);
+    if (nPrevious >= 0) pHierarchy->Nodes[nPrevious].nSuccessor = nNode;
+    if (Node.nCompletedAt < 0) break;
+    Completed.push_back(nNode);
+    nPrevious = nNode;
+    nConnection = Node.nConnection;
+    nCursor = nLast + 1; // 子走势不重复归属；相邻父走势只共享连接端点
+  }
+  return Completed;
+}
+}
+
+SubTrendHierarchy BuildSubTrendHierarchy(int nCount, const float *pHigh, const float *pLow,
+                                         const TrendAnchorContract &Contract)
+{
+  SubTrendHierarchy Result;
+  Result.nAnchorVersion = Contract.nVersion;
+  if (nCount < 0 || (Contract.nVersion != 1 && Contract.nVersion != 2) ||
+      Contract.Dates.size() != static_cast<std::size_t>(nCount) ||
+      (nCount > 0 && (!pHigh || !pLow))) return Result;
+  std::vector<RecursiveUnit> Units;
+  for (int i = 0; i < nCount; i++)
+  {
+    int nDate = Contract.Dates[i];
+    if (!ValidAnchorDate(nDate) ||
+        (i > 0 && (nDate < Contract.Dates[i-1] ||
+                    (Contract.nVersion == 1 && nDate == Contract.Dates[i-1]))) ||
+        (Contract.nVersion == 2 && (nDate < 20000104 || nDate > 20221130)) ||
+        !std::isfinite(pHigh[i]) || !std::isfinite(pLow[i]) ||
+        pLow[i] <= 0 || pHigh[i] < pLow[i]) return Result;
+    RecursiveUnit U = {i, i, i, -1, pHigh[i], pLow[i]};
+    Units.push_back(U);
+  }
+  Result.bAvailable = true;
+  // 每个父走势至少消耗三子走势；单位数严格减少，无任意级别上限。
+  for (int nLevel = 0; Units.size() >= 3; nLevel++)
+  {
+    std::vector<int> Completed = BuildSubTrendLevel(Units, nLevel, &Result, pHigh, pLow);
+    std::vector<RecursiveUnit> Next;
+    for (std::size_t i = 0; i < Completed.size(); i++)
+    {
+      const SubTrendNode &N = Result.Nodes[Completed[i]];
+      RecursiveUnit U = {N.nStart, N.nEnd, N.nCompletedAt, Completed[i], N.fHigh, N.fLow};
+      Next.push_back(U);
+    }
+    Units.swap(Next);
+  }
+  return Result;
+}
+
+std::vector<TrendCompletionEvidence> BuildTrendCompletionEvidence(
+  const std::vector<SegmentPoint> &Points, const std::vector<Center> &Centers,
+  const std::vector<TrendStructure> &Structures, const SubTrendHierarchy &Hierarchy,
+  int nCount)
+{
+  std::vector<TrendCompletionEvidence> Result;
+  // 旧构件走势仅给构件完成证据，理论级别保持未知；不强行关联递归树。
+  for (std::size_t i = 0; i < Structures.size(); i++)
+  {
+    const TrendStructure &T = Structures[i];
+    if (T.nFirstCenter < 0 || T.nLastCenter < T.nFirstCenter ||
+        static_cast<std::size_t>(T.nLastCenter) >= Centers.size()) continue;
+    const Center &C = Centers[T.nLastCenter];
+    int nBoundary = nCount;
+    if (i + 1 < Structures.size()) nBoundary = Structures[i+1].nStart;
+    for (std::size_t j = 1; j + 1 < Points.size(); j++)
+    {
+      const SegmentPoint &P = Points[j], &Q = Points[j+1];
+      if (P.nIndex <= C.nEnd || P.nIndex > nBoundary || Q.nIndex >= nCount ||
+          Q.nIndex <= P.nIndex || Points[j-1].nIndex > C.nEnd) continue;
+      int nSide = OutsideSide(P.fLow, P.fHigh, C.fLow, C.fHigh);
+      if (nSide == 0 || OutsideSide(Q.fLow, Q.fHigh, C.fLow, C.fHigh) != nSide) continue;
+      TrendCompletionEvidence E = {};
+      E.nTrend = static_cast<int>(i);
+      E.nTrendSpace = 0;
+      E.nConnectionPoint = static_cast<int>(j);
+      E.nConnectionBar = P.nIndex;
+      E.nReason = 1;
+      E.nLatestPoint = static_cast<int>(j+1);
+      E.nLatestBar = Q.nIndex;
+      E.nObservedAt = nCount - 1;
+      E.nSuccessor = E.nSuccessorEstablishedAt = -1;
+      E.nTheoreticalLevel = -1;
+      E.nAnchorVersion = 0;
+      E.nDecompositionRule = 1;
+      if (i + 1 < Structures.size())
+      {
+        int nFirst = Structures[i+1].nFirstCenter;
+        if (nFirst >= 0 && static_cast<std::size_t>(nFirst) < Centers.size() &&
+            Centers[nFirst].nEnd > E.nLatestBar && Centers[nFirst].nEnd < nCount)
+        {
+          E.nSuccessor = static_cast<int>(i+1);
+          E.nSuccessorEstablishedAt = Centers[nFirst].nEnd;
+        }
+      }
+      Result.push_back(E);
+      break;
+    }
+  }
+  if (!Hierarchy.bAvailable) return Result;
+  for (std::size_t i = 0; i < Hierarchy.Nodes.size(); i++)
+  {
+    const SubTrendNode &N = Hierarchy.Nodes[i];
+    if (N.nCompletedAt < 0) continue;
+    TrendCompletionEvidence E = {};
+    E.nTrend = static_cast<int>(i);
+    E.nTrendSpace = 1;
+    E.nConnectionPoint = E.nLatestPoint = -1;
+    E.nConnectionBar = N.nConnection;
+    E.nReason = 1;
+    E.nLatestBar = N.nCompletedAt;
+    E.nObservedAt = nCount - 1;
+    E.nSuccessor = N.nSuccessor;
+    E.nSuccessorEstablishedAt = N.nSuccessor < 0 ? -1 : Hierarchy.Nodes[N.nSuccessor].nEstablishedAt;
+    E.nTheoreticalLevel = N.nLevel;
+    E.nAnchorVersion = Hierarchy.nAnchorVersion;
+    E.nDecompositionRule = 1;
+    Result.push_back(E);
+  }
+  return Result;
+}
+
+std::vector<ZhongYinEvidence> BuildZhongYinEvidence(
+  const std::vector<TrendCompletionEvidence> &Evidence, int nCount,
+  const std::vector<float> *pClose)
+{
+  bool bHasRecursiveEvidence = false;
+  for (std::size_t i = 0; i < Evidence.size(); i++)
+    if (Evidence[i].nTrendSpace == 1) bHasRecursiveEvidence = true;
+  if (!bHasRecursiveEvidence) return std::vector<ZhongYinEvidence>();
+  // 第90课 BOLL 是“辅助判断”；只消费真实C，20根总体标准差，宽度=4*std。
+  std::vector<double> Width(static_cast<std::size_t>(std::max(nCount, 0)), -1.0);
+  if (pClose && pClose->size() == Width.size())
+  {
+    for (int i = 19; i < nCount; i++)
+    {
+      double fMean = 0, fVariance = 0;
+      bool bValid = true;
+      for (int j = i-19; j <= i; j++)
+      {
+        bValid = bValid && std::isfinite((*pClose)[j]) && (*pClose)[j] > 0;
+        fMean += (*pClose)[j] / 20.0;
+      }
+      if (!bValid) continue;
+      for (int j = i-19; j <= i; j++)
+      {
+        double d = (*pClose)[j] - fMean;
+        fVariance += d*d / 20.0;
+      }
+      Width[i] = 4.0 * std::sqrt(fVariance);
+    }
+  }
+  std::vector<ZhongYinEvidence> Result;
+  for (std::size_t i = 0; i < Evidence.size(); i++)
+  {
+    const TrendCompletionEvidence &E = Evidence[i];
+    if (E.nTrendSpace != 1) continue; // 主结构只收严格递归证据
+    ZhongYinEvidence Z = {static_cast<int>(i), 1, E.nLatestBar,
+                         E.nSuccessorEstablishedAt, E.nObservedAt, -1, true};
+    Result.push_back(Z);
+    Z.nVersion = 2;
+    Z.nEnd = -1;
+    Z.bAvailable = false;
+    for (int j = std::max(20, Z.nEnter); j < nCount; j++)
+    {
+      if (Width[j] < 0 || Width[j-1] < 0) continue;
+      Z.bAvailable = true;
+      if (Z.nContraction < 0 && Width[j] < Width[j-1]) Z.nContraction = j;
+      if (Z.nContraction >= 0 && j > Z.nContraction &&
+          E.nSuccessorEstablishedAt >= 0 && j >= E.nSuccessorEstablishedAt && Width[j] > Width[j-1])
+      {
+        Z.nEnd = j;
+        break;
+      }
+    }
+    Result.push_back(Z);
+  }
+  return Result;
+}

@@ -283,6 +283,68 @@ struct TrendStructure
   int nLastCenter;
 };
 
+// C3 独立旁路；ID 仅在一次前缀快照内有效，不与旧 Structures 混连。
+// 锚级别 0；升阶只来自三个连续、已完成的下一低级走势，不来自 nCenterUnit。
+struct TrendAnchorContract
+{
+  int nVersion;                   // 1=daily-anchor-v1, 2=five-minute-anchor-v1
+  std::vector<int> Dates;          // 每根单位K线 YYYYMMDD；调用者保证实际周期与锚一致
+};
+
+struct SubTrendNode
+{
+  int nLevel;
+  int nStart;
+  int nEnd;
+  int nCenterStart;
+  int nCenterEnd;
+  int nEstablishedAt;              // 子级证据全部可知的最晚原始K线
+  int nConnection;                 // 具名分解选择的原始K线端点，未完成=-1
+  int nCompletedAt;                // 完成证据最早齐备位置，未完成=-1
+  int nSuccessor;                  // 本旁路 Nodes 外键，未确立=-1
+  float fHigh;
+  float fLow;
+  float fCenterHigh;
+  float fCenterLow;
+  std::vector<int> Children;       // 全部连续子走势成员；锚级别为空，成员为单位K线
+};
+
+struct SubTrendHierarchy
+{
+  int nAnchorVersion;
+  bool bAvailable;
+  std::vector<SubTrendNode> Nodes;
+  SubTrendHierarchy() : nAnchorVersion(0), bAvailable(false) {}
+};
+
+struct TrendCompletionEvidence
+{
+  int nTrend;                     // nTrendSpace=0:旧Structures；1:Hierarchy.Nodes
+  int nTrendSpace;
+  int nConnectionPoint;           // 旧Points外键；递归层无该外键=-1
+  int nConnectionBar;             // 所选连接端点原始K线
+  int nReason;                    // 1=leave-and-observed-nonreturn-v1
+  int nLatestPoint;               // 旧Points最晚必需端点，递归层=-1
+  int nLatestBar;                 // 必需证据最晚K线，不是首次观察时间
+  int nObservedAt;                // 当前调用前缀末端，消费端须冻结首次首见
+  int nSuccessor;                 // 与 nTrend 相同命名空间；可为-1
+  int nSuccessorEstablishedAt;    // 与完成证据独立，新中枢成立才填
+  int nTheoreticalLevel;          // 旧结构=-1；递归锚=0，逐层+1
+  int nAnchorVersion;
+  int nDecompositionRule;         // 1=leftmost-core-first-departure-v1
+};
+
+struct ZhongYinEvidence
+{
+  int nCompletion;                // CompletionEvidence 外键
+  int nVersion;                   // 1=zhongyin-structural-v1; 2=zhongyin-boll20-v1
+  int nEnter;                     // 完成证据齐备位置；不替代首次观察时点
+  int nEnd;                       // 新中枢成立；BOLL版还需收口后放大，未知=-1
+  int nObservedAt;
+  int nContraction;               // BOLL收口位置，纯结构=-1
+  bool bAvailable;                // BOLL缺真实C或不足20根=false
+};
+
 // 中枢突破：离开中枢 + 首次回试的记录，用于判定第三类买卖点
 struct CenterBreakout
 {
@@ -347,6 +409,9 @@ struct CzscAnalyzer
   std::vector<SegmentPoint>           Points;      // 已 AssignSegmentEnergy
   std::vector<Center>                 Centers;
   std::vector<TrendStructure>         Structures;
+  SubTrendHierarchy                  Hierarchy;
+  std::vector<TrendCompletionEvidence> CompletionEvidence;
+  std::vector<ZhongYinEvidence>        ZhongYin;
   std::vector<CenterBreakout>         Breakouts;
   std::vector<TradingSignalCandidate> Candidates;
   std::vector<int>                    TradingFilterReasons;

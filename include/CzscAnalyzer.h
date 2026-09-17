@@ -22,7 +22,7 @@
 
 // 中心化分析器的两个构建入口：信号 pIn 家族 / 原始 H/L+config 家族
 void BuildAnalyzerFromSignal(CzscAnalyzer &An, int nCount, float *pIn, float *pHigh, float *pLow);
-void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
+void BuildAnalyzerFromPrice(CzscAnalyzer &An, int nCount, float *pHigh, float *pLow, const CzscConfig &Config, const TrendAnchorContract *pAnchor = 0);
 
 // 带缓存的入口：通达信就同一序列依次调多个 Func，首调用计算+缓存、后续命中（单槽+全字节指纹）
 const CzscAnalyzer &GetOrBuildSignalAnalyzer(int nCount, float *pIn, float *pHigh, float *pLow);

@@ -40,10 +40,10 @@ DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
 BUILD_DIR=build
 CORE_OBJECTS=src/CzscCommon.o src/CzscMorphology.o src/CzscCenter.o \
              src/CzscDynamics.o src/CzscTrading.o src/CzscNestedDivergence.o \
-             src/CzscAnalyzer.o src/CzscTdxExports.o
+             src/CzscAnalyzer.o src/CzscTdxExports.o src/CzscProjection.o
 OBJECT1=Main.o $(CORE_OBJECTS)
 TARGET1=$(BUILD_DIR)/CZSC.dll
-TEST_OBJECTS=$(CORE_OBJECTS) tests/CzscCoreTests.o
+TEST_OBJECTS=$(CORE_OBJECTS) tests/CzscCoreTests.o tests/CzscProjectionTests.o tests/CzscCompletionTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
 TEST_TARGETS=tests/CzscCoreTests tests/CzscCoreTests.exe
 SSE_DUMP_OBJECTS=$(CORE_OBJECTS) tests/DumpSseResult.o
