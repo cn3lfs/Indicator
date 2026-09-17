@@ -203,6 +203,126 @@ void ApplyTrendEvidenceProjection(int nCount, float *pOut, const CzscAnalyzer &A
                                    int nOutput, int nSlot, int nField)
 {
   if (!PrepareProjection(nCount, pOut, nSlot)) return;
+  if (nOutput >= 100 && nOutput <= 108)
+  {
+    const RecursiveMovementHierarchy &H = An.MovementHierarchy;
+    if (!H.bAvailable || An.nCount != nCount || nField < 0 ||
+        H.Centers.size() > CZSC_PROJECTION_MAX_INTEGER ||
+        H.Movements.size() > CZSC_PROJECTION_MAX_INTEGER ||
+        H.Connections.size() > CZSC_PROJECTION_MAX_INTEGER ||
+        H.Associations.size() > CZSC_PROJECTION_MAX_INTEGER)
+    { UnavailableProjection(nCount,pOut); return; }
+    float &Out = pOut[nCount-1];
+    if (nOutput == 100 || nOutput % 2 == 1)
+    {
+      if (nField != 0) { UnavailableProjection(nCount,pOut); return; }
+      if (nOutput == 100) Out = 4; // capability/version; 旧DLL不会返回4
+      if (nOutput == 101) Out = ProjectionInteger(H.Centers.size());
+      if (nOutput == 103) Out = ProjectionInteger(H.Movements.size());
+      if (nOutput == 105) Out = ProjectionInteger(H.Connections.size());
+      if (nOutput == 107) Out = ProjectionInteger(H.Associations.size());
+      return;
+    }
+    if (nOutput == 102)
+    {
+      if (nField > 16 && nField < 100) { UnavailableProjection(nCount,pOut); return; }
+      if (static_cast<std::size_t>(nSlot) >= H.Centers.size()) return;
+      const SubTrendNode &N = H.Centers[nSlot];
+      switch (nField)
+      {
+        case 0: Out=ProjectionId(nSlot); break;
+        case 1: Out=ProjectionInteger(N.nLevel); break;
+        case 2: Out=ProjectionId(N.nStart); break;
+        case 3: Out=ProjectionId(N.nEnd); break;
+        case 4: Out=ProjectionId(N.nCenterStart); break;
+        case 5: Out=ProjectionId(N.nCenterEnd); break;
+        case 6: Out=ProjectionId(N.nEstablishedAt); break;
+        case 7: Out=ProjectionId(N.nConnection); break;
+        case 8: Out=ProjectionId(N.nCompletedAt); break;
+        case 9: Out=ProjectionId(N.nSuccessor); break;
+        case 10: Out=ProjectionInteger(N.Children.size()); break;
+        case 11: Out=ProjectionInteger(H.nAnchorVersion); break;
+        case 12: Out=2; break;
+        case 13: Out=N.fHigh; break;
+        case 14: Out=N.fLow; break;
+        case 15: Out=N.fCenterHigh; break;
+        case 16: Out=N.fCenterLow; break;
+        default: if (static_cast<std::size_t>(nField-100)<N.Children.size())
+          Out=ProjectionId(N.Children[nField-100]); break;
+      }
+    }
+    else if (nOutput == 104)
+    {
+      if (nField > 13 && nField < 100) { UnavailableProjection(nCount,pOut); return; }
+      if (static_cast<std::size_t>(nSlot) >= H.Movements.size()) return;
+      const RecursiveMovement &M = H.Movements[nSlot];
+      switch (nField)
+      {
+        case 0: Out=ProjectionId(nSlot); break;
+        case 1: Out=ProjectionInteger(M.nLevel); break;
+        case 2: Out=static_cast<float>(M.nType); break;
+        case 3: Out=ProjectionId(M.nStart); break;
+        case 4: Out=ProjectionId(M.nEnd); break;
+        case 5: Out=ProjectionId(M.nEstablishedAt); break;
+        case 6: Out=ProjectionId(M.nCompletedAt); break;
+        case 7: Out=ProjectionId(M.nSuccessor); break;
+        case 8: Out=ProjectionInteger(M.Centers.size()); break;
+        case 9: Out=ProjectionInteger(M.Connections.size()); break;
+        case 10: Out=ProjectionInteger(H.nAnchorVersion); break;
+        case 11: Out=2; break;
+        case 12: Out=M.fHigh; break;
+        case 13: Out=M.fLow; break;
+        default:
+          // 变长域以偶/奇字段交错，不设成员数量的隐式上限。
+          if ((nField-100)%2 == 0 && static_cast<std::size_t>((nField-100)/2)<M.Centers.size())
+            Out=ProjectionId(M.Centers[(nField-100)/2]);
+          if ((nField-100)%2 == 1 && static_cast<std::size_t>((nField-100)/2)<M.Connections.size())
+            Out=ProjectionId(M.Connections[(nField-100)/2]);
+          break;
+      }
+    }
+    else if (nOutput == 106)
+    {
+      if (nField > 8 && nField < 100) { UnavailableProjection(nCount,pOut); return; }
+      if (static_cast<std::size_t>(nSlot) >= H.Connections.size()) return;
+      const RecursiveConnection &C = H.Connections[nSlot];
+      switch (nField)
+      {
+        case 0: Out=ProjectionId(nSlot); break;
+        case 1: Out=ProjectionId(C.nLeftCenter); break;
+        case 2: Out=ProjectionId(C.nRightCenter); break;
+        case 3: Out=static_cast<float>(C.nLevel); break;
+        case 4: Out=ProjectionId(C.nStart); break;
+        case 5: Out=ProjectionId(C.nEnd); break;
+        case 6: Out=ProjectionId(C.nRequiredAt); break;
+        case 7: Out=static_cast<float>(C.nMemberSpace); break;
+        case 8: Out=ProjectionInteger(C.Members.size()); break;
+        default: if (static_cast<std::size_t>(nField-100)<C.Members.size())
+          Out=ProjectionId(C.Members[nField-100]); break;
+      }
+    }
+    else if (nOutput == 108)
+    {
+      if (nField > 8 && nField < 100) { UnavailableProjection(nCount,pOut); return; }
+      if (static_cast<std::size_t>(nSlot) >= H.Associations.size()) return;
+      const StructureAssociation &A = H.Associations[nSlot];
+      switch (nField)
+      {
+        case 0: Out=ProjectionId(nSlot); break;
+        case 1: Out=ProjectionId(A.nStructure); break;
+        case 2: Out=ProjectionId(A.nMovement); break;
+        case 3: Out=ProjectionId(A.nCompletion); break;
+        case 4: Out=static_cast<float>(A.nLevel); break;
+        case 5: Out=static_cast<float>(A.nStatus); break;
+        case 6: Out=ProjectionInteger(A.Centers.size()); break;
+        case 7: Out=ProjectionInteger(H.nAnchorVersion); break;
+        case 8: Out=1; break;
+        default: if (static_cast<std::size_t>(nField-100)<A.Centers.size())
+          Out=ProjectionId(A.Centers[nField-100]); break;
+      }
+    }
+    return;
+  }
   if (!An.Hierarchy.bAvailable || An.nCount != nCount || nField < 0 ||
       An.Hierarchy.Nodes.size() > static_cast<std::size_t>(CZSC_PROJECTION_MAX_INTEGER) ||
       An.CompletionEvidence.size() > static_cast<std::size_t>(CZSC_PROJECTION_MAX_INTEGER) ||

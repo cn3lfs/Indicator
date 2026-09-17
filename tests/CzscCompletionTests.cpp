@@ -4,6 +4,7 @@
 #include <limits>
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
 
 namespace
 {
@@ -304,6 +305,114 @@ bool TestLegacyIsolation()
   }
   return true;
 }
+
+bool TestC4MovementsAndConnections()
+{
+  const float Hi[]={12,13,12,16,17,17,17,21,22,22,22,26,27};
+  const float Lo[]={10,11,10,15,15,15,15,20,20,20,20,25,25};
+  RecursiveMovementHierarchy R=BuildRecursiveMovements(13,Hi,Lo,Anchor(13));
+  if (!R.bAvailable || R.Movements.size()!=1 || R.Centers.size()!=3) return false;
+  const RecursiveMovement &M=R.Movements[0];
+  if (M.nType!=1 || M.Centers.size()!=3 || M.Connections.size()!=2 ||
+      M.nCompletedAt!=12 || M.nEnd!=11 || M.nLevel!=0) return false;
+  for (std::size_t i=0;i<R.Connections.size();i++)
+  {
+    const RecursiveConnection &C=R.Connections[i];
+    if (C.nLevel!=-1 || C.nMemberSpace!=0 || C.Members.size()!=3 ||
+        C.Members.front()!=C.nStart || C.Members.back()!=C.nEnd) return false;
+  }
+  R=BuildRecursiveMovements(5,Hi,Lo,Anchor(5));
+  if (R.Movements.size()!=1 || R.Movements[0].nType!=0 ||
+      R.Movements[0].nCompletedAt!=4) return false; // 单枢即盘整，不取离开方向
+  float DownH[13],DownL[13],TouchL[13];
+  for (int i=0;i<13;i++) { DownH[i]=40-Lo[i]; DownL[i]=40-Hi[i]; TouchL[i]=Lo[i]; }
+  R=BuildRecursiveMovements(13,DownH,DownL,Anchor(13));
+  if (R.Movements.size()!=1 || R.Movements[0].nType!=-1) return false;
+  for (int i=4;i<=6;i++) TouchL[i]=13;
+  R=BuildRecursiveMovements(13,Hi,TouchL,Anchor(13));
+  if (R.Movements.size()<2 || R.Movements[0].nType!=0) return false; // 波动区间相等拒绝同向
+  R=BuildRecursiveMovements(12,Hi,Lo,Anchor(12));
+  if(R.Movements[0].nType!=1 || R.Movements[0].nCompletedAt!=-1) return false;
+  R=BuildRecursiveMovements(17,H,L,Anchor(17));
+  bool parent=false, multiChild=false;
+  for(std::size_t i=0;i<R.Centers.size();i++) if(R.Centers[i].nLevel>0)
+  {
+    parent=true;
+    for(std::size_t j=0;j<R.Centers[i].Children.size();j++)
+    {
+      int id=R.Centers[i].Children[j];
+      if(id<0 || static_cast<std::size_t>(id)>=R.Movements.size()) return false;
+      const RecursiveMovement &Child=R.Movements[id];
+      if(Child.nCompletedAt<0 || Child.nLevel!=R.Centers[i].nLevel-1) return false;
+      if(Child.Centers.size()>1) multiChild=true;
+    }
+  }
+  return parent && multiChild;
+}
+
+bool TestC4AssociationEvidence()
+{
+  const float Hi[]={12,13,12,16,17,17,17,21,22};
+  const float Lo[]={10,11,10,15,15,15,15,20,20};
+  RecursiveMovementHierarchy R=BuildRecursiveMovements(9,Hi,Lo,Anchor(9));
+  if (R.Movements.size()!=1 || R.Centers.size()!=2) return false;
+  std::vector<Center> C;
+  for (std::size_t i=0;i<R.Centers.size();i++)
+  {
+    const SubTrendNode &N=R.Centers[i];
+    float high=Hi[N.nCenterStart],low=Lo[N.nCenterStart];
+    for(int j=N.nCenterStart;j<=N.nCenterEnd;j++)
+    { high=std::max(high,Hi[j]); low=std::min(low,Lo[j]); }
+    C.push_back(Center{N.nCenterStart,N.nCenterEnd,N.fCenterHigh,N.fCenterLow,high,low,1});
+  }
+  std::vector<TrendStructure> T(1,TrendStructure{1,0,6,0,1});
+  TrendCompletionEvidence E={}; E.nTrend=0; E.nTrendSpace=0;
+  E.nConnectionBar=7; E.nLatestBar=8;
+  std::vector<TrendCompletionEvidence> Evidence(1,E);
+  std::vector<StructureAssociation> A=BuildStructureAssociations(C,T,Evidence,R,Hi,Lo);
+  if (A.size()!=1 || A[0].nStatus!=1 || A[0].nLevel!=0 ||
+      A[0].nCompletion!=0 || A[0].Centers!=R.Movements[0].Centers) return false;
+  C[0].fLow+=0.25f; // 时间完全相等仍不能映射价格不同中枢
+  A=BuildStructureAssociations(C,T,Evidence,R,Hi,Lo);
+  if(A[0].nStatus!=0 || A[0].nLevel!=-1) return false;
+  C[0].fLow-=0.25f; Evidence[0].nLatestBar=7;
+  if(BuildStructureAssociations(C,T,Evidence,R,Hi,Lo)[0].nStatus!=0) return false;
+  Evidence[0]=E; R.Movements.push_back(R.Movements[0]);
+  return BuildStructureAssociations(C,T,Evidence,R,Hi,Lo)[0].nStatus==2;
+}
+
+bool TestC4MonthlyAndExtendedAbi()
+{
+  TrendAnchorContract C;
+  C.nVersion=3; C.Dates={20191231,20200131,20200228,20200331,20200430};
+  if(!BuildRecursiveMovements(5,H,L,C).bAvailable) return false;
+  C.Dates[2]=20200131;
+  if(BuildRecursiveMovements(5,H,L,C).bAvailable) return false;
+  C.Dates[2]=20200230;
+  if(BuildRecursiveMovements(5,H,L,C).bAvailable) return false;
+  float Hi[5],Lo[5],Out[5];
+  for(int i=0;i<5;i++){Hi[i]=H[i];Lo[i]=L[i];}
+  float Mode[]={-1000,0,0,3,191231,200131,200228,200331,200430};
+  Func30(5,Out,Hi,Lo,Mode);
+  if(Out[4]!=4) return false;
+  for(int i=0;i<4;i++) if(Out[i]!=0) return false;
+  Mode[0]=-11001000; // config1100 + output100，无100->config1碰撞
+  Func30(5,Out,Hi,Lo,Mode); if(Out[4]!=4) return false;
+  Mode[0]=-1040; Mode[2]=2;
+  Func30(5,Out,Hi,Lo,Mode); if(Out[4]!=0) return false; // 单枢盘整
+  Mode[2]=14; Func30(5,Out,Hi,Lo,Mode);
+  for(int i=0;i<5;i++) if(Out[i]!=-1) return false;
+  Mode[2]=0; Mode[1]=0.5f; Func30(5,Out,Hi,Lo,Mode);
+  for(int i=0;i<5;i++) if(Out[i]!=-1) return false;
+  return true;
+}
+}
+
+// 可独立链接调用，避免既有dev断言提前返回时掩盖C4自检结果。
+bool TestRecursiveMovementSuite()
+{
+  return TestC4MovementsAndConnections() && TestC4AssociationEvidence() &&
+    TestC4MonthlyAndExtendedAbi();
 }
 
 bool TestTrendCompletionSuite()
@@ -312,5 +421,6 @@ bool TestTrendCompletionSuite()
     TestTouchReturnGapAndNoCenter() && TestStrictChildrenAndSnapshotIdDrift() &&
     TestLegacyGapsOverlapNoCandidates() && TestProjectionNoBackfillAndInvalidContract() &&
     TestAllEvidenceProjectionFields() && TestBollIndependentAuxiliary() &&
-    TestLegacyIsolation() && TestSseMemberAndCandidateIsolation();
+    TestLegacyIsolation() && TestSseMemberAndCandidateIsolation() &&
+    TestRecursiveMovementSuite();
 }

@@ -32,6 +32,10 @@ static void BuildCentersStage(CzscAnalyzer &An, int nCount, float *pHigh, float 
   An.Hierarchy = pAnchor ? BuildSubTrendHierarchy(nCount, pHigh, pLow, *pAnchor) : SubTrendHierarchy();
   An.CompletionEvidence = BuildTrendCompletionEvidence(An.Points, An.Centers, An.Structures,
                                                        An.Hierarchy, nCount);
+  An.MovementHierarchy = pAnchor ? BuildRecursiveMovements(nCount, pHigh, pLow, *pAnchor)
+                                : RecursiveMovementHierarchy();
+  An.MovementHierarchy.Associations = BuildStructureAssociations(An.Centers,
+    An.Structures, An.CompletionEvidence, An.MovementHierarchy, pHigh, pLow);
   An.ZhongYin = BuildZhongYinEvidence(An.CompletionEvidence, nCount,
                                      GetValidatedClose(nCount, pHigh, pLow));
   An.Breakouts = BuildCenterBreakouts(An.Points, An.Centers, An.Structures);

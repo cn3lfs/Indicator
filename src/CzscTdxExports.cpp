@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
+#include <cmath>
+
 #include "CzscInternal.h"
 
 // 数学函数部分
@@ -725,35 +727,47 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     return;
   }
 
-  int nMode = (pTime != 0) ? (int)(pTime[0] + 0.5f) : 0;
+  // 100+ 不能沿用三位余数；独立负编码 -(config*10000+output*10)。
+  // 支持配置域的最大编码小于2^24；先检查再转整数，拒绝NaN/溢出。
+  bool bExtended = pTime && pTime[0] <= -1000;
+  if (pTime && (!std::isfinite(pTime[0]) || std::fabs(pTime[0]) >= 16777216))
+  { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
+  if (bExtended && pTime[0] != static_cast<float>(static_cast<int>(pTime[0])))
+  { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
+  int nMode = bExtended ? static_cast<int>(-pTime[0]) :
+    ((pTime != 0) ? (int)(pTime[0] + 0.5f) : 0);
   if (nMode < 0)
   {
     nMode = 0;
   }
   if ((nMode % 10) != 0)
   {
+    if (bExtended) { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
     ClearOutput(nCount, pOut);
     return;
   }
-  int nConfig = nMode / 1000;
+  int nConfig = nMode / (bExtended ? 10000 : 1000);
   if (!IsValidConfigCode(nConfig))
   {
+    if (bExtended) { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
     ClearOutput(nCount, pOut);
     return;
   }
   CzscConfig Config = DecodeConfig((float)nConfig);
-  int nOutput = (nMode % 1000) / 10;
+  int nOutput = (nMode % (bExtended ? 10000 : 1000)) / 10;
+  if (bExtended && (nOutput < 100 || nOutput > 108))
+  { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
 
-  // 93-99 是显式带锚快照表：pTime 必须有 nCount+4 个 float。
+  // 93-108 是显式带锚快照表：pTime 必须有 nCount+4 个 float。
   // [mode, slot, field, anchor, ...每根日期(YYYYMMDD-20000000)]。
   // 普通常量 mode 公式不能调用；裸指针 ABI 无法检测调用方缓冲区长度。
-  if (nOutput >= 93 && nOutput <= 99)
+  if (nOutput >= 93 && nOutput <= 108)
   {
     int nSlot = 0, nField = 0, nAnchor = 0;
     bool bValid = nCount <= CZSC_PROJECTION_MAX_INTEGER && pTime &&
       DecodeProjectionSlot(pTime[1], &nSlot) &&
       DecodeProjectionSlot(pTime[2], &nField) && DecodeProjectionSlot(pTime[3], &nAnchor) &&
-      (nAnchor == 1 || nAnchor == 2);
+      (nAnchor == 1 || nAnchor == 2 || nAnchor == 3);
     TrendAnchorContract Contract;
     Contract.nVersion = nAnchor;
     for (int i = 0; bValid && i < nCount; i++)

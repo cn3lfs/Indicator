@@ -45,4 +45,11 @@ std::vector<ZhongYinEvidence> BuildZhongYinEvidence(
   const std::vector<TrendCompletionEvidence> &Evidence, int nCount,
   const std::vector<float> *pClose);
 
+RecursiveMovementHierarchy BuildRecursiveMovements(int nCount, const float *pHigh,
+  const float *pLow, const TrendAnchorContract &Contract);
+std::vector<StructureAssociation> BuildStructureAssociations(
+  const std::vector<Center> &Centers, const std::vector<TrendStructure> &Structures,
+  const std::vector<TrendCompletionEvidence> &Evidence,
+  const RecursiveMovementHierarchy &Hierarchy, const float *pHigh, const float *pLow);
+
 #endif

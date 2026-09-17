@@ -580,7 +580,7 @@ SubTrendHierarchy BuildSubTrendHierarchy(int nCount, const float *pHigh, const f
 {
   SubTrendHierarchy Result;
   Result.nAnchorVersion = Contract.nVersion;
-  if (nCount < 0 || (Contract.nVersion != 1 && Contract.nVersion != 2) ||
+  if (nCount < 0 || (Contract.nVersion != 1 && Contract.nVersion != 2 && Contract.nVersion != 3) ||
       Contract.Dates.size() != static_cast<std::size_t>(nCount) ||
       (nCount > 0 && (!pHigh || !pLow))) return Result;
   std::vector<RecursiveUnit> Units;
@@ -589,7 +589,8 @@ SubTrendHierarchy BuildSubTrendHierarchy(int nCount, const float *pHigh, const f
     int nDate = Contract.Dates[i];
     if (!ValidAnchorDate(nDate) ||
         (i > 0 && (nDate < Contract.Dates[i-1] ||
-                    (Contract.nVersion == 1 && nDate == Contract.Dates[i-1]))) ||
+                    (Contract.nVersion == 1 && nDate == Contract.Dates[i-1]) ||
+                    (Contract.nVersion == 3 && nDate/100 <= Contract.Dates[i-1]/100))) ||
         (Contract.nVersion == 2 && (nDate < 20000104 || nDate > 20221130)) ||
         !std::isfinite(pHigh[i]) || !std::isfinite(pLow[i]) ||
         pLow[i] <= 0 || pHigh[i] < pLow[i]) return Result;
@@ -609,6 +610,167 @@ SubTrendHierarchy BuildSubTrendHierarchy(int nCount, const float *pHigh, const f
       Next.push_back(U);
     }
     Units.swap(Next);
+  }
+  return Result;
+}
+
+// 第17/18/20课：先按完整波动区间严格分离判同向，接触/重叠不是趋势。
+// 第33课 maximal-same-direction-centers-v1：当前前缀从左向右最大同向分组。
+// 各层新中枢仅消费上一层完成的分组走势；不能把三颗旧单枢节点直接当三趋势。
+RecursiveMovementHierarchy BuildRecursiveMovements(int nCount, const float *pHigh,
+  const float *pLow, const TrendAnchorContract &Contract)
+{
+  RecursiveMovementHierarchy R;
+  R.nAnchorVersion = Contract.nVersion;
+  // 复用输入契约检查；不修改 C3 的 Nodes 或完成表。
+  if (!BuildSubTrendHierarchy(nCount, pHigh, pLow, Contract).bAvailable) return R;
+  R.bAvailable = true;
+  std::vector<RecursiveUnit> Units;
+  for (int i = 0; i < nCount; i++)
+    Units.push_back(RecursiveUnit{i,i,i,-1,pHigh[i],pLow[i]});
+  for (int level = 0; Units.size() >= 3; level++)
+  {
+    SubTrendHierarchy Layer;
+    BuildSubTrendLevel(Units, level, &Layer, pHigh, pLow);
+    if (Layer.Nodes.empty()) break;
+    const int base = static_cast<int>(R.Centers.size());
+    for (std::size_t i = 0; i < Layer.Nodes.size(); i++)
+    {
+      SubTrendNode N = Layer.Nodes[i];
+      if (N.nSuccessor >= 0) N.nSuccessor += base;
+      R.Centers.push_back(N);
+    }
+    std::vector<int> Groups;
+    for (std::size_t i = 0; i < Layer.Nodes.size(); i++)
+    {
+      const SubTrendNode &N = Layer.Nodes[i];
+      int direction = 0;
+      RecursiveConnection Link = {};
+      bool connected = false;
+      if (i > 0)
+      {
+        const SubTrendNode &P = Layer.Nodes[i-1];
+        float ph = pHigh[P.nCenterStart], pl = pLow[P.nCenterStart];
+        float nh = pHigh[N.nCenterStart], nl = pLow[N.nCenterStart];
+        for (int j = P.nCenterStart; j <= P.nCenterEnd; j++)
+        { ph = std::max(ph,pHigh[j]); pl = std::min(pl,pLow[j]); }
+        for (int j = N.nCenterStart; j <= N.nCenterEnd; j++)
+        { nh = std::max(nh,pHigh[j]); nl = std::min(nl,pLow[j]); }
+        direction = nl > ph ? 1 : (nh < pl ? -1 : 0);
+        Link.nLeftCenter = base + static_cast<int>(i)-1;
+        Link.nRightCenter = base + static_cast<int>(i);
+        Link.nLevel = level-1;
+        Link.nStart = P.nCenterEnd;
+        Link.nEnd = N.nCenterStart;
+        Link.nRequiredAt = 0;
+        Link.nMemberSpace = level == 0 ? 0 : 1;
+        int covered = Link.nStart;
+        bool began = false;
+        for (std::size_t j = 0; j < Units.size(); j++)
+        {
+          const RecursiveUnit &U = Units[j];
+          if (U.nEnd < Link.nStart || U.nStart > Link.nEnd) continue;
+          if ((!began && U.nStart > Link.nStart) ||
+              (began && U.nStart > covered + (level == 0 ? 1 : 0))) break;
+          began = true;
+          Link.Members.push_back(level == 0 ? U.nStart : U.nChild);
+          covered = std::max(covered,U.nEnd);
+          Link.nRequiredAt = std::max(Link.nRequiredAt,U.nAvailable);
+          if (covered >= Link.nEnd) break;
+        }
+        connected = began && Link.nEnd > Link.nStart && covered >= Link.nEnd;
+      }
+      bool append = !Groups.empty() && direction != 0 && connected;
+      if (append)
+      {
+        const RecursiveMovement &P = R.Movements[Groups.back()];
+        append = P.nType == 0 || P.nType == direction;
+      }
+      if (!append)
+      {
+        RecursiveMovement M = {};
+        M.nLevel = level; M.nType = 0; M.nStart = N.nStart;
+        M.nEstablishedAt = N.nEstablishedAt; M.nSuccessor = -1;
+        M.fHigh = N.fHigh; M.fLow = N.fLow;
+        int id = static_cast<int>(R.Movements.size());
+        if (!Groups.empty()) R.Movements[Groups.back()].nSuccessor = id;
+        R.Movements.push_back(M); Groups.push_back(id);
+      }
+      RecursiveMovement &M = R.Movements[Groups.back()];
+      if (append)
+      {
+        M.nType = direction;
+        M.Connections.push_back(static_cast<int>(R.Connections.size()));
+        R.Connections.push_back(Link);
+        M.nEstablishedAt = std::max(M.nEstablishedAt,Link.nRequiredAt);
+      }
+      M.Centers.push_back(base + static_cast<int>(i));
+      M.nEnd = N.nEnd;
+      M.nEstablishedAt = std::max(M.nEstablishedAt,N.nEstablishedAt);
+      M.nCompletedAt = N.nCompletedAt < 0 ? -1 : std::max(M.nEstablishedAt,N.nCompletedAt);
+      M.fHigh = std::max(M.fHigh,N.fHigh); M.fLow = std::min(M.fLow,N.fLow);
+    }
+    std::vector<RecursiveUnit> Next;
+    for (std::size_t i = 0; i < Groups.size(); i++)
+    {
+      const RecursiveMovement &M = R.Movements[Groups[i]];
+      if (M.nCompletedAt >= 0)
+        Next.push_back(RecursiveUnit{M.nStart,M.nEnd,M.nCompletedAt,Groups[i],M.fHigh,M.fLow});
+    }
+    Units.swap(Next); // 每枢至少三低级单位；规模严格缩小
+  }
+  return R;
+}
+
+std::vector<StructureAssociation> BuildStructureAssociations(
+  const std::vector<Center> &Centers, const std::vector<TrendStructure> &Structures,
+  const std::vector<TrendCompletionEvidence> &Evidence,
+  const RecursiveMovementHierarchy &H, const float *pHigh, const float *pLow)
+{
+  std::vector<StructureAssociation> Result;
+  if (!H.bAvailable || !pHigh || !pLow) return Result;
+  for (std::size_t t = 0; t < Structures.size(); t++)
+  {
+    StructureAssociation A = {};
+    A.nStructure = static_cast<int>(t);
+    A.nMovement = A.nCompletion = A.nLevel = -1;
+    for (std::size_t e = 0; e < Evidence.size(); e++)
+      if (Evidence[e].nTrendSpace == 0 && Evidence[e].nTrend == A.nStructure)
+        A.nCompletion = static_cast<int>(e);
+    const TrendStructure &T = Structures[t];
+    if (T.nFirstCenter >= 0 && T.nLastCenter >= T.nFirstCenter &&
+        static_cast<std::size_t>(T.nLastCenter) < Centers.size() &&
+        T.nStart == Centers[T.nFirstCenter].nStart && T.nEnd == Centers[T.nLastCenter].nEnd)
+    for (std::size_t m = 0; m < H.Movements.size(); m++)
+    {
+      const RecursiveMovement &M = H.Movements[m];
+      if (M.nType != T.nType || M.Centers.size() !=
+          static_cast<std::size_t>(T.nLastCenter-T.nFirstCenter+1)) continue;
+      bool exact = true;
+      for (std::size_t c = 0; exact && c < M.Centers.size(); c++)
+      {
+        const Center &Old = Centers[T.nFirstCenter+c];
+        const SubTrendNode &New = H.Centers[M.Centers[c]];
+        float high = pHigh[New.nCenterStart], low = pLow[New.nCenterStart];
+        for (int k = New.nCenterStart; k <= New.nCenterEnd; k++)
+        { high = std::max(high,pHigh[k]); low = std::min(low,pLow[k]); }
+        exact = Old.nStart == New.nCenterStart && Old.nEnd == New.nCenterEnd &&
+                Old.fHigh == New.fCenterHigh && Old.fLow == New.fCenterLow &&
+                Old.fTop == high && Old.fBottom == low;
+      }
+      // 旧完成证据存在时还需端点、证据时点相等，不能借映射升级另一段走势。
+      if (exact && A.nCompletion >= 0)
+      {
+        const TrendCompletionEvidence &E = Evidence[A.nCompletion];
+        exact = E.nConnectionBar == M.nEnd && E.nLatestBar == M.nCompletedAt;
+      }
+      if (!exact) continue;
+      if (A.nStatus == 1)
+      { A.nStatus = 2; A.nMovement = A.nLevel = -1; A.Centers.clear(); break; }
+      A.nStatus = 1; A.nMovement = static_cast<int>(m); A.nLevel = M.nLevel;
+      A.Centers = M.Centers;
+    }
+    Result.push_back(A);
   }
   return Result;
 }

@@ -287,7 +287,7 @@ struct TrendStructure
 // 锚级别 0；升阶只来自三个连续、已完成的下一低级走势，不来自 nCenterUnit。
 struct TrendAnchorContract
 {
-  int nVersion;                   // 1=daily-anchor-v1, 2=five-minute-anchor-v1
+  int nVersion;                   // 1=daily, 2=five-minute, 3=monthly-anchor-v1
   std::vector<int> Dates;          // 每根单位K线 YYYYMMDD；调用者保证实际周期与锚一致
 };
 
@@ -332,6 +332,38 @@ struct TrendCompletionEvidence
   int nTheoreticalLevel;          // 旧结构=-1；递归锚=0，逐层+1
   int nAnchorVersion;
   int nDecompositionRule;         // 1=leftmost-core-first-departure-v1
+};
+
+// C4 独立递归分解空间：Centers.Children 引用 Movements，不引用旧 Nodes。
+// 旧 59-99 表保持原意；每层先聚合同向多中枢，再把完成走势交给上层。
+struct RecursiveMovement
+{
+  int nLevel, nType, nStart, nEnd, nEstablishedAt, nCompletedAt, nSuccessor;
+  float fHigh, fLow;
+  std::vector<int> Centers;
+  std::vector<int> Connections;
+};
+struct RecursiveConnection
+{
+  int nLeftCenter, nRightCenter, nLevel, nStart, nEnd, nRequiredAt;
+  int nMemberSpace;                // 0=末端单位K线；1=C4 Movements
+  std::vector<int> Members;        // 可核验的完整低级走势覆盖链（边界可落在成员内）
+};
+struct StructureAssociation
+{
+  int nStructure, nMovement, nCompletion, nLevel, nStatus;
+  // status: 0未知，1唯一逐成员完全相等，2多解；不采用最近区间/方向/config。
+  std::vector<int> Centers;        // 按旧 firstCenter..lastCenter 顺序列出 C4 中枢
+};
+struct RecursiveMovementHierarchy
+{
+  bool bAvailable;
+  int nAnchorVersion;
+  std::vector<SubTrendNode> Centers;
+  std::vector<RecursiveMovement> Movements;
+  std::vector<RecursiveConnection> Connections;
+  std::vector<StructureAssociation> Associations;
+  RecursiveMovementHierarchy() : bAvailable(false), nAnchorVersion(0) {}
 };
 
 struct ZhongYinEvidence
@@ -410,6 +442,7 @@ struct CzscAnalyzer
   std::vector<Center>                 Centers;
   std::vector<TrendStructure>         Structures;
   SubTrendHierarchy                  Hierarchy;
+  RecursiveMovementHierarchy         MovementHierarchy;
   std::vector<TrendCompletionEvidence> CompletionEvidence;
   std::vector<ZhongYinEvidence>        ZhongYin;
   std::vector<CenterBreakout>         Breakouts;
