@@ -153,6 +153,7 @@ enum CzscStrokeType
 {
   CZSC_STROKE_STRICT = 0,
   CZSC_STROKE_NEW    = 1,
+  CZSC_STROKE_CZSC   = 2,  // 借鉴 waditu/czsc check_bi：合并K线跨度≥3 且两端分型K线区间互不包含
 };
 
 // 笔结束：相邻同型分型取最严格极值，还是保留首个（允许次高/次低点收笔）

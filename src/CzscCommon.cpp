@@ -106,7 +106,9 @@ CzscConfig DecodeConfig(float fCode)
   }
 
   CzscConfig Config;
-  Config.nStrokeType = (nCode % 10 == CZSC_STROKE_NEW) ? CZSC_STROKE_NEW : CZSC_STROKE_STRICT;
+  int nStroke = nCode % 10;
+  Config.nStrokeType = (nStroke == CZSC_STROKE_NEW) ? CZSC_STROKE_NEW :
+                       ((nStroke == CZSC_STROKE_CZSC) ? CZSC_STROKE_CZSC : CZSC_STROKE_STRICT);
   Config.nStrokeEnd = ((nCode / 10) % 10 == CZSC_END_SECOND) ? CZSC_END_SECOND : CZSC_END_STRICT;
   Config.nCenterUnit = ((nCode / 100) % 10 == CZSC_UNIT_SEGMENT) ? CZSC_UNIT_SEGMENT : CZSC_UNIT_STROKE;
   Config.nSegmentMethod = ((nCode / 1000) % 10 == CZSC_SEG_FEATURE) ? CZSC_SEG_FEATURE : CZSC_SEG_HEURISTIC;

@@ -151,7 +151,8 @@ inline bool IsValidConfigCode(int nCode)
   for (int i = 0; i < 4; i++)
   {
     int nDigit = nCode % 10;
-    if ((nDigit != 0) && (nDigit != 1))
+    int nMaxDigit = (i == 0) ? CZSC_STROKE_CZSC : 1;  // 个位笔类型允许 0/1/2，其余位 0/1
+    if ((nDigit < 0) || (nDigit > nMaxDigit))
     {
       return false;
     }

@@ -7551,6 +7551,24 @@ static bool TestFirstSellComparesEnteringSegmentB()
   return false;
 }
 
+// 借鉴 czsc check_bi 的 ab_include：顶分型K线区间罩住底分型K线时，czsc 笔(配置个位2)不成笔，严格/新笔不受影响
+static bool TestCzscStrokeRejectsNestedFractals()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 0, 10, 8));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 4, 20, 7));    // [7,20] 罩住 [8,10]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 8, 12, 6));
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 12, 18, 14));
+
+  CzscConfig Czsc = DecodeConfig(2.0f);
+  CzscConfig Strict = DecodeConfig(0.0f);
+  std::vector<Stroke> A = BuildStrokes(F, Czsc);
+  std::vector<Stroke> B = BuildStrokes(F, Strict);
+  // 严格笔：0→4→8→12 三笔；czsc 笔：0→4 被否决，起点底被 8 的更低底替换 → 只剩 8→12
+  return (Czsc.nStrokeType == CZSC_STROKE_CZSC) && (B.size() == 3) &&
+         (A.size() == 1) && (A[0].Start.nIndex == 8) && (A[0].End.nIndex == 12);
+}
+
 static bool TestFeatureLineSegmentEndsAtBottomFractal()
 {
   std::vector<Fractal> F;
@@ -8235,7 +8253,7 @@ static bool TestFunc30RejectsInvalidMode()
   {
     InvalidConfig[(std::size_t)i] = 9.0f;
   }
-  float fInvalidConfig = 2000;
+  float fInvalidConfig = 3000;  // 配置码 3：个位笔类型只允许 0/1/2
   Func30(SSE_DAILY_COUNT, &InvalidConfig[0], &High[0], &Low[0], &fInvalidConfig);
   for (int i = 0; i < SSE_DAILY_COUNT; i++)
   {
@@ -9469,6 +9487,10 @@ int main()
   if (!TestReplaySuite())
   {
     return 223;
+  }
+  if (!TestCzscStrokeRejectsNestedFractals())
+  {
+    return 224;
   }
   return 0;
 }

@@ -260,7 +260,22 @@ static bool StrokeSpanEnough(const Fractal &A, const Fractal &B, const CzscConfi
   {
     return (nMergedGap >= 3) && (nRawGap >= 4);
   }
+  if (Config.nStrokeType == CZSC_STROKE_CZSC)
+  {
+    return nMergedGap >= 3;  // czsc min_bi_len=6：fx_a 首根到 fx_b 末根共 ≥6 根合并K线
+  }
   return (nMergedGap >= 4);
+}
+
+// czsc check_bi 的 ab_include：两端分型中间K线的区间一方完全包含另一方时不成笔
+// （顶分型K线罩住底分型K线或反之，说明这段并未真正走出一顶一底的升降）。仅 CZSC 笔启用。
+static bool FractalRangesNested(const Fractal &A, const Fractal &B, const CzscConfig &Config)
+{
+  if (Config.nStrokeType != CZSC_STROKE_CZSC)
+  {
+    return false;
+  }
+  return ((A.fHigh > B.fHigh) && (A.fLow < B.fLow)) || ((A.fHigh < B.fHigh) && (A.fLow > B.fLow));
 }
 
 // 笔的价位有效性（第62课：上升笔=底分型+上升K线+顶分型）：向上笔的顶须高于起点底所在K线的高点，
@@ -284,7 +299,7 @@ static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
   }
 
   // 笔的最小合并K线跨度：严格笔≥4，新笔≥3
-  int nMinSpan = (Config.nStrokeType == CZSC_STROKE_NEW) ? 3 : 4;
+  int nMinSpan = (Config.nStrokeType == CZSC_STROKE_STRICT) ? 4 : 3;
 
   std::vector<Fractal> &Ends = *pEnds;
   for (std::size_t i = 1; i + 1 < Ends.size(); i++)
@@ -312,7 +327,8 @@ static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
         continue;
       }
       if (!StrokeSpanEnough(Prev, F, Config) || !StrokeSpanEnough(F, Next, Config) ||
-          !StrokePriceValid(Prev, F) || !StrokePriceValid(F, Next))
+          !StrokePriceValid(Prev, F) || !StrokePriceValid(F, Next) ||
+          FractalRangesNested(Prev, F, Config) || FractalRangesNested(F, Next, Config))
       {
         continue;
       }
@@ -355,7 +371,7 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
         Ends.back() = F;
       }
     }
-    else if (StrokeSpanEnough(Last, F, Config) && StrokePriceValid(Last, F))
+    else if (StrokeSpanEnough(Last, F, Config) && StrokePriceValid(Last, F) && !FractalRangesNested(Last, F, Config))
     {
       Ends.push_back(F);  // 异型且跨度达标 → 新笔端点
     }
