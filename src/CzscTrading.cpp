@@ -23,16 +23,20 @@ static bool FindLastTrendStructure(const std::vector<TrendStructure> &Structures
                                    int *pTrend)
 {
   int nType = (nDirection > 0) ? CZSC_MOVEMENT_UP : CZSC_MOVEMENT_DOWN;
-  int nTrend = -1;
-  for (std::size_t i = 0; i < Structures.size(); i++)
+  // 走势按起点递增：二分到最后一个 nStart < nIndex，再向前找同向趋势
+  std::size_t lo = 0, hi = Structures.size();
+  while (lo < hi)
   {
-    if (Structures[i].nStart >= nIndex)
-    {
-      continue;
-    }
+    std::size_t mid = (lo + hi) / 2;
+    if (Structures[mid].nStart < nIndex) lo = mid + 1; else hi = mid;
+  }
+  int nTrend = -1;
+  for (std::size_t i = lo; i-- > 0;)
+  {
     if (Structures[i].nType == nType)
     {
       nTrend = (int)i;
+      break;
     }
   }
 
@@ -457,15 +461,14 @@ std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint>
 // 找到某下标处信号所属（最靠近的、起点不晚于它）的中枢，无则返回 -1
 static int FindLastCenterBeforeIndex(const std::vector<Center> &Centers, int nIndex)
 {
-  int nCenter = -1;
-  for (std::size_t i = 0; i < Centers.size(); i++)
+  // 中枢按起点递增：二分取最后一个 nStart <= nIndex 的中枢
+  std::size_t lo = 0, hi = Centers.size();
+  while (lo < hi)
   {
-    if (Centers[i].nStart <= nIndex)
-    {
-      nCenter = (int)i;
-    }
+    std::size_t mid = (lo + hi) / 2;
+    if (Centers[mid].nStart <= nIndex) lo = mid + 1; else hi = mid;
   }
-  return nCenter;
+  return (int)lo - 1;
 }
 
 static int FindCompletedTrendByCenter(const std::vector<TrendStructure> &Structures,
@@ -1231,16 +1234,25 @@ static void MarkFirstFilterReasons(std::vector<int> *pReasons,
                                    const std::vector<TrendStructure> &Structures,
                                    const std::vector<TradingSignalCandidate> &Candidates)
 {
+  // 预建每个端点是否已有一买/一卖候选，避免逐端点扫描全部候选
+  std::vector<unsigned char> Marks(Points.size(), 0);
+  for (std::size_t k = 0; k < Candidates.size(); k++)
+  {
+    int nPoint = Candidates[k].nPoint;
+    if ((nPoint < 0) || ((std::size_t)nPoint >= Points.size())) continue;
+    if (Candidates[k].fSignal == SIGNAL_FIRST_BUY) Marks[(std::size_t)nPoint] |= 1;
+    if (Candidates[k].fSignal == SIGNAL_FIRST_SELL) Marks[(std::size_t)nPoint] |= 2;
+  }
   for (std::size_t i = 0; i < Points.size(); i++)
   {
-    if ((Points[i].nType == CZSC_POINT_BOTTOM) && !HasCandidateAtPoint(Candidates, (int)i, SIGNAL_FIRST_BUY))
+    if ((Points[i].nType == CZSC_POINT_BOTTOM) && !(Marks[i] & 1))
     {
       SetFilterReason(pReasons,
                       Points,
                       (int)i,
                       ClassifyFirstFilterReason(Points, Centers, Structures, i, -1));
     }
-    else if ((Points[i].nType == CZSC_POINT_TOP) && !HasCandidateAtPoint(Candidates, (int)i, SIGNAL_FIRST_SELL))
+    else if ((Points[i].nType == CZSC_POINT_TOP) && !(Marks[i] & 2))
     {
       SetFilterReason(pReasons,
                       Points,
