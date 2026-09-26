@@ -678,10 +678,10 @@ static bool TestRealSseDiagnosticCounts()
          (SegmentAn.Points.size() == 11) &&
          (StrokeAn.Centers.size() == 14) &&
          (SegmentAn.Centers.size() == 1) &&
-         (StrokeAn.Candidates.size() == 10) &&
+         (StrokeAn.Candidates.size() == 13) &&
          SegmentAn.Candidates.empty() &&
-         CheckSseCandidateSummary(StrokeSummary, 0, 0, 5, 1, 1, 3,
-                                  2, 0, 1, 3, 0, 0, 0, 8) &&
+         CheckSseCandidateSummary(StrokeSummary, 1, 0, 5, 2, 2, 3,
+                                  5, 0, 1, 5, 0, 0, 0, 8) &&
          CheckSseCandidateSummary(SegmentSummary, 0, 0, 0, 0, 0, 0,
                                   0, 0, 0, 0, 0, 0, 0, 0) &&
          SegmentEndsBeyondStart(SegmentAn.Points);
@@ -1093,6 +1093,7 @@ static bool TestRealSseGoldenCandidatesPresent()
   BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
 
   static const SseCandidateExpectation StrokeExpected[] = {
+    {"2019-05-17", 12.0f, 2, 4, 1, CZSC_MOVEMENT_UP, 25, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 1},
     {"2021-03-18", 12.0f, 2, 6, 3, CZSC_MOVEMENT_UP, 61, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 1},
     {"2018-07-12", 13.0f, 1, 0, -1, CZSC_MOVEMENT_CONSOLIDATION, 9, 0, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
     {"2018-11-02", 13.0f, 1, 1, 0, CZSC_MOVEMENT_DOWN, 13, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4232},
@@ -1102,6 +1103,8 @@ static bool TestRealSseGoldenCandidatesPresent()
     {"2024-03-28", 3.0f, 1, 9, 6, CZSC_MOVEMENT_CONSOLIDATION, 120, 9, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
     {"2025-09-04", 3.0f, 1, 11, -1, CZSC_MOVEMENT_CONSOLIDATION, 142, 11, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
     {"2025-11-05", 3.0f, 1, 12, 8, CZSC_MOVEMENT_UP, 146, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4232},
+    {"2018-08-20", 1.0f, 2, 1, 0, CZSC_MOVEMENT_DOWN, 10, -1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_UNKNOWN, 521},
+    {"2019-04-08", 11.0f, 2, 3, 1, CZSC_MOVEMENT_UP, 23, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 265},
     {"2021-02-18", 11.0f, 2, 6, 3, CZSC_MOVEMENT_UP, 59, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 525}
   };
 
@@ -7514,6 +7517,40 @@ static bool TestMacdAreaUsesSameColorBars()
          NearlyEqual(Fall.fMacdArea, 26.0f);
 }
 
+// 第24/37课：一卖比较 c（离开 B 的段）与 b（连接 A、B 的进入段）；b 须是终止于 B 起点的那段，
+// 不能跳过它去比更早的一笔（旧实现用 < B 起点，漏掉了真正的 b）。
+static bool TestFirstSellComparesEnteringSegmentB()
+{
+  const float Px[] = {10, 20, 15, 19, 16, 30, 25, 29, 26, 40, 35};
+  const float En[] = {0, 0, 0, 10, 10, 110, 110, 110, 110, 160, 160};
+  std::vector<SegmentPoint> Points;
+  for (int i = 0; i < 11; i++)
+  {
+    Points.push_back(MakeTestEnergyPoint((i % 2) ? CZSC_POINT_TOP : CZSC_POINT_BOTTOM, i * 4, Px[i], En[i]));
+  }
+  std::vector<Center> Centers = BuildCenters(Points);
+  std::vector<TrendStructure> Structures = BuildTrendStructures(Centers);
+  std::vector<CenterBreakout> Breakouts = BuildCenterBreakouts(Points, Centers, Structures);
+  std::vector<TradingSignalCandidate> Candidates =
+    BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
+  if ((Centers.size() != 2) || (Centers[0].nEnd != 16) || (Centers[1].nStart != 20) ||
+      (ClassifyCenterRelation(Centers[0], Centers[1]) != CZSC_CENTER_RELATION_UP))
+  {
+    return false;
+  }
+  for (std::size_t i = 0; i < Candidates.size(); i++)
+  {
+    const TradingSignalCandidate &C = Candidates[i];
+    if (NearlyEqual(C.fSignal, 11.0f) && (C.nIndex == 36))
+    {
+      // b = 点4→点5（A 终点→B 起点），c = 点8→点9（最后一次回到 B 内的底→新高）
+      return (C.Divergence.nPreviousStartPoint == 4) && (C.Divergence.nPreviousEndPoint == 5) &&
+             (C.Divergence.nCurrentStartPoint == 8) && (C.Divergence.nCurrentEndPoint == 9);
+    }
+  }
+  return false;
+}
+
 static bool TestFeatureLineSegmentEndsAtBottomFractal()
 {
   std::vector<Fractal> F;
@@ -9423,6 +9460,10 @@ int main()
   if (!TestMacdAreaUsesSameColorBars())
   {
     return 221;
+  }
+  if (!TestFirstSellComparesEnteringSegmentB())
+  {
+    return 222;
   }
   return 0;
 }

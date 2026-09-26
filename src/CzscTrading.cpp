@@ -103,6 +103,74 @@ static bool FindPreviousSameDirectionMoveBeforeIndex(const std::vector<SegmentPo
   return false;
 }
 
+// 第24/37课 a+A+b+B+c：c = 离开最后中枢 B 的整段走势，起点取当前点之前最后一次回到 B 内的端点
+// （卖：底 ≤ ZG；买：顶 ≥ ZD），当前点须为 c 段极值；b = 连接前一中枢 A 与 B 的走势（A 终点 → B 起点）。
+// 第29课背驰-转折情况一：背驰后回到 B 使 B 事后延伸，故不以 B 的（事后）终点定位 c。
+// 定位失败时回落为“末笔 vs B 之前最近同向笔”。
+static int FindPointAtIndex(const std::vector<SegmentPoint> &Points, std::size_t nBefore, int nIndex)
+{
+  for (std::size_t i = nBefore + 1; i-- > 0;)
+  {
+    if (Points[i].nIndex == nIndex) return (int)i;
+    if (Points[i].nIndex < nIndex) break;
+  }
+  return -1;
+}
+
+static bool LocateTrendDivergenceSegments(const std::vector<SegmentPoint> &Points,
+                                          const std::vector<Center> &Centers,
+                                          int nLastCenter,
+                                          std::size_t nPoint,
+                                          int nDirection,
+                                          std::size_t *pPrevStart, std::size_t *pPrevEnd,
+                                          std::size_t *pCurStart)
+{
+  const Center &B = Centers[(std::size_t)nLastCenter];
+  int nStartType = (nDirection < 0) ? CZSC_POINT_TOP : CZSC_POINT_BOTTOM;
+  int nC = -1;
+  for (std::size_t k = nPoint; k-- > 0;)
+  {
+    if (Points[k].nIndex < B.nStart) break;
+    if ((Points[k].nType == nStartType) &&
+        ((nDirection > 0) ? (Points[k].fLow <= B.fHigh) : (Points[k].fHigh >= B.fLow)))
+    {
+      nC = (int)k;
+      break;
+    }
+  }
+  bool bExtreme = (nC >= 0);
+  for (std::size_t k = (std::size_t)(nC + 1); bExtreme && (k < nPoint); k++)
+  {
+    if ((Points[k].nType == Points[nPoint].nType) && IsMoreExtremePoint(Points[nPoint], Points[k]))
+    {
+      bExtreme = false;  // c 段内已有更极端点，当前点不是 c 的终点
+    }
+  }
+  int nBStart = (nLastCenter > 0) ? FindPointAtIndex(Points, nPoint, Centers[(std::size_t)nLastCenter - 1].nEnd) : -1;
+  int nBEnd = FindPointAtIndex(Points, nPoint, Centers[(std::size_t)nLastCenter].nStart);
+  if (bExtreme && (nBStart >= 0) && (nBEnd > nBStart) &&
+      (Points[(std::size_t)nBStart].nType == nStartType) &&
+      (GetMoveDirection(Points[(std::size_t)nBStart], Points[(std::size_t)nBEnd]) == nDirection))
+  {
+    *pPrevStart = (std::size_t)nBStart;
+    *pPrevEnd = (std::size_t)nBEnd;
+    *pCurStart = (std::size_t)nC;
+    return true;
+  }
+
+  std::size_t nPrevMove = 0;
+  if ((Points[nPoint - 1].nType != nStartType) ||
+      !FindPreviousSameDirectionMoveBeforeIndex(Points, nPoint, nDirection,
+                                               Centers[(std::size_t)nLastCenter].nStart, &nPrevMove))
+  {
+    return false;
+  }
+  *pPrevStart = nPrevMove;
+  *pPrevEnd = nPrevMove + 1;
+  *pCurStart = nPoint - 1;
+  return true;
+}
+
 static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
                                       const std::vector<Center> &Centers,
                                       const std::vector<TrendStructure> &Structures,
@@ -138,31 +206,26 @@ static bool IsTrendDivergenceFirstBuy(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  const SegmentPoint &CurrentStart = Points[nPoint - 1];
-  const SegmentPoint &CurrentEnd = Points[nPoint];
-  if ((CurrentStart.nType != CZSC_POINT_TOP) ||
-      (CurrentEnd.fLow >= Centers[nLastCenter].fLow))
+  if (Points[nPoint].fLow >= Centers[nLastCenter].fLow)
   {
     return false;
   }
 
-  std::size_t nPrevMove = 0;
-  if (!FindPreviousSameDirectionMoveBeforeIndex(Points, nPoint, -1,
-                                               Centers[nLastCenter].nStart,
-                                               &nPrevMove))
+  std::size_t nPrevStart = 0, nPrevEnd = 0, nCurStart = 0;
+  if (!LocateTrendDivergenceSegments(Points, Centers, nLastCenter, nPoint, -1, &nPrevStart, &nPrevEnd, &nCurStart))
   {
     return false;
   }
 
-  const SegmentPoint &PrevStart = Points[nPrevMove];
-  const SegmentPoint &PrevEnd = Points[nPrevMove + 1];
+  const SegmentPoint &PrevStart = Points[nPrevStart];
+  const SegmentPoint &PrevEnd = Points[nPrevEnd];
   if ((PrevStart.nType != CZSC_POINT_TOP) || (PrevEnd.nType != CZSC_POINT_BOTTOM))
   {
     return false;
   }
 
-  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, -1);
-  SetDivergencePointIds(&Divergence, (int)nPrevMove, (int)nPrevMove + 1, (int)nPoint - 1, (int)nPoint);
+  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, Points[nCurStart], Points[nPoint], -1);
+  SetDivergencePointIds(&Divergence, (int)nPrevStart, (int)nPrevEnd, (int)nCurStart, (int)nPoint);
   if (pDivergence != 0)
   {
     *pDivergence = Divergence;
@@ -209,31 +272,26 @@ static bool IsTrendDivergenceFirstSell(const std::vector<SegmentPoint> &Points,
     return false;
   }
 
-  const SegmentPoint &CurrentStart = Points[nPoint - 1];
-  const SegmentPoint &CurrentEnd = Points[nPoint];
-  if ((CurrentStart.nType != CZSC_POINT_BOTTOM) ||
-      (CurrentEnd.fHigh <= Centers[nLastCenter].fHigh))
+  if (Points[nPoint].fHigh <= Centers[nLastCenter].fHigh)
   {
     return false;
   }
 
-  std::size_t nPrevMove = 0;
-  if (!FindPreviousSameDirectionMoveBeforeIndex(Points, nPoint, 1,
-                                               Centers[nLastCenter].nStart,
-                                               &nPrevMove))
+  std::size_t nPrevStart = 0, nPrevEnd = 0, nCurStart = 0;
+  if (!LocateTrendDivergenceSegments(Points, Centers, nLastCenter, nPoint, 1, &nPrevStart, &nPrevEnd, &nCurStart))
   {
     return false;
   }
 
-  const SegmentPoint &PrevStart = Points[nPrevMove];
-  const SegmentPoint &PrevEnd = Points[nPrevMove + 1];
+  const SegmentPoint &PrevStart = Points[nPrevStart];
+  const SegmentPoint &PrevEnd = Points[nPrevEnd];
   if ((PrevStart.nType != CZSC_POINT_BOTTOM) || (PrevEnd.nType != CZSC_POINT_TOP))
   {
     return false;
   }
 
-  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, 1);
-  SetDivergencePointIds(&Divergence, (int)nPrevMove, (int)nPrevMove + 1, (int)nPoint - 1, (int)nPoint);
+  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, Points[nCurStart], Points[nPoint], 1);
+  SetDivergencePointIds(&Divergence, (int)nPrevStart, (int)nPrevEnd, (int)nCurStart, (int)nPoint);
   if (pDivergence != 0)
   {
     *pDivergence = Divergence;
