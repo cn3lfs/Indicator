@@ -232,6 +232,8 @@ struct SegmentPoint
   float fEnergy;
   float fDif;
   float fDea;
+  float fEnergyRed = 0;    // 该点累积红柱面积（只计正柱，第24课向上看红柱）
+  float fEnergyGreen = 0;  // 该点累积绿柱面积（只计负柱绝对值，第24课向下看绿柱）
 };
 
 struct Center

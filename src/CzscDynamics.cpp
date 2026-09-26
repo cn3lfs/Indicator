@@ -105,13 +105,16 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
     return;
   }
 
-  std::vector<float> Cumulative;
-  Cumulative.resize((std::size_t)nCount);
-  float fAccumulator = 0;
+  std::vector<float> Cumulative((std::size_t)nCount), Red((std::size_t)nCount), Green((std::size_t)nCount);
+  float fAccumulator = 0, fRed = 0, fGreen = 0;
   for (int i = 0; i < nCount; i++)
   {
-    fAccumulator += Macd.Histogram[(std::size_t)i];
+    float fBar = Macd.Histogram[(std::size_t)i];
+    fAccumulator += fBar;
+    if (fBar > 0) fRed += fBar; else fGreen -= fBar;
     Cumulative[(std::size_t)i] = fAccumulator;
+    Red[(std::size_t)i] = fRed;
+    Green[(std::size_t)i] = fGreen;
   }
 
   for (std::size_t i = 0; i < Points.size(); i++)
@@ -120,6 +123,8 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
     if ((nIndex >= 0) && (nIndex < nCount))
     {
       Points[i].fEnergy = Cumulative[(std::size_t)nIndex];
+      Points[i].fEnergyRed = Red[(std::size_t)nIndex];
+      Points[i].fEnergyGreen = Green[(std::size_t)nIndex];
       Points[i].fDif = Macd.Dif[(std::size_t)nIndex];
       Points[i].fDea = Macd.Dea[(std::size_t)nIndex];
     }
@@ -283,8 +288,19 @@ StrengthMetrics MeasureStrength(const SegmentPoint &Start, const SegmentPoint &E
     Strength.fDeaHeight = -Strength.fDeaHeight;
   }
 
-  // 走势段的 MACD 能量 = 区间累积柱面积之差的绝对值（上涨看红柱、下跌看绿柱）。
-  Strength.fMacdArea = End.fEnergy - Start.fEnergy;
+  // 第24课：走势段 MACD 面积“向上的看红柱子，向下看绿柱子”——只累计同色柱，红绿不相抵。
+  // 无红绿数据（手工构造的点）时回落为累积柱代数差的绝对值。
+  bool bHasColor = (Start.fEnergyRed != 0) || (Start.fEnergyGreen != 0) ||
+                   (End.fEnergyRed != 0) || (End.fEnergyGreen != 0);
+  if (bHasColor)
+  {
+    bool bUp = GetPointPrice(End) > GetPointPrice(Start);
+    Strength.fMacdArea = bUp ? (End.fEnergyRed - Start.fEnergyRed) : (End.fEnergyGreen - Start.fEnergyGreen);
+  }
+  else
+  {
+    Strength.fMacdArea = End.fEnergy - Start.fEnergy;
+  }
   if (Strength.fMacdArea < 0)
   {
     Strength.fMacdArea = -Strength.fMacdArea;
@@ -410,6 +426,11 @@ int DetectInstantDivergence(const std::vector<SegmentPoint> &Points,
     Now.fHigh = fHighest;
     Now.fLow = fHighest;
   }
+
+  // 合成终点也要带当下的累积 MACD 面积，否则面积会与 0 相减而失真
+  std::vector<SegmentPoint> NowPoint(1, Now);
+  AssignSegmentEnergy(NowPoint, nCount, pHigh, pLow);
+  Now = NowPoint[0];
 
   // 上一完成的同向段 = Points 倒数第三、第二点
   const SegmentPoint &PrevStart = Points[Points.size() - 3];

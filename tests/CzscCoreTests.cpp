@@ -681,7 +681,7 @@ static bool TestRealSseDiagnosticCounts()
          (StrokeAn.Candidates.size() == 10) &&
          SegmentAn.Candidates.empty() &&
          CheckSseCandidateSummary(StrokeSummary, 0, 0, 5, 1, 1, 3,
-                                  4, 0, 1, 3, 0, 0, 0, 8) &&
+                                  2, 0, 1, 3, 0, 0, 0, 8) &&
          CheckSseCandidateSummary(SegmentSummary, 0, 0, 0, 0, 0, 0,
                                   0, 0, 0, 0, 0, 0, 0, 0) &&
          SegmentEndsBeyondStart(SegmentAn.Points);
@@ -1095,13 +1095,13 @@ static bool TestRealSseGoldenCandidatesPresent()
   static const SseCandidateExpectation StrokeExpected[] = {
     {"2021-03-18", 12.0f, 2, 6, 3, CZSC_MOVEMENT_UP, 61, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 1},
     {"2018-07-12", 13.0f, 1, 0, -1, CZSC_MOVEMENT_CONSOLIDATION, 9, 0, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
-    {"2018-11-02", 13.0f, 2, 1, 0, CZSC_MOVEMENT_DOWN, 13, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2018-11-02", 13.0f, 1, 1, 0, CZSC_MOVEMENT_DOWN, 13, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4232},
     {"2020-07-27", 3.0f, 1, 5, -1, CZSC_MOVEMENT_CONSOLIDATION, 48, 5, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
     {"2021-06-18", 3.0f, 1, 6, 3, CZSC_MOVEMENT_UP, 68, 6, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
     {"2024-01-02", 13.0f, 1, 8, 5, CZSC_MOVEMENT_CONSOLIDATION, 117, 8, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
     {"2024-03-28", 3.0f, 1, 9, 6, CZSC_MOVEMENT_CONSOLIDATION, 120, 9, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
     {"2025-09-04", 3.0f, 1, 11, -1, CZSC_MOVEMENT_CONSOLIDATION, 142, 11, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
-    {"2025-11-05", 3.0f, 2, 12, 8, CZSC_MOVEMENT_UP, 146, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2025-11-05", 3.0f, 1, 12, 8, CZSC_MOVEMENT_UP, 146, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4232},
     {"2021-02-18", 11.0f, 2, 6, 3, CZSC_MOVEMENT_UP, 59, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 525}
   };
 
@@ -7495,6 +7495,25 @@ static bool TestFeatureSegmentGapNewHighBeforeReversalExtends()
          (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 36);
 }
 
+// 第24课：向上段只看红柱、向下段只看绿柱，红绿柱不相抵
+static bool TestMacdAreaUsesSameColorBars()
+{
+  SegmentPoint Low = MakeTestPoint(CZSC_POINT_BOTTOM, 0, 10);
+  SegmentPoint High = MakeTestPoint(CZSC_POINT_TOP, 10, 20);
+  Low.fEnergy = 0;  Low.fEnergyRed = 10;  Low.fEnergyGreen = 5;
+  High.fEnergy = 3; High.fEnergyRed = 22; High.fEnergyGreen = 14;  // 区间红 12、绿 9，代数和仅 3
+
+  StrengthMetrics Up = MeasureStrength(Low, High);
+  StrengthMetrics Down = MeasureStrength(High, Low);  // 反向走势（终点更低）→ 取绿柱
+  SegmentPoint LowLater = Low;
+  LowLater.nIndex = 20;
+  LowLater.fEnergyRed = 30;
+  LowLater.fEnergyGreen = 40;
+  StrengthMetrics Fall = MeasureStrength(High, LowLater);
+  return NearlyEqual(Up.fMacdArea, 12.0f) && NearlyEqual(Down.fMacdArea, 9.0f) &&
+         NearlyEqual(Fall.fMacdArea, 26.0f);
+}
+
 static bool TestFeatureLineSegmentEndsAtBottomFractal()
 {
   std::vector<Fractal> F;
@@ -9400,6 +9419,10 @@ int main()
   if (!TestFeatureSegmentGapNewHighBeforeReversalExtends())
   {
     return 220;
+  }
+  if (!TestMacdAreaUsesSameColorBars())
+  {
+    return 221;
   }
   return 0;
 }
