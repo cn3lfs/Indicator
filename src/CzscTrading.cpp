@@ -1180,51 +1180,30 @@ static int ClassifyFirstFilterReason(const std::vector<SegmentPoint> &Points,
     return CZSC_FILTER_NON_TREND_DIVERGENCE;
   }
 
-  const SegmentPoint &CurrentStart = Points[nPoint - 1];
+  // 与一类判定共用 b/c 段定位（第24/37/29课），保证诊断原因与实际判定一致
   const SegmentPoint &CurrentEnd = Points[nPoint];
-  if (nDirection < 0)
-  {
-    if ((CurrentStart.nType != CZSC_POINT_TOP) || (CurrentEnd.fLow >= Centers[(std::size_t)nLastCenter].fLow))
-    {
-      return CZSC_FILTER_NON_TREND_DIVERGENCE;
-    }
-  }
-  else
-  {
-    if ((CurrentStart.nType != CZSC_POINT_BOTTOM) || (CurrentEnd.fHigh <= Centers[(std::size_t)nLastCenter].fHigh))
-    {
-      return CZSC_FILTER_NON_TREND_DIVERGENCE;
-    }
-  }
-
-  std::size_t nPrevMove = 0;
-  if (!FindPreviousSameDirectionMoveBeforeIndex(Points,
-                                                nPoint,
-                                                nDirection,
-                                                Centers[(std::size_t)nLastCenter].nStart,
-                                                &nPrevMove))
+  if ((nDirection < 0) ? (CurrentEnd.fLow >= Centers[(std::size_t)nLastCenter].fLow)
+                       : (CurrentEnd.fHigh <= Centers[(std::size_t)nLastCenter].fHigh))
   {
     return CZSC_FILTER_NON_TREND_DIVERGENCE;
   }
 
-  const SegmentPoint &PrevStart = Points[nPrevMove];
-  const SegmentPoint &PrevEnd = Points[nPrevMove + 1];
-  if (nDirection < 0)
+  std::size_t nPrevStart = 0, nPrevEnd = 0, nCurStart = 0;
+  if (!LocateTrendDivergenceSegments(Points, Centers, nLastCenter, nPoint, nDirection,
+                                     &nPrevStart, &nPrevEnd, &nCurStart))
   {
-    if ((PrevStart.nType != CZSC_POINT_TOP) || (PrevEnd.nType != CZSC_POINT_BOTTOM))
-    {
-      return CZSC_FILTER_DIRECTION_MISMATCH;
-    }
-  }
-  else
-  {
-    if ((PrevStart.nType != CZSC_POINT_BOTTOM) || (PrevEnd.nType != CZSC_POINT_TOP))
-    {
-      return CZSC_FILTER_DIRECTION_MISMATCH;
-    }
+    return CZSC_FILTER_NON_TREND_DIVERGENCE;
   }
 
-  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, CurrentStart, CurrentEnd, nDirection);
+  const SegmentPoint &PrevStart = Points[nPrevStart];
+  const SegmentPoint &PrevEnd = Points[nPrevEnd];
+  int nPrevStartType = (nDirection < 0) ? CZSC_POINT_TOP : CZSC_POINT_BOTTOM;
+  if ((PrevStart.nType != nPrevStartType) || (PrevEnd.nType == nPrevStartType))
+  {
+    return CZSC_FILTER_DIRECTION_MISMATCH;
+  }
+
+  DivergenceResult Divergence = MeasureDivergence(PrevStart, PrevEnd, Points[nCurStart], CurrentEnd, nDirection);
   return Divergence.bDivergence ? CZSC_FILTER_NONE : CZSC_FILTER_NON_TREND_DIVERGENCE;
 }
 
