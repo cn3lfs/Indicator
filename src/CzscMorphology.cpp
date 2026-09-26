@@ -52,6 +52,7 @@ static int DetectDirection(const MergedBar &Left, const MergedBar &Right)
 }
 
 // 选择包含合并的方向：已有趋势则沿用，否则按高/低点差值较大的一侧定向
+// （原文未定义序列开头的方向，本实现取差值较大一侧、等值向上；见 docs/chan-ambiguity-decisions.md）
 static int ChooseMergeDirection(const MergedBar &Last, const MergedBar &Bar, int nDirection)
 {
   if (nDirection != 0)

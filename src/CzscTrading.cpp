@@ -378,7 +378,7 @@ static CenterBreakout MakeCenterBreakout(const std::vector<SegmentPoint> &Points
   const SegmentPoint &Retest = Points[nRetestPoint];
   if (nDirection > 0)
   {
-    B.bBackIntoCenter = Retest.fLow < C.fHigh;
+    B.bBackIntoCenter = Retest.fLow < C.fHigh;  // 恰等于 ZG 不算跌破（第20课“不跌破”，等值口径见 docs）
     B.bThirdSignal = !B.bBackIntoCenter;
   }
   else
@@ -951,7 +951,7 @@ static void AppendSecondSignalCandidates(std::vector<TradingSignalCandidate> *pC
     if ((FirstSignal.fSignal == SIGNAL_FIRST_BUY) &&
         (Turn.nType == CZSC_POINT_TOP) &&
         (Second.nType == CZSC_POINT_BOTTOM) &&
-        (Second.fLow >= First.fLow))
+        (Second.fLow >= First.fLow))  // 恰等于一买低点不算创新低（第21课，等值口径见 docs）
     {
       int nBreakout = FindOverlappedBreakout(Breakouts, (int)nPoint + 2, FirstSignal.nCenter, 1);
       DivergenceResult Divergence = (nBreakout >= 0) ?
