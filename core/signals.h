@@ -2,7 +2,12 @@
 #pragma once
 
 #include "core/model.h"
+#include "core/morphology.h"
 
+#include <map>
+#include <optional>
+#include <set>
+#include <utility>
 #include <vector>
 
 namespace chan
@@ -19,10 +24,48 @@ struct Breakout
   Divergence divergence;  // 离开段相对前一同向段的盘整背驰（第24课）
 };
 
+// 单个中枢的首次离开+回试；h 记录读取视界（扫描到数据尽头仍未找到则无界）
+std::optional<Breakout> BreakoutFor(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
+                                    std::size_t center, Horizon &h);
 std::vector<Breakout> BuildBreakouts(const std::vector<Pivot> &pivots, const std::vector<Center> &centers);
 
-// 全部候选：顺序为 二类、三类、一类（与同根取胜规则配合：一类 30 > 三类 20 > 二类 10）
+// 全部候选（批量）：顺序为 二类、三类、一类（与同根取胜规则配合：一类 30 > 三类 20 > 二类 10）
 std::vector<Signal> BuildSignals(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
                                  const std::vector<Movement> &movements, const std::vector<Breakout> &breakouts);
+
+// 买卖点流：随端点/中枢/走势的局部变化只重算受影响部分，并对“端点已被下一端点确认”的信号
+// 做出现/失效差分。与每步批量重算后差分的结果逐事件一致。
+class SignalStream
+{
+public:
+  // dirtyPivot/dirtyCenter/dirtyMove：各层首个变化下标（-1 表示该层无变化）
+  void Update(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
+              const std::vector<Movement> &movements, int dirtyPivot, int dirtyCenter, int dirtyMove, int bar,
+              bool emit, std::vector<SignalEvent> &events);
+
+private:
+  using SignalKey = std::pair<int, int>;  // (信号K线, 信号码)
+  using Source = std::pair<int, int>;     // (类别 1/2/3, 来源：一类端点/二类所依一类端点/三类中枢)
+  static SignalKey KeyOf(const Signal &s) { return {s.index, static_cast<int>(s.type)}; }
+  void Put(const Signal &s, Source source);
+  void Drop(const Signal &s, Source source);
+
+  std::vector<std::optional<Signal>> rawFirst_;              // 逐端点：去重前的一类候选
+  std::map<std::pair<int, int>, std::set<int>> members_;      // (类型, 中枢) → 一类候选端点
+  std::map<std::pair<int, int>, std::vector<int>> groupSurvivors_;
+  std::map<int, Signal> survivors_;                           // 一类幸存者（按端点）
+  std::map<int, Signal> seconds_;                             // 二类（按所依一类端点）
+  std::map<int, Signal> thirds_;                              // 三类（按中枢）
+  std::vector<std::optional<Breakout>> breakouts_;
+  std::vector<Horizon> breakoutHorizons_;
+  std::vector<char> breakoutIndexed_;                         // 该中枢的视界是否已登记在索引中
+  std::set<int> openBreakouts_;                               // 视界无界（尚未定型）的中枢
+  std::multimap<std::size_t, int> breakoutByHorizon_;         // 视界上界 → 中枢
+  std::map<SignalKey, std::map<Source, Signal>> byKey_;
+  std::map<SignalKey, Signal> active_;                        // 当前已确认且有效的信号
+  std::set<SignalKey> touched_;
+  std::size_t pivotCount_ = 0;
+  std::vector<int> centerStarts_, moveStarts_;
+};
 
 }  // namespace chan

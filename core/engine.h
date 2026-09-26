@@ -38,6 +38,9 @@ struct Analysis
 // window>0 时只对最近 window 根K线内的时刻产生事件（其前的状态作为基线，不产生事件）
 Analysis Analyze(const Series &series, const Config &config, int window = 0);
 
+// 参照实现：每个时刻从分型前缀整条重算快照再差分。与 Analyze 逐事件一致，仅供测试对照增量逻辑。
+Analysis AnalyzeReference(const Series &series, const Config &config, int window = 0);
+
 // 由分型前缀得到结构快照（纯函数；引擎每一步与全量结果共用）
 Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, const EnergyTables &tables,
                        const Config &config);

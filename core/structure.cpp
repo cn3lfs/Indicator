@@ -72,14 +72,48 @@ bool RetestBackInto(const Center &c, const Pivot &retest, int dir)
 
 }  // namespace
 
-std::vector<Center> BuildCenters(const std::vector<Pivot> &p)
+// 中枢流：每尝试成枢前记录检查点（扫描位置、已成中枢数、至此读取视界）；输入从 dirty 起变化时
+// 从视界早于 dirty 的最后检查点续算。批量构建即空状态下 Update(pivots, 0)。
+int CenterStream::Update(const std::vector<Pivot> &p, std::size_t dirty)
 {
-  std::vector<Center> out;
-  if (p.size() < 4) return out;
-  std::size_t i = 1;
+  while (!checkpoints_.empty() && !checkpoints_.back().horizon.Before(dirty)) checkpoints_.pop_back();
+  std::size_t i = 1, keep = 0;
+  horizon_ = Horizon();
+  if (!checkpoints_.empty())
+  {
+    Checkpoint cp = checkpoints_.back();
+    checkpoints_.pop_back();
+    keep = cp.outSize;
+    horizon_ = cp.horizon;
+    i = cp.i;
+  }
+  // 只保留并比较被续算覆盖的尾部，之前的中枢不变
+  std::vector<Center> oldTail(out_.begin() + static_cast<std::ptrdiff_t>(keep), out_.end());
+  out_.resize(keep);
+  Run(p, i);
+  std::size_t k = 0;
+  while (k < oldTail.size() && keep + k < out_.size() && Same(oldTail[k], out_[keep + k])) k++;
+  return (k == oldTail.size() && keep + k == out_.size()) ? -1 : static_cast<int>(keep + k);
+}
+
+bool CenterStream::Same(const Center &a, const Center &b)
+{
+  return a.firstPivot == b.firstPivot && a.lastPivot == b.lastPivot && a.start == b.start && a.end == b.end &&
+         a.zg == b.zg && a.zd == b.zd && a.gg == b.gg && a.dd == b.dd && a.direction == b.direction;
+}
+
+void CenterStream::Run(const std::vector<Pivot> &p, std::size_t i)
+{
+  if (p.size() < 4)
+  {
+    horizon_.Bound();
+    return;
+  }
   while (i + 3 < p.size())
   {
+    checkpoints_.push_back({i, out_.size(), horizon_});
     Center c;
+    horizon_.Read(i + 3);
     if (!TryForm(p, i, c))
     {
       i++;
@@ -89,8 +123,10 @@ std::vector<Center> BuildCenters(const std::vector<Pivot> &p)
 
     std::size_t k = i + 3;
     bool leftByPrevious = false;
+    bool ended = false;
     while (k + 1 < p.size())
     {
+      horizon_.Read(k + 1);
       Range r = Between(p[k], p[k + 1]);
       if (Overlap(c.zd, c.zg, r.low, r.high))
       {
@@ -99,12 +135,19 @@ std::vector<Center> BuildCenters(const std::vector<Pivot> &p)
         continue;
       }
       int leaveDir = 0;
-      if (LeaveAttempt(c, p[k], p[k + 1], leaveDir) && k + 2 < p.size())
+      bool leave = LeaveAttempt(c, p[k], p[k + 1], leaveDir);
+      if (leave && k + 2 >= p.size()) horizon_.Bound();  // 离开后尚无回试：取决于数据尽头
+      if (leave && k + 2 < p.size())
       {
+        horizon_.Read(k + 2);
         int retestDir = MoveDirection(p[k + 1], p[k + 2]);
         if (retestDir != 0 && retestDir != leaveDir)
         {
-          if (!RetestBackInto(c, p[k + 2], leaveDir)) break;  // 离开+回试不回 → 三类买卖点，封闭中枢
+          if (!RetestBackInto(c, p[k + 2], leaveDir))
+          {
+            ended = true;  // 离开+回试不回 → 三类买卖点，封闭中枢
+            break;
+          }
           // 离开+回试回中枢：两段本身不与 [ZD,ZG] 重叠，Extend 为空操作，仅越过这两段继续考察
           Extend(c, p, k);
           k++;
@@ -114,8 +157,10 @@ std::vector<Center> BuildCenters(const std::vector<Pivot> &p)
         }
       }
       leftByPrevious = true;
+      ended = true;
       break;
     }
+    if (!ended) horizon_.Bound();  // 延伸到数据尽头，中枢未结束
 
     // 第18课定理三：离开段不属于本中枢，退回终点并按保留端点重算 GG/DD，离开段作下一中枢进入段
     if (leftByPrevious && k > i + 3)
@@ -128,14 +173,21 @@ std::vector<Center> BuildCenters(const std::vector<Pivot> &p)
         c.gg = std::max(c.gg, p[j].Price());
         c.dd = std::min(c.dd, p[j].Price());
       }
-      out.push_back(c);
+      out_.push_back(c);
       i = k;
       continue;
     }
-    out.push_back(c);
+    out_.push_back(c);
     i = k + 1;
   }
-  return out;
+  horizon_.Bound();
+}
+
+std::vector<Center> BuildCenters(const std::vector<Pivot> &p)
+{
+  CenterStream s;
+  s.Update(p, 0);
+  return s.Centers();
 }
 
 CenterRelation Relate(const Center &prev, const Center &next)
@@ -145,7 +197,10 @@ CenterRelation Relate(const Center &prev, const Center &next)
   return CenterRelation::Expansion;
 }
 
-std::vector<Movement> BuildMovements(const std::vector<Center> &centers)
+namespace
+{
+// 从第 from 个中枢起按贪心分组追加走势：连续同向关系的中枢并为趋势，否则单中枢盘整
+void AppendMovements(const std::vector<Center> &centers, std::size_t i, std::vector<Movement> &out)
 {
   auto typeOf = [](CenterRelation r) {
     return r == CenterRelation::Up ? MovementType::Up
@@ -160,8 +215,6 @@ std::vector<Movement> BuildMovements(const std::vector<Center> &centers)
     m.end = centers[b].end;
     return m;
   };
-  std::vector<Movement> out;
-  std::size_t i = 0;
   while (i < centers.size())
   {
     if (i + 1 >= centers.size())
@@ -181,7 +234,36 @@ std::vector<Movement> BuildMovements(const std::vector<Center> &centers)
     out.push_back(make(t, i, last));
     i = last + 1;
   }
+}
+
+bool SameMovement(const Movement &a, const Movement &b)
+{
+  return a.type == b.type && a.firstCenter == b.firstCenter && a.lastCenter == b.lastCenter && a.start == b.start &&
+         a.end == b.end;
+}
+}  // namespace
+
+std::vector<Movement> BuildMovements(const std::vector<Center> &centers)
+{
+  std::vector<Movement> out;
+  AppendMovements(centers, 0, out);
   return out;
+}
+
+int UpdateMovements(const std::vector<Center> &centers, std::vector<Movement> &moves, int dirtyCenter)
+{
+  if (dirtyCenter < 0) return -1;
+  // 走势 [a,b] 由关系 (a,a+1)..(b,b+1) 决定：b+1 触及变化中枢者及其后重建
+  std::size_t m = 0;
+  while (m < moves.size() && moves[m].lastCenter + 1 < dirtyCenter) m++;
+  std::vector<Movement> oldTail(moves.begin() + static_cast<std::ptrdiff_t>(m), moves.end());
+  std::size_t from = m < moves.size() ? static_cast<std::size_t>(moves[m].firstCenter)
+                                      : (moves.empty() ? 0 : static_cast<std::size_t>(moves.back().lastCenter) + 1);
+  moves.resize(m);
+  AppendMovements(centers, from, moves);
+  std::size_t k = 0;
+  while (k < oldTail.size() && m + k < moves.size() && SameMovement(oldTail[k], moves[m + k])) k++;
+  return (k == oldTail.size() && m + k == moves.size()) ? -1 : static_cast<int>(m + k);
 }
 
 }  // namespace chan
