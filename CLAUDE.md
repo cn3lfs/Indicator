@@ -79,6 +79,14 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 新增可选分支时**优先扩展 `CzscConfig` 并经 `Func30`/`Func20` 暴露，保持默认=现状以零回归**；
 新增信号/中枢类计算时让 Func 走 `GetOrBuild*` 投影，而非自建流水线。
 
+## 逐步重放（无未来函数，`src/CzscReplay.cpp`）
+
+全量结果只保留事后胜出的信号，当下出现又被新极值否定的一类点会消失（幸存者偏差）。
+`BuildReplaySignalEvents` 在每个分型成立时刻 t（`Fractal::nConfirmedAt`=右侧首根非包含K线）只用 [0,t]
+重算笔→端点→中枢→买卖点，记录出现/失效事件。依据：合并K线无包含 → 顶底分型严格交替且成立即定型，
+故前缀分型=全量分型中 nConfirmedAt≤t 的前缀；MACD 为因果 EMA，用 `BuildEnergyTables` 一次建表。
+`TestReplaySuite` 断言每一步等于真实前缀重算。改动笔/中枢/买卖点算法后必须仍通过此测试。
+
 ## 通达信导出函数（编号见 `Main.cpp` 的 `Info[]`，公式示例见 `README.md`）
 
 | 编号 | 函数 | 输出 | 缠论依据 |
@@ -98,6 +106,7 @@ MeasureStrength / MeasureDivergence 力度与背驰(第15/24/27课)
 | 20 | Func20 | 配置驱动端点(笔/线段中枢) | 见上「架构」 |
 | 30 | Func30 | mode 统一入口(配置+输出，一步算全链路；输出21-28为胜出候选上下文/位置/走势/优先级/编号) | 见上「架构」 |
 | 40 | Func40 | 旁路注册真实 C/V(透传 C)，供后续函数启用 | 见上「旁路注册数据契约」 |
+| 30/109,110 | Func30 扩展输出 | 逐步重放的当下确认信号 / 信号失效(无未来函数) | 见上「逐步重放」 |
 
 新增输出函数时：在对应 `include/Czsc*.h` 声明、对应 `src/Czsc*.cpp` 实现；TDX 编号入口放
 `include/CzscTdxExports.h` / `src/CzscTdxExports.cpp`，再在 `Main.cpp` 注册 `{n,&Funcn}`、
@@ -112,9 +121,8 @@ cd D:/github/czsc-tdx
 "/c/Program Files/LLVM/bin/clang++" -O2 -finput-charset=UTF-8 \
   -Iinclude -I. \
   -o tests/CzscCoreTests.exe \
-  src/CzscCommon.cpp src/CzscMorphology.cpp src/CzscCenter.cpp \
-  src/CzscDynamics.cpp src/CzscTrading.cpp src/CzscNestedDivergence.cpp \
-  src/CzscAnalyzer.cpp src/CzscTdxExports.cpp tests/CzscCoreTests.cpp
+  src/*.cpp tests/CzscCoreTests.cpp tests/CzscProjectionTests.cpp \
+  tests/CzscCompletionTests.cpp tests/CzscReplayTests.cpp
 ./tests/CzscCoreTests.exe; echo $?   # exit 0 = 全过
 ```
 

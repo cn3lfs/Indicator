@@ -83,9 +83,32 @@ std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice)
 // TDX 的 Func5 只传入 H/L（无收盘价），故以 (H+L)/2 作为收盘价代理计算 MACD。
 void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const float *pHigh, const float *pLow)
 {
+  AssignEnergyFromTables(Points, BuildEnergyTables(nCount, pHigh, pLow));
+}
+
+void AssignEnergyFromTables(std::vector<SegmentPoint> &Points, const EnergyTables &T)
+{
+  int nCount = (int)T.Cumulative.size();
+  for (std::size_t i = 0; i < Points.size(); i++)
+  {
+    int nIndex = Points[i].nIndex;
+    if ((nIndex >= 0) && (nIndex < nCount))
+    {
+      Points[i].fEnergy = T.Cumulative[(std::size_t)nIndex];
+      Points[i].fEnergyRed = T.Red[(std::size_t)nIndex];
+      Points[i].fEnergyGreen = T.Green[(std::size_t)nIndex];
+      Points[i].fDif = T.Dif[(std::size_t)nIndex];
+      Points[i].fDea = T.Dea[(std::size_t)nIndex];
+    }
+  }
+}
+
+EnergyTables BuildEnergyTables(int nCount, const float *pHigh, const float *pLow)
+{
+  EnergyTables T;
   if ((nCount <= 0) || (pHigh == 0) || (pLow == 0))
   {
-    return;
+    return T;
   }
 
   std::vector<float> High = SanitizeSeries(nCount, pHigh);
@@ -102,7 +125,7 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
   MacdComponents Macd = ComputeMacdComponents(nCount, &Price[0]);
   if (Macd.Histogram.empty())
   {
-    return;
+    return T;
   }
 
   std::vector<float> Cumulative((std::size_t)nCount), Red((std::size_t)nCount), Green((std::size_t)nCount);
@@ -117,18 +140,12 @@ void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const fl
     Green[(std::size_t)i] = fGreen;
   }
 
-  for (std::size_t i = 0; i < Points.size(); i++)
-  {
-    int nIndex = Points[i].nIndex;
-    if ((nIndex >= 0) && (nIndex < nCount))
-    {
-      Points[i].fEnergy = Cumulative[(std::size_t)nIndex];
-      Points[i].fEnergyRed = Red[(std::size_t)nIndex];
-      Points[i].fEnergyGreen = Green[(std::size_t)nIndex];
-      Points[i].fDif = Macd.Dif[(std::size_t)nIndex];
-      Points[i].fDea = Macd.Dea[(std::size_t)nIndex];
-    }
-  }
+  T.Cumulative.swap(Cumulative);
+  T.Red.swap(Red);
+  T.Green.swap(Green);
+  T.Dif.swap(Macd.Dif);
+  T.Dea.swap(Macd.Dea);
+  return T;
 }
 
 //=============================================================================

@@ -24,6 +24,18 @@
 std::vector<float> ComputeMacdHistogram(int nCount, const float *pPrice);
 void AssignSegmentEnergy(std::vector<SegmentPoint> &Points, int nCount, const float *pHigh, const float *pLow);
 
+// 逐K线 MACD 累积表（柱代数和 / 红柱 / 绿柱 / DIF / DEA）；EMA 因果，前缀取值与前缀重算一致
+struct EnergyTables
+{
+  std::vector<float> Cumulative;
+  std::vector<float> Red;
+  std::vector<float> Green;
+  std::vector<float> Dif;
+  std::vector<float> Dea;
+};
+EnergyTables BuildEnergyTables(int nCount, const float *pHigh, const float *pLow);
+void AssignEnergyFromTables(std::vector<SegmentPoint> &Points, const EnergyTables &Tables);
+
 // 均线系统（第11-15课）：简单移动平均；短长均线的吻分类（飞吻/唇吻/湿吻）
 std::vector<float> ComputeMovingAverage(int nCount, const float *pPrice, int nPeriod);
 std::vector<int> ClassifyMaKisses(const std::vector<float> &Short, const std::vector<float> &Long);

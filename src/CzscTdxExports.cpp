@@ -755,7 +755,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   }
   CzscConfig Config = DecodeConfig((float)nConfig);
   int nOutput = (nMode % (bExtended ? 10000 : 1000)) / 10;
-  if (bExtended && (nOutput < 100 || nOutput > 108))
+  if (bExtended && (nOutput < 100 || nOutput > 110))
   { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
 
   // 93-108 是显式带锚快照表：pTime 必须有 nCount+4 个 float。
@@ -786,6 +786,21 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     CzscAnalyzer EvidenceAn;
     BuildAnalyzerFromPrice(EvidenceAn, nCount, pHigh, pLow, Config, &Contract);
     ApplyTrendEvidenceProjection(nCount, pOut, EvidenceAn, nOutput, nSlot, nField);
+    return;
+  }
+
+  // 109/110：逐步重放（无未来函数）。109=信号在当下确认的K线上写信号码，110=在失效K线上写被撤销的信号码。
+  // pTime[1] 为合法正整数时作为重放窗口（最近 N 根），否则全量重放（常量 mode 调用即全量）。
+  if (nOutput == 109 || nOutput == 110)
+  {
+    int nWindow = 0;
+    if ((nCount > 1) && std::isfinite(pTime[1]) && (pTime[1] >= 1) && (pTime[1] < 16777216) &&
+        (pTime[1] == static_cast<float>(static_cast<int>(pTime[1]))))
+    {
+      nWindow = static_cast<int>(pTime[1]);
+    }
+    WriteReplaySignals(nCount, pOut, GetOrBuildReplaySignalEvents(nCount, pHigh, pLow, Config, nWindow),
+                       nOutput == 110);
     return;
   }
 

@@ -231,6 +231,7 @@ std::vector<Fractal> BuildFractals(const std::vector<MergedBar> &Bars)
     }
 
     Fractal F = MakeFractal(nType, Middle, (int)i);
+    F.nConfirmedAt = Right.nStart;  // 右侧首根非包含K线出现即分型成立；其后并入的包含K线不改变分型条件
     if (!Fractals.empty() && (Fractals.back().nType == F.nType))
     {
       if (IsMoreExtreme(Fractals.back(), F))
@@ -894,7 +895,13 @@ std::vector<SegmentPoint> BuildConfiguredPoints(int nCount, float *pHigh, float 
   }
 
   std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
-  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  return BuildPointsFromFractals(BuildFractals(Bars), Config);
+}
+
+// 由分型序列按配置得到端点（笔端点或线段端点）；供全量计算与逐步重放共用
+std::vector<SegmentPoint> BuildPointsFromFractals(const std::vector<Fractal> &Fractals, const CzscConfig &Config)
+{
+  std::vector<SegmentPoint> Points;
   std::vector<Stroke> Strokes = BuildStrokes(Fractals, Config);
   if (Config.nCenterUnit == CZSC_UNIT_SEGMENT)
   {

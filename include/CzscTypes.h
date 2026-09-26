@@ -212,6 +212,7 @@ struct Fractal
   int   nMergedIndex;  // 分型中点所在的合并 K 线下标（新笔标准按合并 K 线判间隔）
   float fHigh;
   float fLow;
+  int   nConfirmedAt = -1;  // 分型成立（右侧合并K线收完）所在的原始 K 线下标；-1 未知
 };
 
 // 笔：相邻一顶一底之间的一段（nDirection: +1 向上、-1 向下）
@@ -234,6 +235,7 @@ struct SegmentPoint
   float fDea;
   float fEnergyRed = 0;    // 该点累积红柱面积（只计正柱，第24课向上看红柱）
   float fEnergyGreen = 0;  // 该点累积绿柱面积（只计负柱绝对值，第24课向下看绿柱）
+  int   nConfirmedAt = -1;   // 端点分型成立所在原始 K 线下标（当下可知的最早时刻）；-1 未知
 };
 
 struct Center

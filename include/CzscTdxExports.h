@@ -20,6 +20,7 @@
 
 #include "CzscAnalyzer.h"
 #include "CzscProjection.h"
+#include "CzscReplay.h"
 
 // 通达信导出函数（按编号在 Main.cpp 的 Info[] 注册，公式示例见 README）：
 //  1 线段点  2/3 中枢高/低  4 中枢起止  5 三类买卖点  6 形态买卖点  7 强度  8 斜率

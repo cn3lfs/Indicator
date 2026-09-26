@@ -29,6 +29,7 @@ std::vector<SegmentPoint> BuildLineSegmentPoints(const std::vector<Stroke> &Stro
 std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stroke> &Strokes);
 std::vector<SegmentPoint> BuildSignalPoints(int nCount, float *pIn, float *pHigh, float *pLow);
 std::vector<SegmentPoint> BuildConfiguredPoints(int nCount, float *pHigh, float *pLow, const CzscConfig &Config);
+std::vector<SegmentPoint> BuildPointsFromFractals(const std::vector<Fractal> &Fractals, const CzscConfig &Config);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 
 // 顶底扫描与化简（早期版本的笔识别，保留供通达信公式使用）

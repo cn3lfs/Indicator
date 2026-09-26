@@ -170,6 +170,7 @@ inline SegmentPoint MakeSegmentPoint(const Fractal &F)
   Point.fEnergy = 0;
   Point.fDif = 0;
   Point.fDea = 0;
+  Point.nConfirmedAt = F.nConfirmedAt;
   return Point;
 }
 

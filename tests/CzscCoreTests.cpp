@@ -8558,6 +8558,7 @@ static bool TestStrokeBrokenByNewExtreme()
 }
 
 bool TestTrendCompletionSuite();
+bool TestReplaySuite();
 
 int main()
 {
@@ -9464,6 +9465,10 @@ int main()
   if (!TestFirstSellComparesEnteringSegmentB())
   {
     return 222;
+  }
+  if (!TestReplaySuite())
+  {
+    return 223;
   }
   return 0;
 }
