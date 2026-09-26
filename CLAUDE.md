@@ -53,6 +53,15 @@ cd D:/github/czsc-tdx
 - DLL 与完整 `make test`/`make release` 走 WSL：`wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make release'`。
 - `Main.cpp` 含 windows.h，clang 只能 `-fsyntax-only`；不要为此改 pack/windows 头。`build/` 不入库。
 - `compile_flags.txt` 供 clangd 以 C++17 解析头文件。
+- DLL 内禁止使用带析构的 `thread_local`/会在卸载时析构的线程局部对象：MinGW 静态运行时下宿主进程退出会崩溃
+  （曾因 `thread_local std::string` 发生）。改动 `adapter/` 后，用 x64 程序 LoadLibrary 加载 `build/CZSC64.dll`
+  调一次 `czsc_snapshot_build` 并正常退出，作为发布前冒烟检查。
+
+## 结构化接口（adapter/czsc_api.h）
+
+面向 nextjs-quant（koffi FFI）的纯 C 快照接口，契约即头文件；需求见 `docs/nextjs-quant-adapter.md`，P2 结论见
+`docs/nextjs-quant-p2-feasibility.md`。改结构体布局或语义须递增 `CZSC_API_VERSION` 并只在末尾追加字段；
+`confirmedAt` 是“定型”时刻（`Analysis::*FinalAt`），信号行冻结于确认当时。
 
 ## 缠论知识来源
 

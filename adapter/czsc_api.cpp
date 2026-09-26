@@ -17,7 +17,18 @@
 namespace
 {
 
-thread_local std::string g_error;
+// 线程局部错误串用定长数组（平凡可析构）：带析构的 thread_local 在 MinGW 静态运行时下会注册线程退出析构，
+// 宿主进程（如 Node）退出时与 DLL 卸载顺序冲突而崩溃
+thread_local char g_error[512];
+
+void SetError(const std::string &message)
+{
+  std::size_t n = std::min(message.size(), sizeof g_error - 1);
+  // 不截断在 UTF-8 多字节字符中间
+  while (n > 0 && n < message.size() && (static_cast<unsigned char>(message[n]) & 0xC0) == 0x80) n--;
+  std::memcpy(g_error, message.data(), n);
+  g_error[n] = '\0';
+}
 
 const uint32_t kMagic = 0x43535A43u;        // "CZSC"
 const uint32_t kNestedMagic = 0x4E535A43u;  // "CZSN"
@@ -66,7 +77,7 @@ uint64_t Fingerprint(const czsc_input *in)
 
 void *Fail(const std::string &message)
 {
-  g_error = message;
+  SetError(message);
   return nullptr;
 }
 
@@ -412,7 +423,7 @@ Snapshot *Handle(void *h)
   Snapshot *s = static_cast<Snapshot *>(h);
   if (s == nullptr || s->magic != kMagic)
   {
-    g_error = "snapshot 句柄无效";
+    SetError("snapshot 句柄无效");
     return nullptr;
   }
   return s;
@@ -474,11 +485,11 @@ extern "C" {
 
 int32_t czsc_api_version(void) { return CZSC_API_VERSION; }
 
-const char *czsc_last_error(void) { return g_error.c_str(); }
+const char *czsc_last_error(void) { return g_error; }
 
 void *czsc_snapshot_build(const czsc_input *input)
 {
-  g_error.clear();
+  g_error[0] = '\0';
   try
   {
     return Build(input);
@@ -513,7 +524,7 @@ void czsc_snapshot_free(void *snapshot)
 
 void *czsc_nested_build(void *low, void *high)
 {
-  g_error.clear();
+  g_error[0] = '\0';
   Snapshot *l = Handle(low), *h = Handle(high);
   if (!l || !h) return Fail("low/high 须为 czsc_snapshot_build 返回的有效句柄");
   if (l->n != h->n || l->fingerprint != h->fingerprint) return Fail("low 与 high 不是同一输入数据构建的快照");
@@ -533,7 +544,7 @@ const czsc_nested *czsc_nested_rows(void *nested, int32_t *count)
   Nested *s = static_cast<Nested *>(nested);
   if (s == nullptr || s->magic != kNestedMagic)
   {
-    g_error = "nested 句柄无效";
+    SetError("nested 句柄无效");
     return nullptr;
   }
   if (count) *count = static_cast<int32_t>(s->rows.size());
