@@ -121,7 +121,10 @@ struct Divergence
   Strength current;   // c 段
   int previousStart = -1, previousEnd = -1, currentStart = -1, currentEnd = -1;  // 端点下标
   bool newExtreme = false;
-  bool holds = false;
+  bool weakSpace = false;
+  bool weakSpeed = false;
+  bool weakArea = false;
+  bool holds = false;  // newExtreme && (weakArea || (weakSpace && weakSpeed))
 };
 
 struct Signal
