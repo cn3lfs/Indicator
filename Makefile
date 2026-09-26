@@ -24,7 +24,7 @@ MINGW64_PREFIX=x86_64-w64-mingw32-
 EXEEXT=
 CXX=$(CROSS_PREFIX)g++
 RM=rm -f
-CXFLAGS=-I. -finput-charset=UTF-8 -std=c++17 -O2
+CXFLAGS=-I. -finput-charset=UTF-8 -std=c++17 -O2 -DCZSC_BUILDING
 LDFLAGS=
 DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
 
@@ -32,9 +32,10 @@ DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
 BUILD_DIR=build
 CHAN_OBJECTS=$(patsubst %.cpp,%.o,$(wildcard core/*.cpp))
 TDX_OBJECTS=$(patsubst %.cpp,%.o,$(wildcard tdx/*.cpp))
-DLL_OBJECTS=Main.o $(CHAN_OBJECTS) $(TDX_OBJECTS)
+API_OBJECTS=$(patsubst %.cpp,%.o,$(wildcard adapter/*.cpp))
+DLL_OBJECTS=Main.o $(CHAN_OBJECTS) $(TDX_OBJECTS) $(API_OBJECTS)
 DLL_TARGET=$(BUILD_DIR)/CZSC.dll
-TEST_OBJECTS=$(CHAN_OBJECTS) $(TDX_OBJECTS) $(patsubst %.cpp,%.o,$(wildcard tests/unit/*.cpp))
+TEST_OBJECTS=$(CHAN_OBJECTS) $(TDX_OBJECTS) $(API_OBJECTS) $(patsubst %.cpp,%.o,$(wildcard tests/unit/*.cpp))
 TEST_TARGET=tests/unit/ChanTests$(EXEEXT)
 ALL_OBJECTS=$(sort $(DLL_OBJECTS) $(TEST_OBJECTS))
 DEPENDS=$(ALL_OBJECTS:.o=.dep)
