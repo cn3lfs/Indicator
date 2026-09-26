@@ -43,9 +43,11 @@
           └ BuildStrokes 笔(第62/65课, 同型取极值延伸/中继; 异型须跨度达标才成端点, 不足则忽略不弹出达标笔)
               └ BuildSegmentPoints 笔端点 / BuildLineSegmentPoints 启发式线段 /
                 BuildLineSegmentPointsByFeature 线段(第64/67课, 逆向笔 higher high+higher low/lower low+lower
-                high 即反向线段破坏; 终点是逆向笔内端, 不一定是极值)
+                high 即反向线段破坏; 终点是逆向笔内端, 不一定是极值; 新段确立前起点被破则前段延续、起点顺延(第71课);
+                有缺口情形须反向特征序列分型先于原段再创新极值出现(第67课))
                   └ BuildCenters 中枢(第17/20课: 不含进入段第1笔, 由第2/3/4笔重叠成枢, 带方向
-                    nDirection ±1[进入向上=上升中枢/向下=下降中枢], 不与后中枢共用端点)
+                    nDirection ±1[进入向上=上升中枢/向下=下降中枢], 不与后中枢共用端点; [ZD,ZG] 成枢即固定、延伸只扩 GG/DD;
+                    离开段后回抽不回 [ZD,ZG] 即中枢破坏, 离开段不属于前中枢而作为下一中枢进入段, 第18/20课)
                       ├ BuildTrendStructures 走势类型(盘整/趋势=≥2同向中枢, 第17课)
                       ├ BuildCenterBreakouts 中枢首次离开+回试 → 三类买卖点(第20课)
                       └ BuildTradingSignalCandidates 三类买卖点候选(第20/21课)

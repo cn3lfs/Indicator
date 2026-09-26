@@ -86,8 +86,9 @@ static bool TryBuildInitialCenter(const std::vector<SegmentPoint> &Points, std::
   return true;
 }
 
-// 若新一段与中枢重叠则延伸：ZG/ZD 随重叠收缩、GG/DD 随全幅扩张、终点后移；否则中枢结束。
-// 第20课中心定理一按 [dn, gn] 与 [ZD, ZG] 是否重叠判定延伸；穿越整个区间仍属于重叠。
+// 若新一段与中枢重叠则延伸：GG/DD 随全幅扩张、终点后移；否则中枢结束。
+// 第20课：ZG=min(g1,g2)、ZD=max(d1,d2) 只由成枢的前两个 Zn 决定，延伸不改变 [ZD,ZG]；
+// 中心定理一按 [dn, gn] 与 [ZD, ZG] 是否重叠判定延伸；穿越整个区间仍属于重叠。
 static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
 {
   if ((pCenter == 0) ||
@@ -96,16 +97,7 @@ static bool ExtendCenter(Center *pCenter, const SegmentInterval &Interval)
     return false;
   }
 
-  if (Interval.fLow > pCenter->fLow)
-  {
-    pCenter->fLow = Interval.fLow;
-  }
-  if (Interval.fHigh < pCenter->fHigh)
-  {
-    pCenter->fHigh = Interval.fHigh;
-  }
-
-  // ZG/ZD 随延伸收缩，GG/DD 随延伸扩张
+  // [ZD,ZG] 固定，GG/DD 随延伸扩张
   if (Interval.fHigh > pCenter->fTop)
   {
     pCenter->fTop = Interval.fHigh;
@@ -320,6 +312,7 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
 
     // 中枢延伸：后续段与 ZG/ZD 重叠则吸收；若离开段+回试段构成三买卖则立即封死（第20课）
     std::size_t nExtend = i + 3;
+    bool bLeftByPrevious = false;
     while (nExtend + 1 < Points.size())
     {
       SegmentInterval Interval = MakeSegmentInterval(Points[nExtend], Points[nExtend + 1]);
@@ -359,7 +352,26 @@ std::vector<Center> BuildCenters(const std::vector<SegmentPoint> &Points)
         }
       }
 
-      break;  // 无重叠且非延伸型离开 → 中枢结束
+      bLeftByPrevious = true;  // 无重叠且非延伸型离开 → 中枢结束
+      break;
+    }
+
+    // 第18课中枢定理三：前一段离开后，本段回抽不回 [ZD,ZG] → 中枢破坏。离开段是连接中枢的次级别走势
+    // （中枢定理一），不属于本中枢：退回中枢终点并重算 GG/DD，离开段作为下一中枢的进入段。
+    if (bLeftByPrevious && (nExtend > i + 3))
+    {
+      C.nEnd = Points[nExtend - 1].nIndex;
+      C.fTop = GetPointPrice(Points[i]);
+      C.fBottom = C.fTop;
+      for (std::size_t k = i + 1; k < nExtend; k++)
+      {
+        float fPrice = GetPointPrice(Points[k]);
+        if (fPrice > C.fTop) C.fTop = fPrice;
+        if (fPrice < C.fBottom) C.fBottom = fPrice;
+      }
+      Centers.push_back(C);
+      i = nExtend;
+      continue;
     }
 
     Centers.push_back(C);

@@ -676,12 +676,12 @@ static bool TestRealSseDiagnosticCounts()
   return (Strokes.size() == 157) &&
          (StrokeAn.Points.size() == 158) &&
          (SegmentAn.Points.size() == 11) &&
-         (StrokeAn.Centers.size() == 18) &&
+         (StrokeAn.Centers.size() == 14) &&
          (SegmentAn.Centers.size() == 1) &&
-         (StrokeAn.Candidates.size() == 17) &&
+         (StrokeAn.Candidates.size() == 10) &&
          SegmentAn.Candidates.empty() &&
-         CheckSseCandidateSummary(StrokeSummary, 0, 0, 9, 0, 0, 8,
-                                  5, 0, 0, 3, 0, 0, 0, 17) &&
+         CheckSseCandidateSummary(StrokeSummary, 0, 0, 5, 1, 1, 3,
+                                  4, 0, 1, 3, 0, 0, 0, 8) &&
          CheckSseCandidateSummary(SegmentSummary, 0, 0, 0, 0, 0, 0,
                                   0, 0, 0, 0, 0, 0, 0, 0) &&
          SegmentEndsBeyondStart(SegmentAn.Points);
@@ -725,7 +725,7 @@ static bool TestRealSseFirstCenterStopsBeforeLeave()
   std::vector<Center> Centers = BuildCenters(Points);
 
   int nZ00Start = FindSseDateIndex("2018-02-26");
-  int nZ00End = FindSseDateIndex("2018-07-06");
+  int nZ00End = FindSseDateIndex("2018-06-07");  // 离开笔 06-07→07-06 不属于中枢（第18课）
   if ((Centers.empty()) || (nZ00Start < 0) || (nZ00End < 0))
   {
     return false;
@@ -735,7 +735,7 @@ static bool TestRealSseFirstCenterStopsBeforeLeave()
   {
     return false;
   }
-  if (!NearlyEqual(Centers[0].fHigh, 3128.72f) || !NearlyEqual(Centers[0].fLow, 3091.46f))
+  if (!NearlyEqual(Centers[0].fHigh, 3220.85f) || !NearlyEqual(Centers[0].fLow, 3091.46f))
   {
     return false;
   }
@@ -925,12 +925,12 @@ static bool TestRealSseGoldenCentersPresent()
     return false;
   }
 
-  return ContainsSseCenter(Centers, 1, "2018-02-26", "2018-07-06", 3128.72f, 3091.46f) &&
-         ContainsSseCenter(Centers, 1, "2018-07-12", "2018-11-30", 2676.48f, 2653.11f) &&
-         ContainsSseCenter(Centers, -1, "2019-01-04", "2019-05-10", 3125.02f, 2987.77f) &&
-         ContainsSseCenter(Centers, 1, "2019-05-17", "2020-03-19", 2922.91f, 2891.54f) &&
-         ContainsSseCenter(Centers, 1, "2020-04-10", "2020-07-09", 2833.02f, 2802.47f) &&
-         ContainsSseCenter(Centers, -1, "2020-07-27", "2021-01-25", 3350.59f, 3325.17f);
+  return ContainsSseCenter(Centers, 1, "2018-02-26", "2018-06-07", 3220.85f, 3091.46f) &&
+         ContainsSseCenter(Centers, -1, "2018-07-06", "2018-08-28", 2791.39f, 2691.02f) &&
+         ContainsSseCenter(Centers, -1, "2018-10-19", "2019-01-04", 2676.48f, 2590.21f) &&
+         ContainsSseCenter(Centers, 1, "2019-03-07", "2019-04-08", 3125.02f, 2987.77f) &&
+         ContainsSseCenter(Centers, -1, "2019-05-10", "2020-03-05", 2922.91f, 2838.38f) &&
+         ContainsSseCenter(Centers, -1, "2020-03-19", "2020-05-25", 2833.02f, 2796.84f);
 }
 
 static bool TestRealSseCentersDoNotShareEndpoints()
@@ -966,7 +966,7 @@ static bool TestRealSseGoldenSegmentCentersPresent()
     return false;
   }
 
-  return ContainsSseCenter(Centers, -1, "2020-03-19", "2025-04-07", 3418.95f, 3312.72f);
+  return ContainsSseCenter(Centers, -1, "2020-03-19", "2025-04-07", 3723.85f, 3312.72f);
 }
 
 struct CenterLifecycleCounts
@@ -1025,11 +1025,11 @@ static bool TestRealSseRecursiveCenterLifecycleCounts()
   CenterLifecycleCounts StrokeCounts = CountCenterLifecycles(StrokeAn.Centers);
   CenterLifecycleCounts SegmentCounts = CountCenterLifecycles(SegmentAn.Centers);
 
-  return (StrokeAn.Centers.size() == 18) &&
-         (StrokeCounts.nExtension == 1) &&
-         (StrokeCounts.nExpansion == 16) &&
-         (StrokeCounts.nNewbornUp == 0) &&
-         (StrokeCounts.nNewbornDown == 0) &&
+  return (StrokeAn.Centers.size() == 14) &&
+         (StrokeCounts.nExtension == 0) &&
+         (StrokeCounts.nExpansion == 9) &&
+         (StrokeCounts.nNewbornUp == 3) &&
+         (StrokeCounts.nNewbornDown == 1) &&
          (StrokeCounts.nUnknown == 0) &&
          (SegmentAn.Centers.size() == 1) &&
          (SegmentCounts.nExtension == 0) &&
@@ -1064,10 +1064,10 @@ static bool TestRecentSseRecursiveCenterLifecycleCounts()
   CenterLifecycleCounts StrokeCounts = CountCenterLifecycles(StrokeAn.Centers);
   CenterLifecycleCounts SegmentCounts = CountCenterLifecycles(SegmentAn.Centers);
 
-  return (StrokeAn.Centers.size() == 6) &&
-         (StrokeCounts.nExtension == 1) &&
-         (StrokeCounts.nExpansion == 4) &&
-         (StrokeCounts.nNewbornUp == 0) &&
+  return (StrokeAn.Centers.size() == 4) &&
+         (StrokeCounts.nExtension == 0) &&
+         (StrokeCounts.nExpansion == 2) &&
+         (StrokeCounts.nNewbornUp == 1) &&
          (StrokeCounts.nNewbornDown == 0) &&
          (StrokeCounts.nUnknown == 0) &&
          SegmentAn.Centers.empty() &&
@@ -1093,23 +1093,16 @@ static bool TestRealSseGoldenCandidatesPresent()
   BuildAnalyzerFromPrice(SegmentAn, SSE_DAILY_COUNT, pH, pL, SegmentConfig);
 
   static const SseCandidateExpectation StrokeExpected[] = {
-    {"2018-07-12", 13.0f, 1, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 9, 0, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2018-12-13", 13.0f, 2, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 17, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
-    {"2019-05-17", 13.0f, 1, 2, 2, CZSC_MOVEMENT_CONSOLIDATION, 25, 2, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2020-04-10", 13.0f, 1, 3, 3, CZSC_MOVEMENT_CONSOLIDATION, 43, 3, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2020-07-27", 3.0f, 1, 4, 4, CZSC_MOVEMENT_CONSOLIDATION, 48, 4, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2021-01-29", 3.0f, 2, 5, 5, CZSC_MOVEMENT_CONSOLIDATION, 58, 5, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
-    {"2021-06-18", 3.0f, 1, 6, 6, CZSC_MOVEMENT_CONSOLIDATION, 68, 6, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2022-03-03", 13.0f, 1, 7, 7, CZSC_MOVEMENT_CONSOLIDATION, 81, 7, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2022-10-18", 13.0f, 1, 8, 8, CZSC_MOVEMENT_CONSOLIDATION, 93, 8, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2023-02-17", 3.0f, 2, 9, 9, CZSC_MOVEMENT_CONSOLIDATION, 100, 9, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
-    {"2023-09-04", 13.0f, 1, 10, 10, CZSC_MOVEMENT_CONSOLIDATION, 113, 10, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2024-03-28", 3.0f, 1, 11, 11, CZSC_MOVEMENT_CONSOLIDATION, 120, 11, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2024-10-16", 3.0f, 1, 12, 12, CZSC_MOVEMENT_CONSOLIDATION, 126, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2025-04-24", 13.0f, 2, 13, 13, CZSC_MOVEMENT_CONSOLIDATION, 135, 13, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
-    {"2025-09-04", 3.0f, 1, 14, 14, CZSC_MOVEMENT_CONSOLIDATION, 142, 14, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
-    {"2025-11-05", 3.0f, 2, 15, 15, CZSC_MOVEMENT_CONSOLIDATION, 146, 15, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
-    {"2026-02-03", 3.0f, 1, 16, 16, CZSC_MOVEMENT_CONSOLIDATION, 152, 16, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224}
+    {"2021-03-18", 12.0f, 2, 6, 3, CZSC_MOVEMENT_UP, 61, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 1},
+    {"2018-07-12", 13.0f, 1, 0, -1, CZSC_MOVEMENT_CONSOLIDATION, 9, 0, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
+    {"2018-11-02", 13.0f, 2, 1, 0, CZSC_MOVEMENT_DOWN, 13, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2020-07-27", 3.0f, 1, 5, -1, CZSC_MOVEMENT_CONSOLIDATION, 48, 5, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
+    {"2021-06-18", 3.0f, 1, 6, 3, CZSC_MOVEMENT_UP, 68, 6, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-01-02", 13.0f, 1, 8, 5, CZSC_MOVEMENT_CONSOLIDATION, 117, 8, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2024-03-28", 3.0f, 1, 9, 6, CZSC_MOVEMENT_CONSOLIDATION, 120, 9, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224},
+    {"2025-09-04", 3.0f, 1, 11, -1, CZSC_MOVEMENT_CONSOLIDATION, 142, 11, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_NEWBORN, 4160},
+    {"2025-11-05", 3.0f, 2, 12, 8, CZSC_MOVEMENT_UP, 146, 12, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4233},
+    {"2021-02-18", 11.0f, 2, 6, 3, CZSC_MOVEMENT_UP, 59, -1, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_UNKNOWN, 525}
   };
 
   // 线段级：第71课起点顺延后 SSE 只剩 1 个线段中枢，旧的 2020-09-25 / 2024-05-20 三类点随非法线段一并消失
@@ -1135,9 +1128,13 @@ static bool TestRealSseGoldenBreakoutsPresent()
 
   static const SseBreakoutExpectation StrokeExpected[] = {
     {0, 0, -1, 8, "2018-07-06", 9, "2018-07-12", true, false, true},
-    {5, 5, 1, 57, "2021-01-25", 58, "2021-01-29", true, false, true},
-    {13, 13, -1, 134, "2025-04-07", 135, "2025-04-24", true, false, true},
-    {15, 15, 1, 145, "2025-10-30", 146, "2025-11-05", true, false, true}
+    {1, 1, -1, 12, "2018-10-19", 13, "2018-11-02", true, false, true},
+    {5, 5, 1, 47, "2020-07-09", 48, "2020-07-27", true, false, true},
+    {6, 6, 1, 67, "2021-06-02", 68, "2021-06-18", true, false, true},
+    {8, 8, -1, 116, "2023-12-21", 117, "2024-01-02", true, false, true},
+    {9, 9, 1, 119, "2024-03-21", 120, "2024-03-28", true, false, true},
+    {11, 11, 1, 141, "2025-08-26", 142, "2025-09-04", true, false, true},
+    {12, 12, 1, 145, "2025-10-30", 146, "2025-11-05", true, false, true}
   };
 
 
@@ -3770,13 +3767,14 @@ static bool TestCentersSplitWhenOverlapBreaks()
   {
     return false;
   }
-  // 中枢1：进入段终点(index4)到离开点(index20)，P4→P5 [5,20] 触及 ZD=5 故中枢延伸至20。
-  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 20))
+  // 中枢1：index4~16。16→20 [5,20] 离开、20→24 回抽 [15,20] 不回 [5,9] → 中枢破坏（第18课定理三），
+  // 离开段 16→20 是连接两中枢的次级别走势，不属于中枢1（第18课定理一），GG 保持 10。
+  if ((Centers[0].nStart != 4) || (Centers[0].nEnd != 16) || !NearlyEqual(Centers[0].fTop, 10.0f))
   {
     return false;
   }
-  // 中枢2：从 index24 起在高位成枢，并延伸至末段 index40，ZG=18、ZD=17
-  if ((Centers[1].nStart != 24) || (Centers[1].nEnd != 40))
+  // 中枢2：离开段作为进入段，从 index20 起在高位成枢（20→24、24→28、28→32），延伸至 index40，ZG=19、ZD=16
+  if ((Centers[1].nStart != 20) || (Centers[1].nEnd != 40))
   {
     return false;
   }
@@ -3784,7 +3782,7 @@ static bool TestCentersSplitWhenOverlapBreaks()
   {
     return false;
   }
-  if (!NearlyEqual(Centers[1].fHigh, 18.0f) || !NearlyEqual(Centers[1].fLow, 17.0f))
+  if (!NearlyEqual(Centers[1].fHigh, 19.0f) || !NearlyEqual(Centers[1].fLow, 16.0f))
   {
     return false;
   }
@@ -4756,7 +4754,7 @@ static bool TestCenterExtendUpdatesGGDD()
 {
   // 进入段(0->4)不算中枢；中枢三笔(4->8、8->12、12->16)初成，GG=9；
   // 16->20 留在中枢内，20->24 向上离开，24->28 首次回试进中枢，故原中枢延伸；
-  // 离开段创新高 11 把 GG 从 9 扩张到 11，ZD 收缩到 7。
+  // 离开段创新高 11 把 GG 从 9 扩张到 11；[ZD,ZG] 由成枢前两个 Zn 固定（第20课），延伸不收缩。
   std::vector<SegmentPoint> Points;
   Points.push_back(MakeTestPoint(CZSC_POINT_TOP, 0, 8));
   Points.push_back(MakeTestPoint(CZSC_POINT_BOTTOM, 4, 5));
@@ -4773,9 +4771,9 @@ static bool TestCenterExtendUpdatesGGDD()
     return false;
   }
 
-  // 延伸把 GG 从初始 9 扩张到 11、ZD 从 6 收缩到 7；ZG=8（min 8,9,8），DD=5（min 5,6,6）
+  // 延伸把 GG 从初始 9 扩张到 11；ZG=8（min 8,9,8）、ZD=6（max 5,6,6）不变，DD=5
   return (Centers[0].nEnd == 28) &&
-         NearlyEqual(Centers[0].fHigh, 8.0f) && NearlyEqual(Centers[0].fLow, 7.0f) &&
+         NearlyEqual(Centers[0].fHigh, 8.0f) && NearlyEqual(Centers[0].fLow, 6.0f) &&
          NearlyEqual(Centers[0].fTop, 11.0f) && NearlyEqual(Centers[0].fBottom, 5.0f);
 }
 
@@ -4961,8 +4959,8 @@ static bool TestFunc11WritesCenterRelation()
     pOut[i] = -1;
   }
 
-  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)：中枢1吸收 P4→P5 [5,20] 后
-  // GG 扩张至 20，与中枢2 DD=15 重叠 → 中枢关系判为扩展，在后中枢起点(index24)标记 2。
+  // 两个相邻中枢(同 TestCentersSplitWhenOverlapBreaks)：离开段 16→20 不属于中枢1，中枢1 GG=10；
+  // 中枢2 DD=15 > 前GG=10 → 上涨（第20课中心定理二），在后中枢起点(index20)标记 1。
   pIn[0] = -1;
   pHigh[0] = pLow[0] = 1;
   pIn[4] = 1;
@@ -4990,7 +4988,7 @@ static bool TestFunc11WritesCenterRelation()
 
   for (int i = 0; i < nCount; i++)
   {
-    float fExpected = (i == 24) ? 2.0f : 0.0f;  // 后中枢起点(index24)标记扩展
+    float fExpected = (i == 20) ? 1.0f : 0.0f;  // 后中枢起点(index20)标记上涨
     if (!NearlyEqual(pOut[i], fExpected))
     {
       return false;
