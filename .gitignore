@@ -8,3 +8,5 @@ todos.json
 .vscode/settings.json
 czsc-tdx.rar
 /build/
+tests/unit/ChanTests
+tests/unit/*.exe

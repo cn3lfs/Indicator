@@ -27,11 +27,11 @@ AS=$(CROSS_PREFIX)as
 FC=$(CROSS_PREFIX)g77
 WINDRES=$(CROSS_PREFIX)windres
 RM=rm -f
-INCLUDE=-Iinclude
+INCLUDE=-Iinclude -I.
 CHARSETFLAGS=-finput-charset=UTF-8
 ASFLAGS=$(INCLUDE) -O2
 CCFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
-CXFLAGS=$(INCLUDE) $(CHARSETFLAGS) -O2
+CXFLAGS=$(INCLUDE) $(CHARSETFLAGS) -std=c++17 -O2
 FCFLAGS=$(INCLUDE) -O2
 LDFLAGS=
 DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
@@ -41,6 +41,11 @@ BUILD_DIR=build
 CORE_OBJECTS=src/CzscCommon.o src/CzscMorphology.o src/CzscCenter.o \
              src/CzscDynamics.o src/CzscTrading.o src/CzscNestedDivergence.o \
              src/CzscAnalyzer.o src/CzscTdxExports.o src/CzscProjection.o src/CzscReplay.o
+# 新架构：core/ 纯领域引擎，tests/unit/ 模块化单元测试（通配收录，新增文件无需改 Makefile）
+CHAN_OBJECTS=$(patsubst %.cpp,%.o,$(wildcard core/*.cpp core/*/*.cpp))
+UNIT_OBJECTS=$(CHAN_OBJECTS) $(patsubst %.cpp,%.o,$(wildcard tests/unit/*.cpp))
+UNIT_TARGET=tests/unit/ChanTests$(EXEEXT)
+UNIT_TARGETS=tests/unit/ChanTests tests/unit/ChanTests.exe
 OBJECT1=Main.o $(CORE_OBJECTS)
 TARGET1=$(BUILD_DIR)/CZSC.dll
 TEST_OBJECTS=$(CORE_OBJECTS) tests/CzscCoreTests.o tests/CzscProjectionTests.o tests/CzscCompletionTests.o tests/CzscReplayTests.o
@@ -54,8 +59,8 @@ LEGACY_OBJECTS=CCentroid.o
 LEGACY_DEPENDS=CCentroid.dep
 OBJECTS=$(OBJECT1)
 TARGETS=$(TARGET1)
-ALL_OBJECTS=$(sort $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS))
-DEPENDS=$(sort $(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep))
+ALL_OBJECTS=$(sort $(OBJECTS) $(TEST_OBJECTS) $(SSE_DUMP_OBJECTS) $(LEGACY_OBJECTS) $(UNIT_OBJECTS))
+DEPENDS=$(sort $(OBJECTS:.o=.dep) $(TEST_OBJECTS:.o=.dep) $(SSE_DUMP_OBJECTS:.o=.dep) $(UNIT_OBJECTS:.o=.dep))
 
 # Build Commands
 .PHONY: all mingw32 mingw32-test mingw32-test-build check-mingw32 \
@@ -102,11 +107,17 @@ debug: all
 	@echo [DB] $(TARGETS)
 	@gdb -w $(TARGETS)
 
-test: $(TEST_TARGET) formula-test sse-result-check
+test: $(TEST_TARGET) $(UNIT_TARGET) formula-test sse-result-check
 	@echo [TE] $(TEST_TARGET)
 	@$(TEST_TARGET)
+	@echo [TE] $(UNIT_TARGET)
+	@$(UNIT_TARGET)
 
-test-build: $(TEST_TARGET)
+test-build: $(TEST_TARGET) $(UNIT_TARGET)
+
+$(UNIT_TARGET) : $(UNIT_OBJECTS)
+	@echo [LD] $@
+	@$(CXX) -o $@ $^ $(LDFLAGS)
 
 formula-test:
 	@echo [TF] formulas
@@ -149,7 +160,7 @@ run: all
 
 clean:
 	@echo [RM] $(ALL_OBJECTS)
-	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(ALL_OBJECTS) $(TEST_TARGETS) $(SSE_DUMP_TARGETS)
+	@$(RM) $(DEPENDS) $(LEGACY_DEPENDS) $(ALL_OBJECTS) $(TEST_TARGETS) $(SSE_DUMP_TARGETS) $(UNIT_TARGETS)
 
 # Standard Procedures
 %.dep : %.s
