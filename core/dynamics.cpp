@@ -155,4 +155,33 @@ MovingAverages BuildMovingAverages(const Series &s)
   return m;
 }
 
+std::vector<int8_t> Gaps(const Series &s)
+{
+  std::vector<int8_t> out(static_cast<std::size_t>(s.Size()), 0);
+  for (std::size_t k = 1; k < out.size(); k++)
+  {
+    if (s.high[k - 1] < s.low[k]) out[k] = 1;
+    else if (s.low[k - 1] > s.high[k]) out[k] = -1;
+  }
+  return out;
+}
+
+std::vector<int8_t> FractalStrengths(const Series &s, const std::vector<MergedBar> &bars,
+                                     const std::vector<Fractal> &fractals)
+{
+  std::vector<int8_t> out(static_cast<std::size_t>(s.Size()), 0);
+  for (const Fractal &f : fractals)
+  {
+    int bar = f.confirmedAt;
+    if (bar < 0 || bar >= s.Size() || f.merged < 1) continue;
+    const MergedBar &left = bars[static_cast<std::size_t>(f.merged) - 1];
+    std::size_t b = static_cast<std::size_t>(bar);
+    if (f.kind == Kind::Top)
+      out[b] = (s.HasClose() ? s.close[b] : s.low[b]) < left.low ? 2 : 1;
+    else
+      out[b] = (s.HasClose() ? s.close[b] : s.high[b]) > left.high ? -2 : -1;
+  }
+  return out;
+}
+
 }  // namespace chan

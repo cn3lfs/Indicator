@@ -217,32 +217,15 @@ void Gaps(int count, float *out, float *high, float *low, float *config)
   if (count <= 0 || out == nullptr) return;
   Clear(count, out);
   if (high == nullptr || low == nullptr) return;
-  Series s = Series::FromRaw(count, high, low);
-  for (int i = 1; i < count; i++)
-  {
-    std::size_t k = static_cast<std::size_t>(i);
-    if (s.high[k - 1] < s.low[k]) out[i] = 1;
-    else if (s.low[k - 1] > s.high[k]) out[i] = -1;
-  }
+  std::vector<int8_t> g = chan::Gaps(Series::FromRaw(count, high, low));
+  for (int i = 0; i < count; i++) out[i] = static_cast<float>(g[static_cast<std::size_t>(i)]);
 }
 
-// 分型强弱（第82课：第三根扩大战果），写在分型成立那根：其收盘（无真实收盘价用最低/最高）
-// 跌破左侧K线低点为强顶 2，否则 1；底分型对称 -2/-1
 void FractalStrength(int count, float *out, float *high, float *low, float *config)
 {
   Run(count, out, high, low, config, [&](const Analysis &a) {
-    Series s = MakeSeries(count, high, low);
-    for (const chan::Fractal &f : a.fractals)
-    {
-      int bar = f.confirmedAt;
-      if (!InRange(bar, count) || f.merged < 1) continue;
-      const chan::MergedBar &left = a.bars[static_cast<std::size_t>(f.merged) - 1];
-      std::size_t b = static_cast<std::size_t>(bar);
-      if (f.kind == chan::Kind::Top)
-        out[bar] = (s.HasClose() ? s.close[b] : s.low[b]) < left.low ? 2.0f : 1.0f;
-      else
-        out[bar] = (s.HasClose() ? s.close[b] : s.high[b]) > left.high ? -2.0f : -1.0f;
-    }
+    std::vector<int8_t> f = chan::FractalStrengths(MakeSeries(count, high, low), a.bars, a.fractals);
+    for (int i = 0; i < count; i++) out[i] = static_cast<float>(f[static_cast<std::size_t>(i)]);
   });
 }
 

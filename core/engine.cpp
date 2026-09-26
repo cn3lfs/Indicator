@@ -64,32 +64,60 @@ public:
       p.index = ends[i].index;
       p.high = ends[i].high;
       p.low = ends[i].low;
-      p.confirmedAt = ends[i].confirmedAt;
+      p.fractalAt = ends[i].confirmedAt;
       strokePivots_[i] = p;
     }
     strokeDirty_ = MinDirty(strokeDirty_, static_cast<int>(from));
   }
 
-  // 一个时刻的全部分型加入后，推进下游并产出事件
+  // 一个时刻的全部分型加入后，推进下游并产出事件，再推进各层定型边界
   void Step(int bar, bool emit, std::vector<SignalEvent> &events)
   {
     if (strokeDirty_ < 0) return;
     int dirty = strokeDirty_;
     strokeDirty_ = -1;
+    bool changed = true;
     if (config_.unit == CenterUnit::Segment)
     {
       dirty = segments_.Update(strokePivots_, static_cast<std::size_t>(dirty));
-      if (dirty < 0) return;
-      Energize(segments_.Pivots(), static_cast<std::size_t>(dirty));
+      changed = dirty >= 0;
+      if (changed) Energize(segments_.Pivots(), static_cast<std::size_t>(dirty));
     }
     else
     {
       Energize(strokePivots_, static_cast<std::size_t>(dirty));
     }
-    int dc = centers_.Update(pivots_, static_cast<std::size_t>(dirty));
-    int dm = UpdateMovements(centers_.Centers(), moves_, dc);
-    signals_.Update(pivots_, centers_.Centers(), moves_, dirty, dc, dm, bar, emit, events);
+    if (changed)
+    {
+      int dc = centers_.Update(pivots_, static_cast<std::size_t>(dirty));
+      int dm = UpdateMovements(centers_.Centers(), moves_, dc);
+      signals_.Update(pivots_, centers_.Centers(), moves_, dirty, dc, dm, bar, emit, events);
+    }
+    AdvanceFinality(bar);
   }
+
+  // 定型边界只增不减：笔端点 → (线段端点) → 中枢 → 走势 / 突破。
+  // 已定型的输入此后不再改变，视界落在其内的检查点之前的输出也就不再改变。
+  void AdvanceFinality(int bar)
+  {
+    std::size_t strokeFinal = strokes_.FinalCount();
+    std::size_t pivotFinal = config_.unit == CenterUnit::Segment ? segments_.FinalCount(strokeFinal) : strokeFinal;
+    pivotFinal = std::min(pivotFinal, pivots_.size());
+    std::size_t centerFinal = std::min(centers_.FinalCount(pivotFinal), centers_.Centers().size());
+    // 走势 [a,b] 由关系 (b,b+1) 截止：其后一个中枢也已定型才定型
+    std::size_t moveFinal = 0;
+    while (moveFinal < moves_.size() && static_cast<std::size_t>(moves_[moveFinal].lastCenter) + 1 < centerFinal)
+      moveFinal++;
+    Mark(pivotFinalAt, pivotFinal, bar);
+    Mark(centerFinalAt, centerFinal, bar);
+    Mark(movementFinalAt, moveFinal, bar);
+    if (breakoutFinalAt.size() < centerFinal) breakoutFinalAt.resize(centerFinal, -1);
+    for (std::size_t ci = breakoutScan_; ci < centerFinal; ci++)
+      if (breakoutFinalAt[ci] < 0 && signals_.BreakoutFinal(ci, pivotFinal)) breakoutFinalAt[ci] = bar;
+    while (breakoutScan_ < breakoutFinalAt.size() && breakoutFinalAt[breakoutScan_] >= 0) breakoutScan_++;
+  }
+
+  std::vector<int> pivotFinalAt, centerFinalAt, movementFinalAt, breakoutFinalAt;
 
 private:
   // 端点从 from 起更新并赋能量（MACD 因果，只读 <= 端点下标的累积值）
@@ -109,6 +137,12 @@ private:
   SegmentStream segments_;
   CenterStream centers_;
   SignalStream signals_;
+  static void Mark(std::vector<int> &at, std::size_t count, int bar)
+  {
+    if (at.size() < count) at.resize(count, bar);
+  }
+
+  std::size_t breakoutScan_ = 0;
   const EnergyTables &tables_;
   Config config_;
   std::vector<Pivot> strokePivots_;
@@ -153,6 +187,15 @@ Analysis Analyze(const Series &series, const Config &config, int window)
     inc.Step(bar, bar >= from, a.events);
   }
   a.snapshot = BuildSnapshot(f, f.size(), tables, config);
+  auto fit = [](std::vector<int> v, std::size_t n) {
+    v.resize(n, -1);
+    return v;
+  };
+  a.pivotFinalAt = fit(inc.pivotFinalAt, a.snapshot.pivots.size());
+  a.centerFinalAt = fit(inc.centerFinalAt, a.snapshot.centers.size());
+  a.movementFinalAt = fit(inc.movementFinalAt, a.snapshot.movements.size());
+  a.breakoutFinalAt = fit(inc.breakoutFinalAt, a.snapshot.centers.size());
+  a.energy = std::move(tables);
   return a;
 }
 

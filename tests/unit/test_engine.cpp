@@ -74,3 +74,61 @@ TEST(EngineIsCausalOnEveryPrefix)
     }
   }
 }
+
+// 定型口径：任意前缀中 finalAt<=k 的对象与全量中同下标对象逐字段相同，且定型时刻相同
+TEST(FinalizedObjectsNeverChange)
+{
+  chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
+  int checked = 0;
+  for (int code : {0, 1, 2, 10, 101, 1100, 1101})
+  {
+    chan::Config c = *chan::Config::Decode(code);
+    chan::Analysis all = chan::Analyze(full, c);
+    for (int k = 60; k < full.Size(); k += 29)
+    {
+      chan::Series pre;
+      pre.high.assign(full.high.begin(), full.high.begin() + k + 1);
+      pre.low.assign(full.low.begin(), full.low.begin() + k + 1);
+      chan::Analysis a = chan::Analyze(pre, c);
+      for (std::size_t i = 0; i < a.pivotFinalAt.size(); i++)
+      {
+        if (a.pivotFinalAt[i] < 0) continue;
+        REQUIRE(a.pivotFinalAt[i] <= k && i < all.snapshot.pivots.size());
+        const chan::Pivot &x = a.snapshot.pivots[i], &y = all.snapshot.pivots[i];
+        CHECK(x.index == y.index && x.kind == y.kind && x.high == y.high && x.low == y.low && x.fractalAt == y.fractalAt &&
+              a.pivotFinalAt[i] == all.pivotFinalAt[i]);
+        checked++;
+      }
+      for (std::size_t i = 0; i < a.centerFinalAt.size(); i++)
+      {
+        if (a.centerFinalAt[i] < 0) continue;
+        REQUIRE(i < all.snapshot.centers.size());
+        const chan::Center &x = a.snapshot.centers[i], &y = all.snapshot.centers[i];
+        CHECK(x.start == y.start && x.end == y.end && x.zg == y.zg && x.zd == y.zd && x.gg == y.gg && x.dd == y.dd &&
+              x.firstPivot == y.firstPivot && x.lastPivot == y.lastPivot && a.centerFinalAt[i] == all.centerFinalAt[i]);
+      }
+      for (std::size_t i = 0; i < a.movementFinalAt.size(); i++)
+      {
+        if (a.movementFinalAt[i] < 0) continue;
+        REQUIRE(i < all.snapshot.movements.size());
+        const chan::Movement &x = a.snapshot.movements[i], &y = all.snapshot.movements[i];
+        CHECK(x.type == y.type && x.firstCenter == y.firstCenter && x.lastCenter == y.lastCenter && x.end == y.end &&
+              a.movementFinalAt[i] == all.movementFinalAt[i]);
+      }
+      for (const chan::Breakout &b : a.snapshot.breakouts)
+      {
+        if (a.breakoutFinalAt[static_cast<std::size_t>(b.center)] < 0) continue;
+        bool found = false;
+        for (const chan::Breakout &o : all.snapshot.breakouts)
+          if (o.center == b.center)
+            found = o.leavePivot == b.leavePivot && o.retestPivot == b.retestPivot && o.third == b.third &&
+                    o.divergence.holds == b.divergence.holds &&
+                    all.breakoutFinalAt[static_cast<std::size_t>(o.center)] == a.breakoutFinalAt[static_cast<std::size_t>(b.center)];
+        CHECK(found);
+      }
+    }
+    // 全量中除末尾外应基本都已定型
+    CHECK(all.pivotFinalAt.size() < 3 || all.pivotFinalAt[all.pivotFinalAt.size() - 3] >= 0 || code >= 1000);
+  }
+  CHECK(checked > 1000);
+}

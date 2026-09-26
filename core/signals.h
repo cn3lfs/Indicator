@@ -42,6 +42,11 @@ public:
   void Update(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
               const std::vector<Movement> &movements, int dirtyPivot, int dirtyCenter, int dirtyMove, int bar,
               bool emit, std::vector<SignalEvent> &events);
+  // 中枢 ci 的首次离开+回试已找到且扫描视界落在前 pivotFinal 个已定型端点内
+  bool BreakoutFinal(std::size_t ci, std::size_t pivotFinal) const
+  {
+    return ci < breakouts_.size() && breakouts_[ci].has_value() && breakoutHorizons_[ci].Before(pivotFinal);
+  }
 
 private:
   using SignalKey = std::pair<int, int>;  // (信号K线, 信号码)

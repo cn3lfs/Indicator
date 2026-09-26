@@ -19,6 +19,8 @@ class CenterStream
 public:
   int Update(const std::vector<Pivot> &pivots, std::size_t dirty);
   const std::vector<Center> &Centers() const { return out_; }
+  // 已定型中枢数：端点前 pivotFinal 个不再改变时，视界落在其内的最后检查点之前的中枢不再改变
+  std::size_t FinalCount(std::size_t pivotFinal) const;
 
 private:
   struct Checkpoint

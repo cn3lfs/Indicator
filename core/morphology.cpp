@@ -287,7 +287,7 @@ Pivot ToPivot(const Fractal &f)
   p.index = f.index;
   p.high = f.high;
   p.low = f.low;
-  p.confirmedAt = f.confirmedAt;
+  p.fractalAt = f.confirmedAt;
   return p;
 }
 
@@ -460,6 +460,14 @@ int SegmentStream::Update(const std::vector<Pivot> &s, std::size_t dirty)
          oldTail[k].kind == out_[keep + k].kind)
     k++;
   return (k == oldTail.size() && keep + k == out_.size()) ? -1 : static_cast<int>(keep + k);
+}
+
+std::size_t SegmentStream::FinalCount(std::size_t inputFinal) const
+{
+  for (std::size_t k = checkpoints_.size(); k-- > 0;)
+    if (checkpoints_[k].horizon.Before(inputFinal))
+      return checkpoints_[k].outSize > 0 ? checkpoints_[k].outSize - 1 : 0;  // 末元素仍可能被起点顺延替换
+  return 0;
 }
 
 void SegmentStream::Save()

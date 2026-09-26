@@ -26,12 +26,16 @@ bool MoreExtreme(const Pivot &base, const Pivot &p)
   return base.kind == Kind::Top ? p.high >= base.high : p.low <= base.low;
 }
 
-Divergence WithIds(Divergence d, int ps, int pe, int cs, int ce)
+Divergence WithIds(Divergence d, const std::vector<Pivot> &p, int ps, int pe, int cs, int ce)
 {
   d.previousStart = ps;
   d.previousEnd = pe;
   d.currentStart = cs;
   d.currentEnd = ce;
+  d.previousStartIndex = p[static_cast<std::size_t>(ps)].index;
+  d.previousEndIndex = p[static_cast<std::size_t>(pe)].index;
+  d.currentStartIndex = p[static_cast<std::size_t>(cs)].index;
+  d.currentEndIndex = p[static_cast<std::size_t>(ce)].index;
   return d;
 }
 
@@ -132,13 +136,14 @@ bool FirstClass(const std::vector<Pivot> &p, const std::vector<Center> &centers,
   if (!LocateSegments(p, centers, last, at, dir, ps, pe, cs)) return false;
   Kind startKind = dir < 0 ? Kind::Top : Kind::Bottom;
   if (p[ps].kind != startKind || p[pe].kind == startKind) return false;
-  Divergence d = WithIds(MeasureDivergence(p[ps], p[pe], p[cs], p[at], dir), static_cast<int>(ps),
+  Divergence d = WithIds(MeasureDivergence(p[ps], p[pe], p[cs], p[at], dir), p, static_cast<int>(ps),
                          static_cast<int>(pe), static_cast<int>(cs), static_cast<int>(at));
   if (!d.holds) return false;
   out.type = dir < 0 ? SignalType::Buy1 : SignalType::Sell1;
   out.pivot = static_cast<int>(at);
   out.index = p[at].index;
   out.center = last;
+  out.centerStart = b.start;
   out.priority = kPriorityFirst;
   out.stop = dir < 0 ? p[at].low : p[at].high;
   out.divergence = d;
@@ -197,7 +202,7 @@ Divergence Consolidation(const std::vector<Pivot> &p, std::size_t leave, int dir
   Kind lo = dir > 0 ? Kind::Bottom : Kind::Top, hi = Opposite(lo);
   if (ps.kind != lo || pe.kind != hi || cs.kind != lo || ce.kind != hi) return none;
   if (dir > 0 ? ce.high <= pe.high : ce.low >= pe.low) return none;
-  return WithIds(MeasureDivergence(ps, pe, cs, ce, dir), static_cast<int>(prev), static_cast<int>(prev + 1),
+  return WithIds(MeasureDivergence(ps, pe, cs, ce, dir), p, static_cast<int>(prev), static_cast<int>(prev + 1),
                  static_cast<int>(leave - 1), static_cast<int>(leave));
 }
 
@@ -207,7 +212,7 @@ Divergence SecondDivergence(const std::vector<Pivot> &p, std::size_t first)
   if (first < 1 || first + 2 >= p.size()) return d;
   d.previous = MeasureStrength(p[first - 1], p[first]);
   d.current = MeasureStrength(p[first + 1], p[first + 2]);
-  d = WithIds(d, static_cast<int>(first) - 1, static_cast<int>(first), static_cast<int>(first) + 1,
+  d = WithIds(d, p, static_cast<int>(first) - 1, static_cast<int>(first), static_cast<int>(first) + 1,
               static_cast<int>(first) + 2);
   d.weakSpace = d.current.space < d.previous.space;
   d.weakSpeed = d.current.speed < d.previous.speed;
@@ -237,6 +242,8 @@ std::optional<Signal> SecondFrom(const Signal &f, const std::vector<Pivot> &p, c
   s.pivot = static_cast<int>(at) + 2;
   s.index = second.index;
   s.center = CenterAt(centers, second.index);
+  s.centerStart = s.center >= 0 ? centers[static_cast<std::size_t>(s.center)].start : -1;
+  s.basedOnIndex = f.index;
   s.priority = kPrioritySecond;
   s.stop = buy ? second.low : second.high;
   s.divergence = overlapped ? b->divergence : SecondDivergence(p, at);
@@ -250,6 +257,7 @@ Signal ThirdFrom(const Breakout &b, const std::vector<Pivot> &p, const Center &c
   s.pivot = b.retestPivot;
   s.index = p[static_cast<std::size_t>(b.retestPivot)].index;
   s.center = b.center;
+  s.centerStart = c.start;
   s.priority = kPriorityThird;
   s.stop = b.direction > 0 ? c.zg : c.zd;
   s.divergence = b.divergence;

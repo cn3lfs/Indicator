@@ -39,6 +39,8 @@ public:
   // 加入 fractals[k]（须按顺序）；返回首个发生变化的端点下标，无变化返回 -1
   int Add(std::size_t k);
   const std::vector<Fractal> &Ends() const { return ends_; }
+  // 已定型端点数：第 i 个端点在第 i+2 个未细化端点出现后不再改变（末两个端点仍可能延伸或重新细化）
+  std::size_t FinalCount() const { return raw_.size() >= 2 ? raw_.size() - 2 : 0; }
 
 private:
   const std::vector<Fractal> *fractals_;
@@ -68,6 +70,8 @@ public:
   explicit SegmentStream(SegmentMethod method) : method_(method) {}
   int Update(const std::vector<Pivot> &strokes, std::size_t dirty);
   const std::vector<Pivot> &Pivots() const { return out_; }
+  // 已定型线段端点数：输入前 inputFinal 个端点不再改变时，视界落在其内的最后检查点之前的输出不再改变
+  std::size_t FinalCount(std::size_t inputFinal) const;
 
 private:
   struct Checkpoint

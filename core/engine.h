@@ -33,6 +33,14 @@ struct Analysis
   Snapshot snapshot;                 // 全部数据下的结构（画线/中枢用）
   std::vector<SignalEvent> events;   // 当下信号的出现/失效（回测/选股用）
   MovingAverages ma;
+  EnergyTables energy;               // 逐根 MACD 累积表（DIF/DEA/柱）
+
+  // 定型时刻：对象此后无论再来什么数据都不会改变的最早K线；尚未定型为 -1。
+  // 与快照表逐行对应；breakoutFinalAt 按中枢下标。
+  std::vector<int> pivotFinalAt;
+  std::vector<int> centerFinalAt;
+  std::vector<int> movementFinalAt;
+  std::vector<int> breakoutFinalAt;
 };
 
 // window>0 时只对最近 window 根K线内的时刻产生事件（其前的状态作为基线，不产生事件）

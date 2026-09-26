@@ -96,6 +96,13 @@ int CenterStream::Update(const std::vector<Pivot> &p, std::size_t dirty)
   return (k == oldTail.size() && keep + k == out_.size()) ? -1 : static_cast<int>(keep + k);
 }
 
+std::size_t CenterStream::FinalCount(std::size_t pivotFinal) const
+{
+  for (std::size_t k = checkpoints_.size(); k-- > 0;)
+    if (checkpoints_[k].horizon.Before(pivotFinal)) return checkpoints_[k].outSize;
+  return 0;
+}
+
 bool CenterStream::Same(const Center &a, const Center &b)
 {
   return a.firstPivot == b.firstPivot && a.lastPivot == b.lastPivot && a.start == b.start && a.end == b.end &&

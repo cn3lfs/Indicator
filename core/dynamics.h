@@ -49,4 +49,12 @@ struct MovingAverages
 
 MovingAverages BuildMovingAverages(const Series &s);
 
+// 缺口（借鉴 czsc check_gap_info，只给当下可知部分）：H[i-1]<L[i] 为 +1，L[i-1]>H[i] 为 -1，否则 0
+std::vector<int8_t> Gaps(const Series &s);
+
+// 分型强弱（第82课：第三根扩大战果），写在分型成立那根K线：其收盘（无真实收盘价时顶用最低、底用最高）
+// 跌破左侧合并K线低点为强顶 2，否则 1；底分型对称 -2/-1；其余 0
+std::vector<int8_t> FractalStrengths(const Series &s, const std::vector<MergedBar> &bars,
+                                     const std::vector<Fractal> &fractals);
+
 }  // namespace chan

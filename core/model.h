@@ -1,6 +1,6 @@
 // 缠论领域模型：只含不可变值类型，不含任何算法、输出或全局状态。
 // 层次（第72课懒人线路图）：K线 → 合并K线 → 分型 → 笔 → 线段 → 中枢 → 走势类型 → 买卖点。
-// 每个会被“当下”改写的实体都带 confirmedAt：它在当下可被确认的最早原始K线下标。
+// 分型带 confirmedAt（右侧首根非包含K线出现即成立）；端点、中枢等何时定型、此后不再改变，由引擎另行给出（Analysis::*FinalAt）。
 #pragma once
 
 #include <cstdint>
@@ -47,7 +47,7 @@ struct Pivot
   int index = 0;
   float high = 0;
   float low = 0;
-  int confirmedAt = -1;
+  int fractalAt = -1;  // 端点所在分型成立的K线（端点此后仍可能被延伸替换，定型时刻见 Analysis::pivotFinalAt）
   // 动力学：截至 index 的累积 MACD 柱（代数和/红/绿）与 DIF/DEA
   float energy = 0;
   float energyRed = 0;
@@ -120,6 +120,7 @@ struct Divergence
   Strength previous;  // b 段（或 A 段）
   Strength current;   // c 段
   int previousStart = -1, previousEnd = -1, currentStart = -1, currentEnd = -1;  // 端点下标
+  int previousStartIndex = -1, previousEndIndex = -1, currentStartIndex = -1, currentEndIndex = -1;  // 对应K线下标
   bool newExtreme = false;
   bool weakSpace = false;
   bool weakSpeed = false;
@@ -133,6 +134,8 @@ struct Signal
   int pivot = 0;       // 信号端点
   int index = 0;       // 信号所在原始K线
   int center = -1;     // 所属中枢
+  int centerStart = -1;   // 所属中枢起点K线（跨时刻引用中枢用）
+  int basedOnIndex = -1;  // 二类：所依一类买卖点所在K线
   int priority = 0;    // 同根取胜优先级：一类>二类>三类
   float stop = 0;      // 失效价（第20/21/27课）
   Divergence divergence;
