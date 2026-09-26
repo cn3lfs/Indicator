@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 #include "CzscInternal.h"
+#include <algorithm>
 
 static bool FindLastTrendStructure(const std::vector<TrendStructure> &Structures,
                                    int nIndex,
@@ -405,7 +406,11 @@ std::vector<CenterBreakout> BuildCenterBreakouts(const std::vector<SegmentPoint>
     const Center &C = Centers[i];
     // 离开点 = 中枢结束后第一个突破 ZG/ZD 的笔端点（次级别走势离开中枢，第20课）。
     // 注：中枢首尾相连，离开段同时是下一中枢的首段，故不以下一中枢起点为界。
-    for (std::size_t j = 1; j < Points.size(); j++)
+    // 端点按下标递增：二分到第一个 nIndex > 中枢终点的端点，避免每个中枢都从头扫描（O(中枢×端点)）
+    std::size_t nFirst = (std::size_t)(std::upper_bound(Points.begin(), Points.end(), C.nEnd,
+                                                        [](int nIdx, const SegmentPoint &X) { return nIdx < X.nIndex; }) -
+                                       Points.begin());
+    for (std::size_t j = (nFirst > 1) ? nFirst : 1; j < Points.size(); j++)
     {
       const SegmentPoint &Start = Points[j - 1];
       const SegmentPoint &End = Points[j];
