@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 #include "CzscInternal.h"
+#include <algorithm>
 
 static MergedBar MakeMergedBar(int nIndex, float fHigh, float fLow)
 {
@@ -294,12 +295,18 @@ static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
     // 候选只允许在 Prev 附近有限窗口内（≤ 2×最小跨度），防止跳过已验证的相反端点
     int nMaxMerged = Prev.nMergedIndex + 2 * nMinSpan;
 
-    for (std::size_t j = 0; j < Fractals.size(); j++)
+    // 分型按下标有序：二分定位到 (Prev, Next) 窗口，避免对每个端点全表扫描（O(端点×分型) → O(端点×窗口)）
+    std::size_t j = (std::size_t)(std::upper_bound(Fractals.begin(), Fractals.end(), Prev.nIndex,
+                                                   [](int nIdx, const Fractal &X) { return nIdx < X.nIndex; }) -
+                                  Fractals.begin());
+    for (; (j < Fractals.size()) && (Fractals[j].nIndex < Next.nIndex); j++)
     {
       const Fractal &F = Fractals[j];
-      if ((F.nType != Ends[i].nType) ||
-          (F.nIndex <= Prev.nIndex) || (F.nIndex >= Next.nIndex) ||
-          (F.nMergedIndex > nMaxMerged))
+      if (F.nMergedIndex > nMaxMerged)
+      {
+        break;  // 合并K线下标随分型单调递增，超窗即止
+      }
+      if (F.nType != Ends[i].nType)
       {
         continue;
       }
@@ -483,9 +490,10 @@ struct FeatureElement
 static bool MakeFeatureElement(const std::vector<SegmentPoint> &P,
                                std::size_t nStart,
                                std::size_t nElement,
-                               FeatureElement *pElement)
+                               FeatureElement *pElement,
+                               std::size_t nSize)
 {
-  if ((pElement == 0) || (nStart + 2 + 2 * nElement >= P.size()))
+  if ((pElement == 0) || (nStart + 2 + 2 * nElement >= nSize))
   {
     return false;
   }
@@ -586,47 +594,65 @@ static void MergeFeatureElement(FeatureElement *pLast, const FeatureElement &Cur
   pLast->nOuterPoint = Current.nOuterPoint;
 }
 
-static std::vector<FeatureElement> BuildStandardFeatureSequence(const std::vector<SegmentPoint> &P,
-                                                                std::size_t nStart)
+// 标准特征序列的惰性构建器（第67课非包含处理）：按需产出元素，只算到找到分型为止，
+// 避免每次从起点到数据末尾整条重建（原实现在线段划分中是平方级热点）。
+// Seq[k] 在 Seq.size() > k+1（其后已有非包含新元素）或原始元素耗尽时才定型。
+struct FeatureSequenceBuilder
 {
-  std::vector<FeatureElement> Standard;
-  int nDirection = 0;
+  const std::vector<SegmentPoint> &P;
+  std::size_t nStart;
+  std::size_t nSize;
+  std::size_t nNext;
+  int nDirection;
+  std::vector<FeatureElement> Seq;
 
-  for (std::size_t i = 0; ; i++)
+  FeatureSequenceBuilder(const std::vector<SegmentPoint> &Points, std::size_t nFrom, std::size_t nLimit)
+    : P(Points), nStart(nFrom), nSize(nLimit < Points.size() ? nLimit : Points.size()), nNext(0), nDirection(0) {}
+
+  // 吃进原始元素，直到 Seq 长度超过 nWant 或耗尽；返回是否仍有未读元素
+  bool Fill(std::size_t nWant)
   {
-    FeatureElement Current;
-    if (!MakeFeatureElement(P, nStart, i, &Current))
+    while (Seq.size() <= nWant)
     {
-      break;
-    }
-    if (Standard.empty())
-    {
-      Standard.push_back(Current);
-      continue;
-    }
-
-    FeatureElement &Last = Standard.back();
-    if (FeatureElementsIncluded(Last, Current))
-    {
-      int nMergeDirection = ChooseFeatureMergeDirection(Last, Current, nDirection);
-      MergeFeatureElement(&Last, Current, nMergeDirection);
-      if (nDirection == 0)
+      FeatureElement Current;
+      if (!MakeFeatureElement(P, nStart, nNext, &Current, nSize))
       {
-        nDirection = nMergeDirection;
+        return false;
       }
-      continue;
+      nNext++;
+      if (Seq.empty())
+      {
+        Seq.push_back(Current);
+        continue;
+      }
+      FeatureElement &Last = Seq.back();
+      if (FeatureElementsIncluded(Last, Current))
+      {
+        int nMergeDirection = ChooseFeatureMergeDirection(Last, Current, nDirection);
+        MergeFeatureElement(&Last, Current, nMergeDirection);
+        if (nDirection == 0)
+        {
+          nDirection = nMergeDirection;
+        }
+        continue;
+      }
+      int nNewDirection = DetectFeatureDirection(Last, Current);
+      if (nNewDirection != 0)
+      {
+        nDirection = nNewDirection;
+      }
+      Seq.push_back(Current);
     }
-
-    int nNewDirection = DetectFeatureDirection(Last, Current);
-    if (nNewDirection != 0)
-    {
-      nDirection = nNewDirection;
-    }
-    Standard.push_back(Current);
+    return true;
   }
 
-  return Standard;
-}
+  // 使 Seq[k] 定型；返回 Seq[k] 是否存在
+  bool Settle(std::size_t k)
+  {
+    Fill(k + 1);
+    return Seq.size() > k;
+  }
+};
 
 static bool FeatureElementsOverlap(const FeatureElement &Left, const FeatureElement &Right)
 {
@@ -653,12 +679,12 @@ static bool IsFeatureFractal(const FeatureElement &Left,
   return false;
 }
 
-static bool HasAnyFeatureFractal(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
+static bool HasAnyFeatureFractal(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir, std::size_t nLimit)
 {
-  std::vector<FeatureElement> Seq = BuildStandardFeatureSequence(P, nStart);
-  for (std::size_t i = 1; i + 1 < Seq.size(); i++)
+  FeatureSequenceBuilder B(P, nStart, nLimit);
+  for (std::size_t i = 1; B.Settle(i + 1); i++)
   {
-    if (IsFeatureFractal(Seq[i - 1], Seq[i], Seq[i + 1], nDir))
+    if (IsFeatureFractal(B.Seq[i - 1], B.Seq[i], B.Seq[i + 1], nDir))
     {
       return true;
     }
@@ -676,8 +702,9 @@ static std::size_t FeatureFractalPoint(const FeatureElement &Element, int nDir)
 //  第二种情况：第一、第二元素有缺口，必须从该分型高/低点开始的反向特征序列出现分型确认。
 static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t nStart, int nDir)
 {
-  std::vector<FeatureElement> Seq = BuildStandardFeatureSequence(P, nStart);
-  for (std::size_t i = 1; i + 1 < Seq.size(); i++)
+  FeatureSequenceBuilder B(P, nStart, P.size());
+  const std::vector<FeatureElement> &Seq = B.Seq;
+  for (std::size_t i = 1; B.Settle(i + 1); i++)
   {
     if (!IsFeatureFractal(Seq[i - 1], Seq[i], Seq[i + 1], nDir))
     {
@@ -698,8 +725,7 @@ static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t
     {
       nLimit += 2;
     }
-    std::vector<SegmentPoint> Window(P.begin(), P.begin() + (nLimit < P.size() ? nLimit : P.size()));
-    if (HasAnyFeatureFractal(Window, nEndPoint, -nDir))
+    if (HasAnyFeatureFractal(P, nEndPoint, -nDir, nLimit))
     {
       return (int)nEndPoint;
     }
