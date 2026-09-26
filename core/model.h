@@ -128,6 +128,18 @@ struct Divergence
   bool holds = false;  // newExtreme && (weakArea || (weakSpace && weakSpeed))
 };
 
+// 买卖点上下文标志位（研判语义，信号产生当时计算、随信号冻结）
+enum SignalContext : uint32_t
+{
+  kContextAbc = 0x01,           // a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课）
+  kContextZeroPullback = 0x02,  // B 中枢期间黄白线回拉零轴（第24/25课）
+  kContextLineWeak = 0x04,      // c 段黄白线极值不及 b 段（第25课）
+  kContextStandard = 0x08,      // 标准背驰：同色面积背驰 + 黄白线回零（第24课）
+  kContextSmallTurn = 0x10,     // 小转大必要条件：同中枢先有同向一类点、其后出现三类点（第44课）
+  kContextOverlap = 0x20,       // 二三类重合（第21/61课）
+  kContextFirstRetest = 0x40,   // 三类为首次回试（第20课）
+};
+
 struct Signal
 {
   SignalType type = SignalType::Buy1;
@@ -136,6 +148,10 @@ struct Signal
   int center = -1;     // 所属中枢
   int centerStart = -1;   // 所属中枢起点K线（跨时刻引用中枢用）
   int basedOnIndex = -1;  // 二类：所依一类买卖点所在K线
+  int quality = 0;        // 1 确认 / 2 强质（见 docs/chan-ambiguity-decisions.md）
+  uint32_t context = 0;   // SignalContext 位掩码
+  int secondBaseIndex = -1, secondTurnIndex = -1;  // 二类：一类基点K线、其后转折端点K线（第21课）
+  int smallTurnBaseIndex = -1, smallTurnLeaveIndex = -1, smallTurnRetestIndex = -1;  // 小转大：一类基点、离开、回试K线
   int priority = 0;    // 同根取胜优先级：一类>二类>三类
   float stop = 0;      // 失效价（第20/21/27课）
   Divergence divergence;

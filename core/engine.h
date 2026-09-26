@@ -41,6 +41,10 @@ struct Analysis
   std::vector<int> centerFinalAt;
   std::vector<int> movementFinalAt;
   std::vector<int> breakoutFinalAt;
+
+  // 即时背驰预警（第24课，逐根、当下可知）：当前未完成段自最后端点起创新极值且相对前一同向段背驰时，
+  // 向上段为 +1（见顶预警）、向下段为 -1（见底预警），否则 0
+  std::vector<int8_t> instantWarning;
 };
 
 // window>0 时只对最近 window 根K线内的时刻产生事件（其前的状态作为基线，不产生事件）

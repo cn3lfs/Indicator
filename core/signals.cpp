@@ -119,8 +119,63 @@ bool LocateSegments(const std::vector<Pivot> &p, const std::vector<Center> &cent
 }
 
 // 一类买卖点（第21/24/27课）：至少两个同向中枢的趋势，最后中枢外创新低/新高且 c 相对 b 背驰
+// 黄白线（DIF）在 [from,to] 根上的极值与零轴关系
+struct DifWindow
+{
+  float min = 0, max = 0, minAbs = 0;
+  bool signChange = false, valid = false;
+};
+
+DifWindow Dif(const EnergyTables &t, int from, int to)
+{
+  DifWindow w;
+  if (from < 0 || to < from || static_cast<std::size_t>(to) >= t.dif.size()) return w;
+  w.valid = true;
+  w.min = w.max = t.dif[static_cast<std::size_t>(from)];
+  w.minAbs = std::fabs(w.min);
+  for (int i = from + 1; i <= to; i++)
+  {
+    float v = t.dif[static_cast<std::size_t>(i)];
+    if ((v > 0) != (t.dif[static_cast<std::size_t>(i) - 1] > 0)) w.signChange = true;
+    w.min = std::min(w.min, v);
+    w.max = std::max(w.max, v);
+    w.minAbs = std::min(w.minAbs, std::fabs(v));
+  }
+  return w;
+}
+
+// 一类的研判上下文与质量（第24/25/37课）：
+//  回零：B 起点到 c 起点之间 DIF 穿越零轴，或 |DIF| 最小值不超过 b 段 |DIF| 峰值的 10%；
+//  黄白线弱：c 段 DIF 极值未超过 b 段（向上看最高、向下看最低）；
+//  标准背驰：同色面积背驰 且 回零；abc：B 的首次离开+回试构成三类点且回试落在 c 段内；
+//  质量：成立即 1，标准背驰且 abc 完整为 2。
+void AnnotateFirst(Signal &s, const std::vector<Pivot> &p, const std::vector<Center> &centers, int last,
+                   std::size_t ps, std::size_t pe, std::size_t cs, std::size_t at, int dir, const EnergyTables *t)
+{
+  const Center &b = centers[static_cast<std::size_t>(last)];
+  if (t)
+  {
+    DifWindow inB = Dif(*t, b.start, p[cs].index);
+    DifWindow bSeg = Dif(*t, p[ps].index, p[pe].index);
+    DifWindow cSeg = Dif(*t, p[cs].index, p[at].index);
+    if (inB.valid && bSeg.valid)
+    {
+      float peak = std::max(std::fabs(bSeg.min), std::fabs(bSeg.max));
+      if (inB.signChange || (peak > 0 && inB.minAbs <= 0.1f * peak)) s.context |= kContextZeroPullback;
+    }
+    if (bSeg.valid && cSeg.valid && (dir > 0 ? cSeg.max < bSeg.max : cSeg.min > bSeg.min)) s.context |= kContextLineWeak;
+  }
+  if (s.divergence.weakArea && (s.context & kContextZeroPullback)) s.context |= kContextStandard;
+  Horizon h;
+  std::optional<Breakout> br = BreakoutFor(p, centers, static_cast<std::size_t>(last), h);
+  if (br && br->third && br->direction == dir && p[static_cast<std::size_t>(br->retestPivot)].index > p[cs].index &&
+      br->retestPivot <= static_cast<int>(at))
+    s.context |= kContextAbc;
+  s.quality = ((s.context & kContextStandard) && (s.context & kContextAbc)) ? 2 : 1;
+}
+
 bool FirstClass(const std::vector<Pivot> &p, const std::vector<Center> &centers, const std::vector<Movement> &moves,
-                std::size_t at, int dir, Signal &out)
+                std::size_t at, int dir, Signal &out, const EnergyTables *tables)
 {
   Kind want = dir < 0 ? Kind::Bottom : Kind::Top;
   if (at < 4 || p[at].kind != want) return false;
@@ -147,14 +202,15 @@ bool FirstClass(const std::vector<Pivot> &p, const std::vector<Center> &centers,
   out.priority = kPriorityFirst;
   out.stop = dir < 0 ? p[at].low : p[at].high;
   out.divergence = d;
+  AnnotateFirst(out, p, centers, last, ps, pe, cs, at, dir, tables);
   return true;
 }
 
 std::optional<Signal> FirstAt(const std::vector<Pivot> &p, const std::vector<Center> &centers,
-                              const std::vector<Movement> &moves, std::size_t at)
+                              const std::vector<Movement> &moves, std::size_t at, const EnergyTables *tables)
 {
   Signal s;
-  if (FirstClass(p, centers, moves, at, -1, s) || FirstClass(p, centers, moves, at, 1, s)) return s;
+  if (FirstClass(p, centers, moves, at, -1, s, tables) || FirstClass(p, centers, moves, at, 1, s, tables)) return s;
   return std::nullopt;
 }
 
@@ -247,11 +303,20 @@ std::optional<Signal> SecondFrom(const Signal &f, const std::vector<Pivot> &p, c
   s.priority = kPrioritySecond;
   s.stop = buy ? second.low : second.high;
   s.divergence = overlapped ? b->divergence : SecondDivergence(p, at);
+  s.secondBaseIndex = f.index;
+  s.secondTurnIndex = turn.index;
+  if (overlapped) s.context |= kContextOverlap;
+  // 质量（第27/61课）：二类由盘整背驰构成，自身背驰成立或二三重合为强质
+  s.quality = (s.divergence.holds || overlapped) ? 2 : 1;
   return s;
 }
 
-Signal ThirdFrom(const Breakout &b, const std::vector<Pivot> &p, const Center &c)
+// firsts：同一中枢的一类幸存者（按端点递增）；用于小转大与二三重合（第44/21/61课）
+template <class BreakoutOf>
+Signal ThirdFrom(const Breakout &b, const std::vector<Pivot> &p, const std::vector<Center> &centers,
+                 const std::vector<Signal> &firsts, BreakoutOf breakoutOf)
 {
+  const Center &c = centers[static_cast<std::size_t>(b.center)];
   Signal s;
   s.type = b.direction > 0 ? SignalType::Buy3 : SignalType::Sell3;
   s.pivot = b.retestPivot;
@@ -261,6 +326,25 @@ Signal ThirdFrom(const Breakout &b, const std::vector<Pivot> &p, const Center &c
   s.priority = kPriorityThird;
   s.stop = b.direction > 0 ? c.zg : c.zd;
   s.divergence = b.divergence;
+  s.context |= kContextFirstRetest;
+  SignalType firstType = b.direction > 0 ? SignalType::Buy1 : SignalType::Sell1;
+  bool overlap = false;
+  for (const Signal &f : firsts)
+  {
+    if (f.type != firstType || f.pivot >= b.retestPivot) continue;
+    if (s.smallTurnBaseIndex < 0)
+    {
+      // 小转大必要条件（第44课）：小级别背驰（一类）之后，该中枢出现同向第三类买卖点
+      s.context |= kContextSmallTurn;
+      s.smallTurnBaseIndex = f.index;
+      s.smallTurnLeaveIndex = p[static_cast<std::size_t>(b.leavePivot)].index;
+      s.smallTurnRetestIndex = p[static_cast<std::size_t>(b.retestPivot)].index;
+    }
+    if (f.pivot + 2 == b.retestPivot && SecondFrom(f, p, centers, breakoutOf)) overlap = true;
+  }
+  if (overlap) s.context |= kContextOverlap;
+  // 质量：离开段无盘整背驰（有力离开）或二三重合为强质（第20/53/61课，口径见 docs）
+  s.quality = (!b.divergence.holds || overlap) ? 2 : 1;
   return s;
 }
 
@@ -326,14 +410,15 @@ std::vector<Breakout> BuildBreakouts(const std::vector<Pivot> &p, const std::vec
 }
 
 std::vector<Signal> BuildSignals(const std::vector<Pivot> &p, const std::vector<Center> &centers,
-                                 const std::vector<Movement> &moves, const std::vector<Breakout> &breakouts)
+                                 const std::vector<Movement> &moves, const std::vector<Breakout> &breakouts,
+                                 const EnergyTables *tables)
 {
   // 一类：逐端点判定后按 (类型, 中枢) 分组去重，保持端点顺序
   std::vector<std::optional<Signal>> raw(p.size());
   std::map<std::pair<int, int>, std::vector<int>> groups;
   for (std::size_t i = 0; i < p.size(); i++)
   {
-    raw[i] = FirstAt(p, centers, moves, i);
+    raw[i] = FirstAt(p, centers, moves, i, tables);
     if (raw[i]) groups[{static_cast<int>(raw[i]->type), raw[i]->center}].push_back(static_cast<int>(i));
   }
   std::vector<bool> keep(p.size(), false);
@@ -353,7 +438,13 @@ std::vector<Signal> BuildSignals(const std::vector<Pivot> &p, const std::vector<
   for (const Signal &f : firsts)
     if (std::optional<Signal> s = SecondFrom(f, p, centers, breakoutOf)) out.push_back(*s);
   for (const Breakout &b : breakouts)
-    if (b.third && b.direction != 0) out.push_back(ThirdFrom(b, p, centers[static_cast<std::size_t>(b.center)]));
+  {
+    if (!b.third || b.direction == 0) continue;
+    std::vector<Signal> same;
+    for (const Signal &f : firsts)
+      if (f.center == b.center) same.push_back(f);
+    out.push_back(ThirdFrom(b, p, centers, same, breakoutOf));
+  }
   out.insert(out.end(), firsts.begin(), firsts.end());
   return out;
 }
@@ -421,7 +512,7 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
   rawFirst_.resize(static_cast<std::size_t>(P));
   for (std::size_t k = static_cast<std::size_t>(T); k < rawFirst_.size(); k++)
   {
-    rawFirst_[k] = FirstAt(p, centers, moves, k);
+    rawFirst_[k] = FirstAt(p, centers, moves, k, tables_);
     if (rawFirst_[k])
     {
       std::pair<int, int> g{static_cast<int>(rawFirst_[k]->type), rawFirst_[k]->center};
@@ -432,8 +523,10 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
 
   // 2) 受影响分组重算去重幸存者
   std::set<int> survivorChanged;
+  std::set<int> groupCenters;  // 幸存者有变化的中枢：其三类的小转大/重合上下文需重算
   for (const std::pair<int, int> &g : groups)
   {
+    groupCenters.insert(g.second);
     auto oldIt = groupSurvivors_.find(g);
     if (oldIt != groupSurvivors_.end())
     {
@@ -515,8 +608,15 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
     breakoutChanged.insert(ci);
   }
 
-  // 4) 三类：随突破更新
-  for (int ci : breakoutChanged)
+  // 4) 三类：随突破或同中枢一类幸存者更新
+  auto breakoutOf = [&](int center) -> const Breakout * {
+    if (center < 0 || static_cast<std::size_t>(center) >= breakouts_.size() || !breakouts_[static_cast<std::size_t>(center)])
+      return nullptr;
+    return &*breakouts_[static_cast<std::size_t>(center)];
+  };
+  std::set<int> thirdRedo(breakoutChanged.begin(), breakoutChanged.end());
+  thirdRedo.insert(groupCenters.begin(), groupCenters.end());
+  for (int ci : thirdRedo)
   {
     auto tIt = thirds_.find(ci);
     if (tIt != thirds_.end())
@@ -527,7 +627,15 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
     if (ci >= static_cast<int>(C)) continue;
     const std::optional<Breakout> &b = breakouts_[static_cast<std::size_t>(ci)];
     if (!b || !b->third || b->direction == 0) continue;
-    thirds_[ci] = ThirdFrom(*b, p, centers[static_cast<std::size_t>(ci)]);
+    std::vector<Signal> same;
+    for (SignalType t : {SignalType::Buy1, SignalType::Sell1})
+    {
+      auto g = groupSurvivors_.find({static_cast<int>(t), ci});
+      if (g == groupSurvivors_.end()) continue;
+      for (int k : g->second) same.push_back(survivors_[k]);
+    }
+    std::sort(same.begin(), same.end(), [](const Signal &x, const Signal &y) { return x.pivot < y.pivot; });
+    thirds_[ci] = ThirdFrom(*b, p, centers, same, breakoutOf);
     Put(thirds_[ci], {3, ci});
   }
 
@@ -541,11 +649,6 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
       if (g != groupSurvivors_.end()) redo.insert(g->second.begin(), g->second.end());
     }
   for (auto it = seconds_.lower_bound(std::max(T - 2, 0)); it != seconds_.end(); ++it) redo.insert(it->first);
-  auto breakoutOf = [&](int center) -> const Breakout * {
-    if (center < 0 || static_cast<std::size_t>(center) >= breakouts_.size() || !breakouts_[static_cast<std::size_t>(center)])
-      return nullptr;
-    return &*breakouts_[static_cast<std::size_t>(center)];
-  };
   for (int k : redo)
   {
     auto sIt = seconds_.find(k);

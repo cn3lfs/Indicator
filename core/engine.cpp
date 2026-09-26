@@ -41,6 +41,7 @@ public:
   Incremental(const std::vector<Fractal> &fractals, const EnergyTables &tables, const Config &config)
     : strokes_(fractals, config), segments_(config.segment), tables_(tables), config_(config)
   {
+    signals_.SetTables(&tables_);
   }
 
   // 加入第 k 个分型；只登记变化，不重算下游
@@ -119,6 +120,43 @@ public:
 
   std::vector<int> pivotFinalAt, centerFinalAt, movementFinalAt, breakoutFinalAt;
 
+  // 即时背驰预警：当前段 = 最后端点 P 到此刻的极值；与前一同向段（倒数第三→倒数第二端点）比较力度
+  int8_t InstantWarning(int bar, const Series &s)
+  {
+    if (pivots_.size() < 3) return 0;
+    const Pivot &last = pivots_.back();
+    if (last.index != anchor_)
+    {
+      anchor_ = last.index;
+      extremeAt_ = -1;
+      scanned_ = last.index;
+    }
+    int dir = last.kind == Kind::Bottom ? 1 : -1;
+    for (int i = scanned_ + 1; i <= bar; i++)
+    {
+      float v = dir > 0 ? s.high[static_cast<std::size_t>(i)] : s.low[static_cast<std::size_t>(i)];
+      if (extremeAt_ < 0 || (dir > 0 ? v > extreme_ : v < extreme_))
+      {
+        extreme_ = v;
+        extremeAt_ = i;
+      }
+    }
+    scanned_ = bar;
+    if (extremeAt_ < 0) return 0;
+    Pivot now;
+    now.kind = dir > 0 ? Kind::Top : Kind::Bottom;
+    now.index = extremeAt_;
+    now.high = now.low = extreme_;
+    std::vector<Pivot> tmp(1, now);
+    AssignEnergy(tmp, tables_);  // 取极值K线处的能量
+    std::size_t b = static_cast<std::size_t>(bar);
+    tmp[0].energy = tables_.cumulative[b];  // 面积累积到此刻
+    tmp[0].energyRed = tables_.red[b];
+    tmp[0].energyGreen = tables_.green[b];
+    const Pivot &ps = pivots_[pivots_.size() - 3], &pe = pivots_[pivots_.size() - 2];
+    return MeasureDivergence(ps, pe, last, tmp[0], dir).holds ? static_cast<int8_t>(dir) : 0;
+  }
+
 private:
   // 端点从 from 起更新并赋能量（MACD 因果，只读 <= 端点下标的累积值）
   void Energize(const std::vector<Pivot> &src, std::size_t from)
@@ -143,6 +181,8 @@ private:
   }
 
   std::size_t breakoutScan_ = 0;
+  int anchor_ = -1, extremeAt_ = -1, scanned_ = -1;
+  float extreme_ = 0;
   const EnergyTables &tables_;
   Config config_;
   std::vector<Pivot> strokePivots_;
@@ -163,7 +203,7 @@ Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, 
   s.centers = BuildCenters(s.pivots);
   s.movements = BuildMovements(s.centers);
   s.breakouts = BuildBreakouts(s.pivots, s.centers);
-  s.signals = BuildSignals(s.pivots, s.centers, s.movements, s.breakouts);
+  s.signals = BuildSignals(s.pivots, s.centers, s.movements, s.breakouts, &tables);
   return s;
 }
 
@@ -179,12 +219,18 @@ Analysis Analyze(const Series &series, const Config &config, int window)
   int from = window > 0 ? series.Size() - window : 0;
   Incremental inc(a.fractals, tables, config);
   const std::vector<Fractal> &f = a.fractals;
-  for (std::size_t k = 0; k < f.size(); k++)
+  a.instantWarning.assign(static_cast<std::size_t>(series.Size()), 0);
+  std::size_t k = 0;
+  for (int bar = 0; bar < series.Size(); bar++)
   {
-    inc.AddFractal(k);
-    int bar = f[k].confirmedAt;
-    if (k + 1 < f.size() && f[k + 1].confirmedAt == bar) continue;  // 同一时刻成立的分型一并处理
-    inc.Step(bar, bar >= from, a.events);
+    bool added = false;
+    for (; k < f.size() && f[k].confirmedAt == bar; k++)  // 同一时刻成立的分型一并处理
+    {
+      inc.AddFractal(k);
+      added = true;
+    }
+    if (added) inc.Step(bar, bar >= from, a.events);
+    a.instantWarning[static_cast<std::size_t>(bar)] = inc.InstantWarning(bar, series);
   }
   a.snapshot = BuildSnapshot(f, f.size(), tables, config);
   auto fit = [](std::vector<int> v, std::size_t n) {

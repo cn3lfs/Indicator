@@ -13,6 +13,8 @@
 namespace chan
 {
 
+struct EnergyTables;
+
 // 中枢首次离开与回试（第20课）；third=回试不回 [ZD,ZG]，构成三类买卖点
 struct Breakout
 {
@@ -30,8 +32,10 @@ std::optional<Breakout> BreakoutFor(const std::vector<Pivot> &pivots, const std:
 std::vector<Breakout> BuildBreakouts(const std::vector<Pivot> &pivots, const std::vector<Center> &centers);
 
 // 全部候选（批量）：顺序为 二类、三类、一类（与同根取胜规则配合：一类 30 > 三类 20 > 二类 10）
+// tables 用于黄白线相关上下文（回零、黄白线弱），为空时这些标志位不置
 std::vector<Signal> BuildSignals(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
-                                 const std::vector<Movement> &movements, const std::vector<Breakout> &breakouts);
+                                 const std::vector<Movement> &movements, const std::vector<Breakout> &breakouts,
+                                 const EnergyTables *tables = nullptr);
 
 // 买卖点流：随端点/中枢/走势的局部变化只重算受影响部分，并对“端点已被下一端点确认”的信号
 // 做出现/失效差分。与每步批量重算后差分的结果逐事件一致。
@@ -42,6 +46,8 @@ public:
   void Update(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
               const std::vector<Movement> &movements, int dirtyPivot, int dirtyCenter, int dirtyMove, int bar,
               bool emit, std::vector<SignalEvent> &events);
+  void SetTables(const EnergyTables *tables) { tables_ = tables; }
+
   // 中枢 ci 的首次离开+回试已找到且扫描视界落在前 pivotFinal 个已定型端点内
   bool BreakoutFinal(std::size_t ci, std::size_t pivotFinal) const
   {
@@ -71,6 +77,7 @@ private:
   std::set<SignalKey> touched_;
   std::size_t pivotCount_ = 0;
   std::vector<int> centerStarts_, moveStarts_;
+  const EnergyTables *tables_ = nullptr;
 };
 
 }  // namespace chan
