@@ -176,9 +176,26 @@ bool GapAndFractalStrengthCausal()
   return (nStrong > 0) && (nGap > 0);
 }
 
+// 缓存：同一次调用内先后取线段级与笔级分析器，前一个引用不得被后一个覆盖（旧单槽实现两者指向同一对象）
+bool PriceCacheKeepsConcurrentConfigs()
+{
+  const int N = SSE_DAILY_COUNT;
+  std::vector<float> H(SSE_DAILY_HIGH, SSE_DAILY_HIGH + N), L(SSE_DAILY_LOW, SSE_DAILY_LOW + N);
+  CzscConfig HighConfig = DefaultConfig();
+  HighConfig.nCenterUnit = CZSC_UNIT_SEGMENT;
+  HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
+  const CzscAnalyzer &HighAn = GetOrBuildPriceAnalyzer(N, &H[0], &L[0], HighConfig);
+  std::size_t nHighPoints = HighAn.Points.size();
+  const CzscAnalyzer &LowAn = GetOrBuildPriceAnalyzer(N, &H[0], &L[0], DefaultConfig());
+  return (&HighAn != &LowAn) && (HighAn.Config.nCenterUnit == CZSC_UNIT_SEGMENT) &&
+         (HighAn.Points.size() == nHighPoints) && (LowAn.Points.size() > nHighPoints) &&
+         (&GetOrBuildPriceAnalyzer(N, &H[0], &L[0], HighConfig) == &HighAn);  // 再取命中同槽
+}
+
 bool TestReplaySuite()
 {
   return ReplayMatchesPrefix(0) && ReplayMatchesPrefix(1) && ReplayMatchesPrefix(10) &&
          ReplayWindowIsSuffixOfFull() && ReplayExposesRevokedFirstSell() && Func30WritesReplayOutputs() &&
-         ReplayStopsFollowSignalRules() && GapAndFractalStrengthCausal();
+         ReplayStopsFollowSignalRules() && GapAndFractalStrengthCausal() &&
+         PriceCacheKeepsConcurrentConfigs();
 }

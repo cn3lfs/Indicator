@@ -142,25 +142,50 @@ const CzscAnalyzer &GetOrBuildSignalAnalyzer(int nCount, float *pIn, float *pHig
   return s_Analyzer;
 }
 
+// 多槽 LRU：同一图上常并用笔级与线段级配置（如输出 17/70+ 同时取 HighAn 与 LowAn），
+// 单槽会让两个引用指向同一对象（后取者覆盖前者）并在配置间来回重算。槽为固定数组、只原地重建，
+// 同一次调用内同时持有的引用数不超过槽数时引用始终有效。
+static const int PRICE_CACHE_SLOTS = 4;
+
 const CzscAnalyzer &GetOrBuildPriceAnalyzer(int nCount, float *pHigh, float *pLow, const CzscConfig &Config)
 {
-  static CzscAnalyzer s_Analyzer;
-  static int s_nCount = -1;
-  static unsigned int s_hHL = 0;
-  static int s_nConfig = -1;
-  static unsigned int s_hAux = 0;
-  static bool s_bValid = false;
+  struct Slot
+  {
+    CzscAnalyzer An;
+    int nCount;
+    unsigned int hHL;
+    int nConfig;
+    unsigned int hAux;
+    unsigned int nTick;
+    bool bValid;
+  };
+  static Slot s_Slots[PRICE_CACHE_SLOTS];
+  static unsigned int s_nTick = 0;
 
   unsigned int hHL = HashHL(pHigh, pLow, nCount);
   int nConfig = Config.nStrokeType + Config.nStrokeEnd * 10 +
                 Config.nCenterUnit * 100 + Config.nSegmentMethod * 1000;
   unsigned int hAux = HashAux(nCount, pHigh, pLow);
-  if (s_bValid && (s_nCount == nCount) && (s_hHL == hHL) && (s_nConfig == nConfig) && (s_hAux == hAux))
+  s_nTick++;
+
+  int nVictim = 0;
+  for (int i = 0; i < PRICE_CACHE_SLOTS; i++)
   {
-    return s_Analyzer;  // 命中
+    Slot &S = s_Slots[i];
+    if (S.bValid && (S.nCount == nCount) && (S.hHL == hHL) && (S.nConfig == nConfig) && (S.hAux == hAux))
+    {
+      S.nTick = s_nTick;
+      return S.An;  // 命中
+    }
+    if (!S.bValid || (s_Slots[nVictim].bValid && (S.nTick < s_Slots[nVictim].nTick)))
+    {
+      nVictim = i;  // 优先空槽，否则最久未用
+    }
   }
 
-  BuildAnalyzerFromPrice(s_Analyzer, nCount, pHigh, pLow, Config);
-  s_nCount = nCount; s_hHL = hHL; s_nConfig = nConfig; s_hAux = hAux; s_bValid = true;
-  return s_Analyzer;
+  Slot &S = s_Slots[nVictim];
+  S.An = CzscAnalyzer();
+  BuildAnalyzerFromPrice(S.An, nCount, pHigh, pLow, Config);
+  S.nCount = nCount; S.hHL = hHL; S.nConfig = nConfig; S.hAux = hAux; S.nTick = s_nTick; S.bValid = true;
+  return S.An;
 }
