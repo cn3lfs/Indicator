@@ -18,34 +18,25 @@
 
 
 #include "Main.h"
-#include "CzscCore.h"
+#include "tdx/exports.h"
 
-// 通达信插件函数注册表：编号 → 函数指针，以 {0,NULL} 结尾。
-// 通达信公式用 TDXDLL1(编号,...) 调用，编号含义见 CzscCore.h 与 README。
+// 通达信插件函数注册表：编号 → 函数，以 {0,NULL} 结尾。公式 TDXDLL1(编号,H,L,配置码)，含义见 README。
 static PluginTCalcFuncInfo Info[] =
 {
-  {1, &Func1},
-  {2, &Func2},
-  {3, &Func3},
-  {4, &Func4},
-  {5, &Func5},
-  {6, &Func6},
-  {7, &Func7},
-  {8, &Func8},
-  {9, &Func9},
-  {10, &Func10},
-  {11, &Func11},
-  {12, &Func12},
-  {13, &Func13},
-  {14, &Func14},
-  {15, &Func15},
-  {16, &Func16},
-  {17, &Func17},
-  {18, &Func18},
-  {19, &Func19},
-  {20, &Func20},
-  {30, &Func30},
-  {40, &Func40},
+  {1, &tdx::Pivots},            // 端点 顶+1/底-1
+  {2, &tdx::CenterHigh},        // 中枢 ZG
+  {3, &tdx::CenterLow},         // 中枢 ZD
+  {4, &tdx::CenterRelation},    // 相邻中枢关系 1上涨/-1下跌/2扩展
+  {5, &tdx::Signals},           // 当下确认买卖点 1/2/3、11/12/13
+  {6, &tdx::Revokes},           // 信号失效
+  {7, &tdx::Stops},             // 失效价（止损参考）
+  {8, &tdx::Divergence},        // c/b MACD 面积比 %
+  {9, &tdx::Movements},         // 走势类型 0/1/-1
+  {10, &tdx::Kisses},           // 均线吻 1-4
+  {11, &tdx::Gaps},             // 缺口 ±1
+  {12, &tdx::FractalStrength},  // 分型强弱 ±1/±2
+  {13, &tdx::HindsightSignals}, // 事后买卖点（含未来函数，仅复盘）
+  {40, &tdx::RegisterCloseVolume},  // 注册真实 C/V
   {0, NULL},
 };
 

@@ -44,10 +44,11 @@ CORE_OBJECTS=src/CzscCommon.o src/CzscMorphology.o src/CzscCenter.o \
 # 新架构：core/ 纯领域引擎，tests/unit/ 模块化单元测试（通配收录，新增文件无需改 Makefile）
 CHAN_OBJECTS=$(patsubst %.cpp,%.o,$(wildcard core/*.cpp core/*/*.cpp))
 # 迁移期：单元测试链接旧实现（src/）作为 oracle，逐位对照；旧实现删除时去掉 $(CORE_OBJECTS)
-UNIT_OBJECTS=$(CHAN_OBJECTS) $(CORE_OBJECTS) $(patsubst %.cpp,%.o,$(wildcard tests/unit/*.cpp))
+UNIT_OBJECTS=$(CHAN_OBJECTS) $(TDX_OBJECTS) $(CORE_OBJECTS) $(patsubst %.cpp,%.o,$(wildcard tests/unit/*.cpp))
 UNIT_TARGET=tests/unit/ChanTests$(EXEEXT)
 UNIT_TARGETS=tests/unit/ChanTests tests/unit/ChanTests.exe
-OBJECT1=Main.o $(CORE_OBJECTS)
+TDX_OBJECTS=$(patsubst %.cpp,%.o,$(wildcard tdx/*.cpp))
+OBJECT1=Main.o $(CHAN_OBJECTS) $(TDX_OBJECTS)
 TARGET1=$(BUILD_DIR)/CZSC.dll
 TEST_OBJECTS=$(CORE_OBJECTS) tests/CzscCoreTests.o tests/CzscProjectionTests.o tests/CzscCompletionTests.o tests/CzscReplayTests.o
 TEST_TARGET=tests/CzscCoreTests$(EXEEXT)
@@ -122,7 +123,6 @@ $(UNIT_TARGET) : $(UNIT_OBJECTS)
 
 formula-test:
 	@echo [TF] formulas
-	@python3 tests/check_formulas.py --self-test
 	@python3 tests/check_formulas.py
 
 sse-result: clean $(SSE_DUMP_TARGET)

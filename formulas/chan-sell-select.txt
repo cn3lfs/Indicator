@@ -1,0 +1,7 @@
+{选股：最近 3 根K线内当下确认了卖点（一/二/三卖），且其间没有卖点失效}
+XC:=TDXDLL1(40,C,V,0);
+BS:=TDXDLL1(5,H,L,0);
+XX:=TDXDLL1(6,H,L,0);
+SELL:=BS>=11 AND BS<=13;
+LOST:=XX>=11 AND XX<=13;
+COUNT(SELL,3)>0 AND COUNT(LOST,3)=0;
