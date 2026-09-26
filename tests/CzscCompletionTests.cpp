@@ -250,7 +250,8 @@ bool TestSseMemberAndCandidateIsolation()
     CzscConfig Config=DecodeConfig(static_cast<float>(Configs[c]));
     BuildAnalyzerFromPrice(A,SSE_DAILY_COUNT,&High[0],&Low[0],Config);
     BuildAnalyzerFromPrice(B,SSE_DAILY_COUNT,&High[0],&Low[0],Config,&C);
-    if (A.Structures.empty() || A.Candidates.empty() || B.Hierarchy.Nodes.empty() ||
+    // 线段级(1100)在 SSE 样本上可能无候选（第71课起点顺延后线段更少），仅笔级要求候选非空
+    if (A.Structures.empty() || ((c == 0) && A.Candidates.empty()) || B.Hierarchy.Nodes.empty() ||
         A.Structures.size()!=B.Structures.size() || A.Candidates.size()!=B.Candidates.size()) return false;
     std::vector<float> X(SSE_DAILY_COUNT),Y(SSE_DAILY_COUNT);
     for (int o=59;o<=91;o++)

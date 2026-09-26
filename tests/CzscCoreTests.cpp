@@ -639,6 +639,20 @@ static bool CheckSseCandidateSummary(const SseCandidateSummary &S,
          (S.nBreakout == nBreakout);
 }
 
+// 第65/71课：向上线段终点顶必须高于起点底、向下线段终点底必须低于起点顶，否则起点不是线段分界点
+static bool SegmentEndsBeyondStart(const std::vector<SegmentPoint> &Points)
+{
+  for (std::size_t i = 1; i < Points.size(); i++)
+  {
+    bool bUp = (Points[i - 1].nType == CZSC_POINT_BOTTOM);
+    if (bUp ? (Points[i].fHigh <= Points[i - 1].fLow) : (Points[i].fLow >= Points[i - 1].fHigh))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool TestRealSseDiagnosticCounts()
 {
   float *pH = const_cast<float *>(SSE_DAILY_HIGH);
@@ -661,15 +675,16 @@ static bool TestRealSseDiagnosticCounts()
 
   return (Strokes.size() == 157) &&
          (StrokeAn.Points.size() == 158) &&
-         (SegmentAn.Points.size() == 15) &&
+         (SegmentAn.Points.size() == 13) &&
          (StrokeAn.Centers.size() == 18) &&
-         (SegmentAn.Centers.size() == 2) &&
+         (SegmentAn.Centers.size() == 1) &&
          (StrokeAn.Candidates.size() == 17) &&
-         (SegmentAn.Candidates.size() == 2) &&
+         SegmentAn.Candidates.empty() &&
          CheckSseCandidateSummary(StrokeSummary, 0, 0, 9, 0, 0, 8,
                                   5, 0, 0, 3, 0, 0, 0, 17) &&
-         CheckSseCandidateSummary(SegmentSummary, 0, 0, 1, 0, 0, 1,
-                                  1, 0, 0, 0, 0, 0, 0, 2);
+         CheckSseCandidateSummary(SegmentSummary, 0, 0, 0, 0, 0, 0,
+                                  0, 0, 0, 0, 0, 0, 0, 0) &&
+         SegmentEndsBeyondStart(SegmentAn.Points);
 }
 
 static bool TestRealSsePricePointsStayOnStrictStrokeEndpoints()
@@ -945,13 +960,13 @@ static bool TestRealSseGoldenSegmentCentersPresent()
   std::vector<SegmentPoint> Points = BuildConfiguredPoints(SSE_DAILY_COUNT, pH, pL, Config);
   std::vector<Center> Centers = BuildCenters(Points);
 
-  if (Centers.size() != 2)
+  // 旧 golden 的 2018-11~2020-07 退化中枢(ZG=ZD=2822)建在非法线段(起点被跌破)上，第71课起点顺延后消失
+  if (Centers.size() != 1)
   {
     return false;
   }
 
-  return ContainsSseCenter(Centers, 1, "2018-11-19", "2020-07-09", 2822.19f, 2822.19f) &&
-         ContainsSseCenter(Centers, -1, "2020-09-25", "2023-06-26", 3418.95f, 3312.72f);
+  return ContainsSseCenter(Centers, -1, "2020-03-19", "2025-04-07", 3418.95f, 3312.72f);
 }
 
 struct CenterLifecycleCounts
@@ -1016,9 +1031,9 @@ static bool TestRealSseRecursiveCenterLifecycleCounts()
          (StrokeCounts.nNewbornUp == 0) &&
          (StrokeCounts.nNewbornDown == 0) &&
          (StrokeCounts.nUnknown == 0) &&
-         (SegmentAn.Centers.size() == 2) &&
+         (SegmentAn.Centers.size() == 1) &&
          (SegmentCounts.nExtension == 0) &&
-         (SegmentCounts.nExpansion == 1) &&
+         (SegmentCounts.nExpansion == 0) &&
          (SegmentCounts.nNewbornUp == 0) &&
          (SegmentCounts.nNewbornDown == 0) &&
          (SegmentCounts.nUnknown == 0);
@@ -1097,17 +1112,11 @@ static bool TestRealSseGoldenCandidatesPresent()
     {"2026-02-03", 3.0f, 1, 16, 16, CZSC_MOVEMENT_CONSOLIDATION, 152, 16, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4224}
   };
 
-  static const SseCandidateExpectation SegmentExpected[] = {
-    {"2020-09-25", 3.0f, 2, 0, 0, CZSC_MOVEMENT_CONSOLIDATION, 6, 0, CZSC_CENTER_POSITION_ABOVE, CZSC_CENTER_AFTERMATH_EXTENDED, 4225},
-    {"2024-05-20", 13.0f, 1, 1, 1, CZSC_MOVEMENT_CONSOLIDATION, 13, 1, CZSC_CENTER_POSITION_BELOW, CZSC_CENTER_AFTERMATH_UNKNOWN, 4096}
-  };
-
+  // 线段级：第71课起点顺延后 SSE 只剩 1 个线段中枢，旧的 2020-09-25 / 2024-05-20 三类点随非法线段一并消失
   return ContainsAllSseCandidates(StrokeAn.Candidates,
                                   StrokeExpected,
                                   sizeof(StrokeExpected) / sizeof(StrokeExpected[0])) &&
-         ContainsAllSseCandidates(SegmentAn.Candidates,
-                                  SegmentExpected,
-                                  sizeof(SegmentExpected) / sizeof(SegmentExpected[0]));
+         SegmentAn.Candidates.empty();
 }
 
 static bool TestRealSseGoldenBreakoutsPresent()
@@ -1131,19 +1140,13 @@ static bool TestRealSseGoldenBreakoutsPresent()
     {15, 15, 1, 145, "2025-10-30", 146, "2025-11-05", true, false, true}
   };
 
-  static const SseBreakoutExpectation SegmentExpected[] = {
-    {0, 0, 1, 5, "2020-07-09", 6, "2020-09-25", true, false, true},
-    {1, 1, -1, 12, "2023-06-26", 13, "2024-05-20", true, false, true}
-  };
 
   return CheckAllSseBreakouts(StrokeAn.Points,
                               StrokeAn.Breakouts,
                               StrokeExpected,
                               sizeof(StrokeExpected) / sizeof(StrokeExpected[0])) &&
-         CheckAllSseBreakouts(SegmentAn.Points,
-                              SegmentAn.Breakouts,
-                              SegmentExpected,
-                              sizeof(SegmentExpected) / sizeof(SegmentExpected[0]));
+         // 线段级唯一中枢延续到样本末端（第71课起点顺延后），尚无离开/回试
+         SegmentAn.Breakouts.empty();
 }
 
 static bool TestFunc1WritesCompatibleSignal()
@@ -7463,6 +7466,19 @@ static bool TestFeatureLineSegmentRequiresFirstThreeOverlap()
 }
 
 // 向下线段的特征序列出现无缺口底分型：线段在该底分型低点结束（第67课第一种情况）。
+// 第62课：向下笔的底须低于起点顶的低点，否则“顶-底”不构成笔（仅跨度达标不够）
+static bool TestStrokeRequiresPriceProgress()
+{
+  std::vector<Fractal> F;
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 0, 100, 96));
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 4, 99, 97));   // 底高于顶的低点：不成笔
+  F.push_back(MakeTestFractal(CZSC_POINT_TOP, 8, 105, 101));    // 更高的顶：起点顶延伸至此
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 12, 95, 90));  // 真正的向下笔终点
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  return (Strokes.size() == 1) && (Strokes[0].Start.nIndex == 8) && (Strokes[0].End.nIndex == 12);
+}
+
 static bool TestFeatureLineSegmentEndsAtBottomFractal()
 {
   std::vector<Fractal> F;
@@ -7471,7 +7487,7 @@ static bool TestFeatureLineSegmentEndsAtBottomFractal()
   F.push_back(MakeTestFractal(CZSC_POINT_TOP, 8, 95, 90));      // S1=[85,95]
   F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 12, 88, 80));  // S2=[80,90] 底分型低点
   F.push_back(MakeTestFractal(CZSC_POINT_TOP, 16, 90, 84));
-  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 20, 89, 84));  // S3=[84,92]
+  F.push_back(MakeTestFractal(CZSC_POINT_BOTTOM, 20, 89, 83));  // S3=[83,92]（底须低于前顶低点，第62课）
   F.push_back(MakeTestFractal(CZSC_POINT_TOP, 24, 92, 88));
 
   std::vector<Stroke> Strokes = BuildStrokes(F);
@@ -9361,5 +9377,9 @@ int main()
     return 199;
   }
 
+  if (!TestStrokeRequiresPriceProgress())
+  {
+    return 219;
+  }
   return 0;
 }

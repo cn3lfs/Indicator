@@ -261,6 +261,17 @@ static bool StrokeSpanEnough(const Fractal &A, const Fractal &B, const CzscConfi
   return (nMergedGap >= 4);
 }
 
+// 笔的价位有效性（第62课：上升笔=底分型+上升K线+顶分型）：向上笔的顶须高于起点底所在K线的高点，
+// 向下笔的底须低于起点顶所在K线的低点；否则两分型并非“一底一顶”的升降关系，不构成笔。
+static bool StrokePriceValid(const Fractal &Start, const Fractal &End)
+{
+  if (Start.nType == CZSC_POINT_BOTTOM)
+  {
+    return End.fHigh > Start.fHigh;
+  }
+  return End.fLow < Start.fLow;
+}
+
 static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
                                    const std::vector<Fractal> &Fractals,
                                    const CzscConfig &Config)
@@ -292,7 +303,8 @@ static void RefineStrictStrokeEnds(std::vector<Fractal> *pEnds,
       {
         continue;
       }
-      if (!StrokeSpanEnough(Prev, F, Config) || !StrokeSpanEnough(F, Next, Config))
+      if (!StrokeSpanEnough(Prev, F, Config) || !StrokeSpanEnough(F, Next, Config) ||
+          !StrokePriceValid(Prev, F) || !StrokePriceValid(F, Next))
       {
         continue;
       }
@@ -335,7 +347,7 @@ std::vector<Stroke> BuildStrokes(const std::vector<Fractal> &Fractals, const Czs
         Ends.back() = F;
       }
     }
-    else if (StrokeSpanEnough(Last, F, Config))
+    else if (StrokeSpanEnough(Last, F, Config) && StrokePriceValid(Last, F))
     {
       Ends.push_back(F);  // 异型且跨度达标 → 新笔端点
     }
@@ -708,6 +720,21 @@ static bool FirstThreeStrokesOverlap(const std::vector<SegmentPoint> &P, std::si
   return fLow <= fHigh;
 }
 
+// 在 (nStart, nLimit) 内找比起点更极端的同型端点（向上段更低的底 / 向下段更高的顶），返回最极端者；无则返回 nStart
+static std::size_t FindStartBreak(const std::vector<SegmentPoint> &P, std::size_t nStart, std::size_t nLimit)
+{
+  std::size_t nBest = nStart;
+  for (std::size_t i = nStart + 2; (i < nLimit) && (i < P.size()); i += 2)
+  {
+    if ((P[i].nType == P[nBest].nType) && IsMoreExtremePoint(P[nBest], P[i]) &&
+        (GetPointPrice(P[i]) != GetPointPrice(P[nBest])))
+    {
+      nBest = i;
+    }
+  }
+  return nBest;
+}
+
 // 特征序列法划分线段（第67课），与 BuildLineSegmentPoints 的启发式并存
 std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stroke> &Strokes)
 {
@@ -731,13 +758,21 @@ std::vector<SegmentPoint> BuildLineSegmentPointsByFeature(const std::vector<Stro
   Points.push_back(StrokePoints[nStart]);
   while (nStart + 3 < StrokePoints.size())
   {
-    if (!FirstThreeStrokesOverlap(StrokePoints, nStart))
-    {
-      break;
-    }
     int nDir = (StrokePoints[nStart].nType == CZSC_POINT_BOTTOM) ? 1 : -1;
     int nEnd = FindFeatureSegmentEnd(StrokePoints, nStart, nDir);
-    if ((nEnd < 0) || ((std::size_t)nEnd <= nStart))
+
+    // 第71课：新线段确立前先破了起点（向上段出现更低的底 / 向下段出现更高的顶），
+    // 说明起点不是线段分界点，前线段延续 → 起点顺延到考察区间内最极端的同型端点后重新考察。
+    std::size_t nLimit = (nEnd < 0) ? StrokePoints.size() : (std::size_t)nEnd + 1;
+    std::size_t nExtreme = FindStartBreak(StrokePoints, nStart, nLimit);
+    if (nExtreme != nStart)
+    {
+      Points.back() = StrokePoints[nExtreme];
+      nStart = nExtreme;
+      continue;
+    }
+
+    if ((nEnd < 0) || ((std::size_t)nEnd <= nStart) || !FirstThreeStrokesOverlap(StrokePoints, nStart))
     {
       break;
     }

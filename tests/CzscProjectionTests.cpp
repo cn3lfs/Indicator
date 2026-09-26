@@ -173,7 +173,8 @@ bool TestNativeProjectionSseRouting()
   HighConfig.nSegmentMethod = CZSC_SEG_FEATURE;
   CzscAnalyzer HighAn;
   BuildAnalyzerFromPrice(HighAn, nCount, &High[0], &Low[0], HighConfig);
-  if (HighAn.Candidates.size() != 2) return false; // existing SSE golden count
+  // SSE 线段级只有 1 个中枢（第71课起点顺延后），不构成趋势 → 无线段级候选；下方循环按实际候选数校验
+  if (HighAn.Centers.size() != 1 || !HighAn.Candidates.empty()) return false;
   const int ConfigCodes[] = {0, 1100};
   for (int c = 0; c < 2; c++)
   {
