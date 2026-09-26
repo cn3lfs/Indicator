@@ -32,7 +32,18 @@
 extern "C" {
 #endif
 
-#define CZSC_API_VERSION 1
+/* 版本历史：1 = P0 基础结构；2 = 追加 P1 研判语义（czsc_center.lifecycle、czsc_signal.quality 起 7 个字段、
+ * czsc_bar.instantDivergence、区间套表 czsc_nested） */
+#define CZSC_API_VERSION 2
+
+/* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
+#define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
+#define CZSC_CTX_ZERO_PULLBACK 0x02u  /* 一类：B 中枢期间黄白线回拉零轴（DIF 穿越零轴或 |DIF| 最小值 <= b 段峰值 10%，第24/25课） */
+#define CZSC_CTX_LINE_WEAK 0x04u      /* 一类：c 段黄白线（DIF）极值不及 b 段（第25课） */
+#define CZSC_CTX_STANDARD 0x08u       /* 一类：标准背驰 = 同色面积背驰 且 黄白线回零（第24课） */
+#define CZSC_CTX_SMALL_TURN 0x10u     /* 三类：同中枢此前有同向一类点（小转大必要条件，第44课） */
+#define CZSC_CTX_OVERLAP 0x20u        /* 二类与三类重合（同中枢、同向、同一回试端点，第21/61课） */
+#define CZSC_CTX_FIRST_RETEST 0x40u   /* 三类：首次回试（第20课“必须是第一次”） */
 
 /* czsc_input.flags 位定义 */
 #define CZSC_FLAG_EVENTS 0x1u     /* 位0：生成当下事件流（czsc_events） */
@@ -77,6 +88,9 @@ typedef struct czsc_center
   int32_t direction;      /* 进入段方向：+1 向上进入 / -1 向下进入 */
   int32_t confirmedAt;    /* 中枢定型的K线（终点、GG/DD 不再改变）；未定型 -1 */
   int32_t relationToPrev; /* 与前一中枢（第20课中心定理二）：1 上涨 / -1 下跌 / 2 扩展 / 0 首个中枢 */
+  /* ---- v2 ---- */
+  int32_t lifecycle;      /* 相对前一中枢（第18/20课）：0 延伸（[ZD,ZG] 重叠）/ 1 扩展（仅 GG/DD 重叠）/
+                             2 新生上 / 3 新生下；首个中枢 -1 */
 } czsc_center;
 
 /* 走势类型（第17课）：盘整 = 1 个中枢；趋势 = 连续同向关系的 >=2 个中枢 */
@@ -150,6 +164,15 @@ typedef struct czsc_signal
   int32_t revokedAt;      /* 当下口径下被撤销的K线（新低/新高否定背驰等）；未撤销 -1 */
   int32_t hindsight;      /* 1 = 属于事后全量集合 */
   czsc_divergence divergence; /* 一类：b 段 vs c 段；二类：一买后两段；三类：离开段 vs 前一同向段 */
+  /* ---- v2 ---- */
+  int32_t quality;        /* 1 确认 / 2 强质。一类：标准背驰且 abc 完整为 2（第24/37课）；二类：自身盘整背驰或二三重合为 2
+                             （第27/61课）；三类：离开段无盘整背驰（有力离开）或二三重合为 2（第20/53/61课） */
+  uint32_t context;       /* CZSC_CTX_* 位掩码 */
+  int32_t secondBasePivot;      /* 二类：所依一类的端点，端点表下标；其他 -1（第21课） */
+  int32_t secondTurnPivot;      /* 二类：一类之后的转折端点（次级别第一段终点），端点表下标；其他 -1 */
+  int32_t smallTurnBasePivot;   /* 三类且 CZSC_CTX_SMALL_TURN：同中枢此前同向一类的端点；其他 -1（第44课） */
+  int32_t smallTurnLeavePivot;  /* 同上：离开段终点 */
+  int32_t smallTurnRetestPivot; /* 同上：回试终点 */
 } czsc_signal;
 
 /* 当下事件流（flags 位0）：与通达信 5/6 号序列逐根等价 */
@@ -171,7 +194,25 @@ typedef struct czsc_bar
   int32_t kiss;           /* MA5 与 MA20 的吻（第11/12课）：0 无 / 1 飞吻 / 2 唇吻 / 3 湿吻 / 4 放量湿吻 */
   int32_t gap;            /* 缺口：1 向上（前根最高 < 本根最低）/ -1 向下 / 0 无 */
   int32_t fractalStrength;/* 写在分型成立那根：2 强顶 / 1 顶 / -1 底 / -2 强底 / 0 无（第62/82课） */
+  /* ---- v2 ---- */
+  int32_t instantDivergence; /* 即时背驰预警（第24课）：当时已知的最后端点起的未完成段创新极值且相对前一同向段背驰，
+                                向上段 +1（见顶预警）/ 向下段 -1（见底预警）/ 0 */
 } czsc_bar;
+
+/* 区间套（第27/61课；小转大候选见第43/44课）：低级别一类信号 → 高级别结构。由两个同一数据的快照生成。 */
+typedef struct czsc_nested
+{
+  uint32_t size;               /* sizeof(czsc_nested) */
+  int32_t lowSignal;           /* 低级别快照的信号表下标（一类买卖点） */
+  int32_t highSignal;          /* 高级别同向一类信号（信号表下标），其背驰段 c 包含 lowSignal 的K线；无则 -1 */
+  int32_t highSegmentStart;    /* 高级别快照中包含 lowSignal K线的那一段：起点端点表下标（无则 -1） */
+  int32_t highSegmentEnd;      /* 同上：终点端点表下标（该段尚未结束为 -1） */
+  int32_t insideHighSegment;   /* 1 = 低级别背驰落在高级别背驰段内（highSignal>=0） */
+  int32_t confirmed;           /* 1 = inside 且高低两级信号均已确认（confirmedAt>=0） */
+  int32_t newExtreme;          /* 1 = 低级别背驰创新高/新低（第61课：无新高新低只可能是盘整背驰） */
+  int32_t smallTurn;           /* 1 = 小转大候选：低级别背驰落在方向一致的高级别段内、但该段无高级别背驰（第43课）；
+                                  其必要条件（最后次级别中枢出现同向三类点，第44课）由调用方结合后续三类信号判断 */
+} czsc_nested;
 
 CZSC_API int32_t czsc_api_version(void);
 CZSC_API const char *czsc_last_error(void);
@@ -187,6 +228,11 @@ CZSC_API const czsc_breakout *czsc_breakouts(void *snapshot, int32_t *count);
 CZSC_API const czsc_signal *czsc_signals(void *snapshot, int32_t *count);
 CZSC_API const czsc_event *czsc_events(void *snapshot, int32_t *count);   /* 未置 CZSC_FLAG_EVENTS 时为空 */
 CZSC_API const czsc_bar *czsc_bars(void *snapshot, int32_t *count);        /* n 条 */
+
+/* 区间套：low、high 须为同一输入数据（n 与 H/L/C/V 逐字节相同）、配置不同的两个快照（通常 0 与 1100）。
+ * 返回新句柄（用 czsc_snapshot_free 释放，与 low/high 的生命期独立）；不合法返回 NULL 并设置错误。 */
+CZSC_API void *czsc_nested_build(void *low, void *high);
+CZSC_API const czsc_nested *czsc_nested_rows(void *nested, int32_t *count);
 
 #ifdef __cplusplus
 }

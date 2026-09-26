@@ -19,12 +19,15 @@ namespace
 
 thread_local std::string g_error;
 
-const uint32_t kMagic = 0x43535A43u;  // "CZSC"
+const uint32_t kMagic = 0x43535A43u;        // "CZSC"
+const uint32_t kNestedMagic = 0x4E535A43u;  // "CZSN"
 const int32_t kMaxBars = 16777216;
 
 struct Snapshot
 {
   uint32_t magic = kMagic;
+  int32_t n = 0;
+  uint64_t fingerprint = 0;  // 输入 H/L/C/V 指纹，区间套据此确认两快照同一数据
   std::vector<czsc_pivot> pivots;
   std::vector<czsc_center> centers;
   std::vector<czsc_movement> movements;
@@ -33,6 +36,33 @@ struct Snapshot
   std::vector<czsc_event> events;
   std::vector<czsc_bar> bars;
 };
+
+struct Nested
+{
+  uint32_t magic = kNestedMagic;
+  std::vector<czsc_nested> rows;
+};
+
+uint64_t Fingerprint(const czsc_input *in)
+{
+  uint64_t h = 1469598103934665603ULL;
+  auto mix = [&](const float *p) {
+    const unsigned char *b = reinterpret_cast<const unsigned char *>(p);
+    for (std::size_t i = 0; i < static_cast<std::size_t>(in->n) * sizeof(float); i++)
+    {
+      h ^= b[i];
+      h *= 1099511628211ULL;
+    }
+  };
+  if (in->n > 0)
+  {
+    mix(in->high);
+    mix(in->low);
+    mix(in->close);
+    mix(in->volume);
+  }
+  return h;
+}
 
 void *Fail(const std::string &message)
 {
@@ -130,6 +160,14 @@ public:
     r.confirmedAt = -1;
     r.revokedAt = -1;
     r.divergence = Divergence(s.divergence, first ? 1 : 2);
+    r.quality = s.quality;
+    r.context = s.context;
+    auto pivotOrNone = [&](int bar) { return bar >= 0 ? Pivot(bar) : -1; };
+    r.secondBasePivot = pivotOrNone(s.secondBaseIndex);
+    r.secondTurnPivot = pivotOrNone(s.secondTurnIndex);
+    r.smallTurnBasePivot = pivotOrNone(s.smallTurnBaseIndex);
+    r.smallTurnLeavePivot = pivotOrNone(s.smallTurnLeaveIndex);
+    r.smallTurnRetestPivot = pivotOrNone(s.smallTurnRetestIndex);
     return r;
   }
 
@@ -286,6 +324,8 @@ Snapshot *Build(const czsc_input *in)
   chan::Analysis a = chan::Analyze(s, config);
   Resolver r(a);
   Snapshot *out = new Snapshot();
+  out->n = in->n;
+  out->fingerprint = Fingerprint(in);
 
   for (std::size_t i = 0; i < a.snapshot.pivots.size(); i++)
   {
@@ -313,6 +353,15 @@ Snapshot *Build(const czsc_input *in)
     row.direction = c.direction;
     row.confirmedAt = a.centerFinalAt[i];
     row.relationToPrev = i == 0 ? 0 : static_cast<int32_t>(chan::Relate(a.snapshot.centers[i - 1], c));
+    row.lifecycle = -1;
+    if (i > 0)
+    {
+      const chan::Center &prev = a.snapshot.centers[i - 1];
+      // 第18/20课：[ZD,ZG] 重叠为同级延伸；否则按中心定理二，GG/DD 重叠为扩展，不重叠为同向新生
+      if (prev.zd <= c.zg && c.zd <= prev.zg) row.lifecycle = 0;
+      else if (row.relationToPrev == 2) row.lifecycle = 1;
+      else row.lifecycle = row.relationToPrev == 1 ? 2 : 3;
+    }
     out->centers.push_back(row);
   }
   for (std::size_t i = 0; i < a.snapshot.movements.size(); i++)
@@ -352,6 +401,7 @@ Snapshot *Build(const czsc_input *in)
     row.kiss = static_cast<int32_t>(a.ma.kisses[i]);
     row.gap = gaps[i];
     row.fractalStrength = strengths[i];
+    row.instantDivergence = a.instantWarning[i];
     out->bars.push_back(row);
   }
   return out;
@@ -366,6 +416,45 @@ Snapshot *Handle(void *h)
     return nullptr;
   }
   return s;
+}
+
+// 区间套（第27/61课）：每个低级别一类信号，在高级别快照中找同向且背驰段 c 包含其K线的一类信号；
+// 同时给出包含它的高级别段；段方向一致而无高级别背驰时标小转大候选（第43课）
+Nested *BuildNested(const Snapshot &low, const Snapshot &high)
+{
+  Nested *out = new Nested();
+  const std::vector<czsc_pivot> &hp = high.pivots;
+  for (std::size_t i = 0; i < low.signals.size(); i++)
+  {
+    const czsc_signal &l = low.signals[i];
+    if (l.type != 1 && l.type != -1) continue;
+    czsc_nested row = Row<czsc_nested>();
+    row.lowSignal = static_cast<int32_t>(i);
+    row.highSignal = -1;
+    for (std::size_t j = 0; j < high.signals.size(); j++)
+    {
+      const czsc_signal &h = high.signals[j];
+      if (h.type != l.type || h.divergence.curStart < 0) continue;
+      int cStart = hp[static_cast<std::size_t>(h.divergence.curStart)].index;
+      if (cStart > l.index || l.index > h.index) continue;
+      const czsc_signal *best = row.highSignal >= 0 ? &high.signals[static_cast<std::size_t>(row.highSignal)] : nullptr;
+      if (!best || h.index < best->index || (h.index == best->index && h.confirmedAt >= 0 && best->confirmedAt < 0))
+        row.highSignal = static_cast<int32_t>(j);  // 取包含它的最近（最早结束）的高级别背驰段
+    }
+    auto it = std::upper_bound(hp.begin(), hp.end(), l.index, [](int b, const czsc_pivot &p) { return b < p.index; });
+    row.highSegmentStart = it == hp.begin() ? -1 : static_cast<int32_t>(it - hp.begin()) - 1;
+    row.highSegmentEnd = it == hp.end() ? -1 : static_cast<int32_t>(it - hp.begin());
+    row.insideHighSegment = row.highSignal >= 0;
+    const czsc_signal *h = row.highSignal >= 0 ? &high.signals[static_cast<std::size_t>(row.highSignal)] : nullptr;
+    row.confirmed = h && l.confirmedAt >= 0 && h->confirmedAt >= 0;
+    row.newExtreme = l.divergence.newExtreme;
+    // 一买（l.type=1）落在高级别向下段（起点为顶）中，一卖落在向上段中，方向一致
+    bool sameDirection = row.highSegmentStart >= 0 &&
+                         hp[static_cast<std::size_t>(row.highSegmentStart)].kind == (l.type > 0 ? 1 : -1);
+    row.smallTurn = !row.insideHighSegment && sameDirection;
+    out->rows.push_back(row);
+  }
+  return out;
 }
 
 template <class T>
@@ -406,10 +495,49 @@ void *czsc_snapshot_build(const czsc_input *input)
 
 void czsc_snapshot_free(void *snapshot)
 {
-  Snapshot *s = static_cast<Snapshot *>(snapshot);
-  if (s == nullptr || s->magic != kMagic) return;
-  s->magic = 0;
-  delete s;
+  if (snapshot == nullptr) return;
+  uint32_t magic = *static_cast<uint32_t *>(snapshot);
+  if (magic == kMagic)
+  {
+    Snapshot *s = static_cast<Snapshot *>(snapshot);
+    s->magic = 0;
+    delete s;
+  }
+  else if (magic == kNestedMagic)
+  {
+    Nested *s = static_cast<Nested *>(snapshot);
+    s->magic = 0;
+    delete s;
+  }
+}
+
+void *czsc_nested_build(void *low, void *high)
+{
+  g_error.clear();
+  Snapshot *l = Handle(low), *h = Handle(high);
+  if (!l || !h) return Fail("low/high 须为 czsc_snapshot_build 返回的有效句柄");
+  if (l->n != h->n || l->fingerprint != h->fingerprint) return Fail("low 与 high 不是同一输入数据构建的快照");
+  try
+  {
+    return BuildNested(*l, *h);
+  }
+  catch (...)
+  {
+    return Fail("内存不足或内部错误");
+  }
+}
+
+const czsc_nested *czsc_nested_rows(void *nested, int32_t *count)
+{
+  if (count) *count = 0;
+  Nested *s = static_cast<Nested *>(nested);
+  if (s == nullptr || s->magic != kNestedMagic)
+  {
+    g_error = "nested 句柄无效";
+    return nullptr;
+  }
+  if (count) *count = static_cast<int32_t>(s->rows.size());
+  return s->rows.data();
 }
 
 const czsc_pivot *czsc_pivots(void *h, int32_t *count) { return Table(h, count, &Snapshot::pivots); }
