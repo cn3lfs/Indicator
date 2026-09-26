@@ -755,7 +755,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   }
   CzscConfig Config = DecodeConfig((float)nConfig);
   int nOutput = (nMode % (bExtended ? 10000 : 1000)) / 10;
-  if (bExtended && (nOutput < 100 || nOutput > 111))
+  if (bExtended && (nOutput < 100 || nOutput > 113))
   { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
 
   // 93-108 是显式带锚快照表：pTime 必须有 nCount+4 个 float。
@@ -786,6 +786,18 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     CzscAnalyzer EvidenceAn;
     BuildAnalyzerFromPrice(EvidenceAn, nCount, pHigh, pLow, Config, &Contract);
     ApplyTrendEvidenceProjection(nCount, pOut, EvidenceAn, nOutput, nSlot, nField);
+    return;
+  }
+
+  // 112 缺口 / 113 分型强弱：均写在当下可知的 K 线上，与配置无关
+  if (nOutput == 112)
+  {
+    WriteGapSignal(nCount, pOut, pHigh, pLow);
+    return;
+  }
+  if (nOutput == 113)
+  {
+    WriteFractalStrengthSignal(nCount, pOut, pHigh, pLow);
     return;
   }
 

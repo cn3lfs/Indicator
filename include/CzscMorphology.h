@@ -32,6 +32,11 @@ std::vector<SegmentPoint> BuildConfiguredPoints(int nCount, float *pHigh, float 
 std::vector<SegmentPoint> BuildPointsFromFractals(const std::vector<Fractal> &Fractals, const CzscConfig &Config);
 void WriteSegmentSignal(int nCount, float *pOut, const std::vector<SegmentPoint> &Points);
 
+// 缺口（借鉴 czsc check_gap_info，只输出当下可知部分）：H[i-1]<L[i] 为 +1，L[i-1]>H[i] 为 -1
+void WriteGapSignal(int nCount, float *pOut, float *pHigh, float *pLow);
+// 分型强弱（第82课：第三根K线扩大战果）：写在分型成立K线上，顶 2强/1普通，底 -2强/-1普通
+void WriteFractalStrengthSignal(int nCount, float *pOut, float *pHigh, float *pLow);
+
 // 顶底扫描与化简（早期版本的笔识别，保留供通达信公式使用）
 void Parse1(int nCount, float *pOut, float *pHigh, float *pLow);
 void Parse2(int nCount, float *pOut, float *pHigh, float *pLow);

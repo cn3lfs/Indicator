@@ -932,3 +932,62 @@ std::vector<SegmentPoint> BuildPointsFromFractals(const std::vector<Fractal> &Fr
   return Points;
 }
 
+
+void WriteGapSignal(int nCount, float *pOut, float *pHigh, float *pLow)
+{
+  if (!HasOutput(nCount, pOut) || (pHigh == 0) || (pLow == 0))
+  {
+    return;
+  }
+  ClearOutput(nCount, pOut);
+  std::vector<float> High = SanitizeSeries(nCount, pHigh);
+  std::vector<float> Low = SanitizeSeries(nCount, pLow);
+  for (int i = 1; i < nCount; i++)
+  {
+    if (High[(std::size_t)i - 1] < Low[(std::size_t)i])
+    {
+      pOut[i] = 1;
+    }
+    else if (Low[(std::size_t)i - 1] > High[(std::size_t)i])
+    {
+      pOut[i] = -1;
+    }
+  }
+}
+
+// 第82课：顶分型=第1根多方占优、第2根空方阻击、第3根空方扩大战果。以右侧首根K线（分型成立那根）
+// 收盘跌破左侧合并K线低点为“强顶”（无真实收盘价时用其最低价）；底分型对称。只用成立时已知数据。
+void WriteFractalStrengthSignal(int nCount, float *pOut, float *pHigh, float *pLow)
+{
+  if (!HasOutput(nCount, pOut) || (pHigh == 0) || (pLow == 0))
+  {
+    return;
+  }
+  ClearOutput(nCount, pOut);
+  std::vector<float> High = SanitizeSeries(nCount, pHigh);
+  std::vector<float> Low = SanitizeSeries(nCount, pLow);
+  const std::vector<float> *pClose = GetValidatedClose(nCount, pHigh, pLow);
+  std::vector<MergedBar> Bars = BuildMergedBars(nCount, pHigh, pLow);
+  std::vector<Fractal> Fractals = BuildFractals(Bars);
+  for (std::size_t k = 0; k < Fractals.size(); k++)
+  {
+    const Fractal &F = Fractals[k];
+    int nBar = F.nConfirmedAt;
+    int nMid = F.nMergedIndex;
+    if ((nBar < 0) || (nBar >= nCount) || (nMid < 1))
+    {
+      continue;
+    }
+    const MergedBar &Left = Bars[(std::size_t)nMid - 1];
+    if (F.nType == CZSC_POINT_TOP)
+    {
+      float fProbe = pClose ? (*pClose)[(std::size_t)nBar] : Low[(std::size_t)nBar];
+      pOut[nBar] = (fProbe < Left.fLow) ? 2.0f : 1.0f;
+    }
+    else
+    {
+      float fProbe = pClose ? (*pClose)[(std::size_t)nBar] : High[(std::size_t)nBar];
+      pOut[nBar] = (fProbe > Left.fHigh) ? -2.0f : -1.0f;
+    }
+  }
+}

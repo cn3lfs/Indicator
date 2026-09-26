@@ -140,9 +140,45 @@ bool ReplayStopsFollowSignalRules()
 }
 }
 
+// 112 缺口 / 113 分型强弱：取值规则 + 因果性（前缀计算与全量在前缀范围内逐位一致）
+bool GapAndFractalStrengthCausal()
+{
+  // 合成：0→1 向上缺口、3→4 向下缺口；1 为顶分型中点，右侧首根 2 的低点 3 < 左侧 0 的低点 4 → 强顶
+  float Hs[6] = {5, 9, 6, 5, 2, 3};
+  float Ls[6] = {4, 6, 3, 4, 1, 2};
+  float G[6], S[6];
+  float ModeG = -1120.0f, ModeS = -1130.0f;
+  Func30(6, G, Hs, Ls, &ModeG);
+  Func30(6, S, Hs, Ls, &ModeS);
+  if ((G[1] != 1.0f) || (G[4] != -1.0f) || (G[2] != 0.0f) || (S[2] != 2.0f)) return false;
+
+  const int N = SSE_DAILY_COUNT;
+  std::vector<float> H(SSE_DAILY_HIGH, SSE_DAILY_HIGH + N), L(SSE_DAILY_LOW, SSE_DAILY_LOW + N);
+  std::vector<float> FullG(N), FullS(N), MG(N, -1120.0f), MS(N, -1130.0f);
+  Func30(N, &FullG[0], &H[0], &L[0], &MG[0]);
+  Func30(N, &FullS[0], &H[0], &L[0], &MS[0]);
+  int nStrong = 0, nGap = 0;
+  for (int i = 0; i < N; i++)
+  {
+    if ((FullS[(std::size_t)i] == 2.0f) || (FullS[(std::size_t)i] == -2.0f)) nStrong++;
+    if (FullG[(std::size_t)i] != 0.0f) nGap++;
+  }
+  for (int t = 50; t <= N; t += 97)
+  {
+    std::vector<float> PG(t), PS(t);
+    Func30(t, &PG[0], &H[0], &L[0], &MG[0]);
+    Func30(t, &PS[0], &H[0], &L[0], &MS[0]);
+    for (int i = 0; i < t; i++)
+    {
+      if ((PG[(std::size_t)i] != FullG[(std::size_t)i]) || (PS[(std::size_t)i] != FullS[(std::size_t)i])) return false;
+    }
+  }
+  return (nStrong > 0) && (nGap > 0);
+}
+
 bool TestReplaySuite()
 {
   return ReplayMatchesPrefix(0) && ReplayMatchesPrefix(1) && ReplayMatchesPrefix(10) &&
          ReplayWindowIsSuffixOfFull() && ReplayExposesRevokedFirstSell() && Func30WritesReplayOutputs() &&
-         ReplayStopsFollowSignalRules();
+         ReplayStopsFollowSignalRules() && GapAndFractalStrengthCausal();
 }
