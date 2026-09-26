@@ -43,7 +43,8 @@ CORE_OBJECTS=src/CzscCommon.o src/CzscMorphology.o src/CzscCenter.o \
              src/CzscAnalyzer.o src/CzscTdxExports.o src/CzscProjection.o src/CzscReplay.o
 # 新架构：core/ 纯领域引擎，tests/unit/ 模块化单元测试（通配收录，新增文件无需改 Makefile）
 CHAN_OBJECTS=$(patsubst %.cpp,%.o,$(wildcard core/*.cpp core/*/*.cpp))
-UNIT_OBJECTS=$(CHAN_OBJECTS) $(patsubst %.cpp,%.o,$(wildcard tests/unit/*.cpp))
+# 迁移期：单元测试链接旧实现（src/）作为 oracle，逐位对照；旧实现删除时去掉 $(CORE_OBJECTS)
+UNIT_OBJECTS=$(CHAN_OBJECTS) $(CORE_OBJECTS) $(patsubst %.cpp,%.o,$(wildcard tests/unit/*.cpp))
 UNIT_TARGET=tests/unit/ChanTests$(EXEEXT)
 UNIT_TARGETS=tests/unit/ChanTests tests/unit/ChanTests.exe
 OBJECT1=Main.o $(CORE_OBJECTS)
