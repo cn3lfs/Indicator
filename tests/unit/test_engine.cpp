@@ -1,6 +1,6 @@
 // 增量引擎 = 参照实现（每步整条重算后差分），逐事件一致；这是增量逻辑的长期规格。
 #include "check.h"
-#include "oracle_data.h"
+#include "sse_data.h"
 #include "core/engine.h"
 
 #include <cstdio>
@@ -31,15 +31,15 @@ bool Same(const std::vector<chan::SignalEvent> &a, const std::vector<chan::Signa
 
 TEST(IncrementalEngineMatchesReference)
 {
-  std::vector<OracleSample> samples = OracleSamples();
+  std::vector<SseSample> samples = SseSamples();
   samples[1].high.resize(9000);
   samples[1].low.resize(9000);
   int total = 0;
-  for (OracleSample &s : samples)
+  for (SseSample &s : samples)
   {
     int n = static_cast<int>(s.high.size());
     chan::Series series = chan::Series::FromRaw(n, &s.high[0], &s.low[0]);
-    for (int code : kOracleConfigs)
+    for (int code : kConfigs)
     {
       chan::Config c = *chan::Config::Decode(code);
       chan::Analysis inc = chan::Analyze(series, c);

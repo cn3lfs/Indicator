@@ -535,6 +535,16 @@ void SegmentStream::RunHeuristic(const std::vector<Pivot> &s, bool fresh)
   {
     horizon_.Read(i_);
     int dir = s[start_].kind == Kind::Bottom ? 1 : -1;
+    // 第71课：新段确立前先破了起点（向上段出现更低的底 / 向下段出现更高的顶），起点不是分界点，
+    // 前一段延续 → 起点顺延到该端点后重新考察（与极值持平不算突破）
+    if (s[i_].kind == s[start_].kind && MoreExtremePivot(s[start_], s[i_]) && s[i_].Price() != s[start_].Price())
+    {
+      out_.back() = s[i_];
+      start_ = i_;
+      has_ = false;
+      i_ = start_ + 1;
+      continue;
+    }
     if (!has_)
     {
       if (i_ - start_ >= 3 && s[i_].kind != s[start_].kind)

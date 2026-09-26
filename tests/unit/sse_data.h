@@ -1,23 +1,23 @@
-// 迁移期 oracle 对照用数据：SSE 日线原样 + 翻转/缩放拼接的放大序列。
+// 上证指数日线样本：原样 + 翻转/缩放拼接的 12 倍放大序列（覆盖更多形态）；kConfigs 为常用配置全集。
 #pragma once
 
 #include "tests/SseIndexDaily.h"
 
 #include <vector>
 
-struct OracleSample
+struct SseSample
 {
   const char *name;
   std::vector<float> high, low;
 };
 
-inline std::vector<OracleSample> OracleSamples()
+inline std::vector<SseSample> SseSamples()
 {
-  std::vector<OracleSample> out;
+  std::vector<SseSample> out;
   out.push_back({"sse", std::vector<float>(SSE_DAILY_HIGH, SSE_DAILY_HIGH + SSE_DAILY_COUNT),
                  std::vector<float>(SSE_DAILY_LOW, SSE_DAILY_LOW + SSE_DAILY_COUNT)});
   const int rep = 12;
-  OracleSample big{"sse-x12", {}, {}};
+  SseSample big{"sse-x12", {}, {}};
   for (int r = 0; r < rep; r++)
   {
     float scale = 1.0f + 0.013f * static_cast<float>(r % 7);
@@ -32,4 +32,4 @@ inline std::vector<OracleSample> OracleSamples()
   return out;
 }
 
-inline const int kOracleConfigs[] = {0, 1, 2, 10, 11, 12, 100, 101, 102, 1100, 1101, 1102, 1110};
+inline const int kConfigs[] = {0, 1, 2, 10, 11, 12, 100, 101, 102, 1100, 1101, 1102, 1110};

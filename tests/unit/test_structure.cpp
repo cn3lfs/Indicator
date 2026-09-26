@@ -1,6 +1,6 @@
 // 结构层不变量（第17/18/20课）与关键原文规则。
 #include "check.h"
-#include "oracle_data.h"
+#include "sse_data.h"
 #include "core/dynamics.h"
 #include "core/morphology.h"
 #include "core/structure.h"
@@ -23,7 +23,7 @@ TEST(CentersRespectBoundsAndDoNotShareEndpoints)
 {
   Series s = Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
   std::vector<Fractal> f = DetectFractals(MergeBars(s));
-  for (int code : kOracleConfigs)
+  for (int code : kConfigs)
   {
     std::vector<Pivot> p = BuildPivots(f, *Config::Decode(code));
     std::vector<Center> c = BuildCenters(p);

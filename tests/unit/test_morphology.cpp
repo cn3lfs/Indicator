@@ -1,6 +1,6 @@
 // 形态层不变量（第62/65/67/71课）：与实现细节无关的长期规格。
 #include "check.h"
-#include "oracle_data.h"
+#include "sse_data.h"
 #include "core/morphology.h"
 
 #include <algorithm>
@@ -66,16 +66,13 @@ TEST(FractalsAlternateAndAreCausal)
 TEST(PivotsAlternateAndProgress)
 {
   std::vector<Fractal> f = DetectFractals(MergeBars(Sse()));
-  for (int code : kOracleConfigs)
+  for (int code : kConfigs)
   {
     Config c = *Config::Decode(code);
     std::vector<Pivot> p = BuildPivots(f, c);
     CHECK(p.size() >= 2);
     CHECK(Alternates(p));
-    // 已知缺陷（与旧实现一致，迁移期保持逐位对照）：启发式线段在新笔/czsc 笔上会产生价位倒挂段
-    // （SSE 2022-12-07 顶 3226.08 → 2023-02-06 底 3226.21）。阶段 6 移除 oracle 后按第71课修正并去掉此豁免。
-    bool heuristicSegment = c.unit == CenterUnit::Segment && c.segment == SegmentMethod::Heuristic;
-    if (!heuristicSegment) CHECK(PriceProgresses(p));
+    CHECK(PriceProgresses(p));
     if (c.unit == CenterUnit::Segment)
     {
       // 线段端点是笔端点的子集（第67课），且级别更高
