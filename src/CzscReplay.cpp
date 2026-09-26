@@ -22,6 +22,26 @@
 
 namespace
 {
+struct SignalState
+{
+  int   nPriority;
+  float fStop;
+};
+
+// 第20/21/27课：一/二类买点跌破信号点低点即背驰/二买不成立；三买回试跌破 ZG 即不构成三买（卖点对称）
+float SignalStopPrice(const TradingSignalCandidate &C, const std::vector<SegmentPoint> &Points,
+                      const std::vector<Center> &Centers)
+{
+  const SegmentPoint &P = Points[(std::size_t)C.nPoint];
+  bool bThird = (C.fSignal == SIGNAL_THIRD_BUY) || (C.fSignal == SIGNAL_THIRD_SELL);
+  if (bThird && (C.nCenter >= 0) && ((std::size_t)C.nCenter < Centers.size()))
+  {
+    return (C.fSignal == SIGNAL_THIRD_BUY) ? Centers[(std::size_t)C.nCenter].fHigh
+                                           : Centers[(std::size_t)C.nCenter].fLow;
+  }
+  return (GetTradingSignalSide(C.fSignal) > 0) ? P.fLow : P.fHigh;
+}
+
 struct SignalKey
 {
   int   nIndex;
@@ -49,7 +69,7 @@ std::vector<ReplaySignalEvent> BuildReplaySignalEvents(int nCount, float *pHigh,
   std::vector<Fractal> All = BuildFractals(BuildMergedBars(nCount, pHigh, pLow));
   EnergyTables Tables = BuildEnergyTables(nCount, pHigh, pLow);
 
-  std::map<SignalKey, int> Active;  // 当前有效信号 → 优先级
+  std::map<SignalKey, SignalState> Active;  // 当前有效信号 → 优先级/失效价
   std::vector<Fractal> Prefix;
   Prefix.reserve(All.size());
   for (std::size_t k = 0; k < All.size(); k++)
@@ -76,7 +96,7 @@ std::vector<ReplaySignalEvent> BuildReplaySignalEvents(int nCount, float *pHigh,
       BuildTradingSignalCandidates(Points, Centers, Structures, Breakouts);
 
     // 只认端点已被下一端点确认的候选（末端点仍可延伸，不输出）
-    std::map<SignalKey, int> Now;
+    std::map<SignalKey, SignalState> Now;
     for (std::size_t i = 0; i < Candidates.size(); i++)
     {
       const TradingSignalCandidate &C = Candidates[i];
@@ -85,10 +105,11 @@ std::vector<ReplaySignalEvent> BuildReplaySignalEvents(int nCount, float *pHigh,
         continue;
       }
       SignalKey Key = {C.nIndex, C.fSignal};
-      std::map<SignalKey, int>::iterator It = Now.find(Key);
-      if ((It == Now.end()) || (It->second < C.nPriority))
+      std::map<SignalKey, SignalState>::iterator It = Now.find(Key);
+      if ((It == Now.end()) || (It->second.nPriority < C.nPriority))
       {
-        Now[Key] = C.nPriority;
+        SignalState State = {C.nPriority, SignalStopPrice(C, Points, Centers)};
+        Now[Key] = State;
       }
     }
 
@@ -97,19 +118,21 @@ std::vector<ReplaySignalEvent> BuildReplaySignalEvents(int nCount, float *pHigh,
       Active.swap(Now);  // 基线：窗口起点前已存在的信号，不作为事件
       continue;
     }
-    for (std::map<SignalKey, int>::const_iterator It = Now.begin(); It != Now.end(); ++It)
+    for (std::map<SignalKey, SignalState>::const_iterator It = Now.begin(); It != Now.end(); ++It)
     {
       if (Active.find(It->first) == Active.end())
       {
-        ReplaySignalEvent E = {nBar, It->first.nIndex, It->first.fSignal, It->second, false};
+        ReplaySignalEvent E = {nBar, It->first.nIndex, It->first.fSignal, It->second.nPriority, false,
+                               It->second.fStop};
         Events.push_back(E);
       }
     }
-    for (std::map<SignalKey, int>::const_iterator It = Active.begin(); It != Active.end(); ++It)
+    for (std::map<SignalKey, SignalState>::const_iterator It = Active.begin(); It != Active.end(); ++It)
     {
       if (Now.find(It->first) == Now.end())
       {
-        ReplaySignalEvent E = {nBar, It->first.nIndex, It->first.fSignal, It->second, true};
+        ReplaySignalEvent E = {nBar, It->first.nIndex, It->first.fSignal, It->second.nPriority, true,
+                               It->second.fStop};
         Events.push_back(E);
       }
     }
@@ -181,6 +204,29 @@ void WriteReplaySignals(int nCount, float *pOut, const std::vector<ReplaySignalE
     if (E.nPriority >= Priority[(std::size_t)E.nBar])
     {
       pOut[E.nBar] = E.fSignal;
+      Priority[(std::size_t)E.nBar] = E.nPriority;
+    }
+  }
+}
+
+void WriteReplayStops(int nCount, float *pOut, const std::vector<ReplaySignalEvent> &Events)
+{
+  if (!HasOutput(nCount, pOut))
+  {
+    return;
+  }
+  ClearOutput(nCount, pOut);
+  std::vector<int> Priority((std::size_t)nCount, -1);
+  for (std::size_t i = 0; i < Events.size(); i++)
+  {
+    const ReplaySignalEvent &E = Events[i];
+    if (E.bRevoke || (E.nBar < 0) || (E.nBar >= nCount))
+    {
+      continue;
+    }
+    if (E.nPriority >= Priority[(std::size_t)E.nBar])
+    {
+      pOut[E.nBar] = E.fStop;
       Priority[(std::size_t)E.nBar] = E.nPriority;
     }
   }

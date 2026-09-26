@@ -30,6 +30,7 @@ struct ReplaySignalEvent
   float fSignal;     // 1/2/3 买、11/12/13 卖
   int   nPriority;   // 同根取胜优先级（同 TradingSignalCandidate）
   bool  bRevoke;     // true=此前出现过的信号在 nBar 失效
+  float fStop;       // 信号失效价（止损参考）：一/二买=信号点低点、三买=中枢 ZG；卖点对称(高点/ZD)
 };
 
 // nWindow>0 时只逐步重放最近 nWindow 根K线内的事件（窗口起点先算一次基线、不产生事件），
@@ -43,5 +44,7 @@ const std::vector<ReplaySignalEvent> &GetOrBuildReplaySignalEvents(int nCount, f
 
 // 输出：bRevoke=false 的事件写在 nBar 上（当下确认信号）；bRevoke=true 写失效信号码
 void WriteReplaySignals(int nCount, float *pOut, const std::vector<ReplaySignalEvent> &Events, bool bRevoke);
+// 输出：在信号当下确认的 K 线上写该信号的失效价（止损参考位）
+void WriteReplayStops(int nCount, float *pOut, const std::vector<ReplaySignalEvent> &Events);
 
 #endif

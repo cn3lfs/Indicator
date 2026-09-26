@@ -114,10 +114,35 @@ bool Func30WritesReplayOutputs()
   }
   return (nAppear > 0) && (nRevoke > 0) && (nOut <= nAppear) && (nRev <= nRevoke) && (nOut > 0) && (nRev > 0);
 }
+
+// 失效价：一/二买=信号点低点、三买=中枢 ZG（卖点对称）；111 与 109 同根输出
+bool ReplayStopsFollowSignalRules()
+{
+  const int N = SSE_DAILY_COUNT;
+  std::vector<float> H(SSE_DAILY_HIGH, SSE_DAILY_HIGH + N), L(SSE_DAILY_LOW, SSE_DAILY_LOW + N);
+  std::vector<ReplaySignalEvent> Events = BuildReplaySignalEvents(N, &H[0], &L[0], DefaultConfig());
+  std::vector<float> Mode(N, -1110.0f), Stop(N, -9.0f);
+  Func30(N, &Stop[0], &H[0], &L[0], &Mode[0]);
+  int nChecked = 0;
+  for (std::size_t i = 0; i < Events.size(); i++)
+  {
+    const ReplaySignalEvent &E = Events[i];
+    if (E.bRevoke) continue;
+    float fSig = E.fSignal;
+    if ((fSig == 1.0f) || (fSig == 2.0f)) { if (E.fStop != L[(std::size_t)E.nIndex]) return false; }
+    else if ((fSig == 11.0f) || (fSig == 12.0f)) { if (E.fStop != H[(std::size_t)E.nIndex]) return false; }
+    else if (fSig == 3.0f) { if (!(E.fStop <= L[(std::size_t)E.nIndex])) return false; }   // 三买回试低点不破 ZG
+    else if (fSig == 13.0f) { if (!(E.fStop >= H[(std::size_t)E.nIndex])) return false; } // 三卖回抽高点不破 ZD
+    if (Stop[(std::size_t)E.nBar] == 0.0f) return false;
+    nChecked++;
+  }
+  return nChecked > 0;
+}
 }
 
 bool TestReplaySuite()
 {
   return ReplayMatchesPrefix(0) && ReplayMatchesPrefix(1) && ReplayMatchesPrefix(10) &&
-         ReplayWindowIsSuffixOfFull() && ReplayExposesRevokedFirstSell() && Func30WritesReplayOutputs();
+         ReplayWindowIsSuffixOfFull() && ReplayExposesRevokedFirstSell() && Func30WritesReplayOutputs() &&
+         ReplayStopsFollowSignalRules();
 }

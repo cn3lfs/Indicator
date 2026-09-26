@@ -755,7 +755,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
   }
   CzscConfig Config = DecodeConfig((float)nConfig);
   int nOutput = (nMode % (bExtended ? 10000 : 1000)) / 10;
-  if (bExtended && (nOutput < 100 || nOutput > 110))
+  if (bExtended && (nOutput < 100 || nOutput > 111))
   { for (int i=0;i<nCount;i++) pOut[i]=-1; return; }
 
   // 93-108 是显式带锚快照表：pTime 必须有 nCount+4 个 float。
@@ -791,7 +791,7 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
 
   // 109/110：逐步重放（无未来函数）。109=信号在当下确认的K线上写信号码，110=在失效K线上写被撤销的信号码。
   // pTime[1] 为合法正整数时作为重放窗口（最近 N 根），否则全量重放（常量 mode 调用即全量）。
-  if (nOutput == 109 || nOutput == 110)
+  if (nOutput >= 109 && nOutput <= 111)
   {
     int nWindow = 0;
     if ((nCount > 1) && std::isfinite(pTime[1]) && (pTime[1] >= 1) && (pTime[1] < 16777216) &&
@@ -799,8 +799,15 @@ void Func30(int nCount, float *pOut, float *pHigh, float *pLow, float *pTime)
     {
       nWindow = static_cast<int>(pTime[1]);
     }
-    WriteReplaySignals(nCount, pOut, GetOrBuildReplaySignalEvents(nCount, pHigh, pLow, Config, nWindow),
-                       nOutput == 110);
+    const std::vector<ReplaySignalEvent> &Events = GetOrBuildReplaySignalEvents(nCount, pHigh, pLow, Config, nWindow);
+    if (nOutput == 111)
+    {
+      WriteReplayStops(nCount, pOut, Events);  // 111：与 109 同根的信号失效价（止损参考）
+    }
+    else
+    {
+      WriteReplaySignals(nCount, pOut, Events, nOutput == 110);
+    }
     return;
   }
 
