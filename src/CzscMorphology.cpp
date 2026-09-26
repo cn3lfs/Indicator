@@ -690,7 +690,16 @@ static int FindFeatureSegmentEnd(const std::vector<SegmentPoint> &P, std::size_t
       return (int)nEndPoint;
     }
 
-    if (HasAnyFeatureFractal(P, nEndPoint, -nDir))
+    // 反向特征序列须在原线段再创新高/新低之前出现分型；一旦先破了该分型极值，原线段延续（第67/71课）
+    std::size_t nLimit = nEndPoint + 2;
+    // 原文未定义“等高”情形，本实现取：与分型极值持平不算突破
+    while ((nLimit < P.size()) &&
+           !(IsMoreExtremePoint(P[nEndPoint], P[nLimit]) && (GetPointPrice(P[nLimit]) != GetPointPrice(P[nEndPoint]))))
+    {
+      nLimit += 2;
+    }
+    std::vector<SegmentPoint> Window(P.begin(), P.begin() + (nLimit < P.size() ? nLimit : P.size()));
+    if (HasAnyFeatureFractal(Window, nEndPoint, -nDir))
     {
       return (int)nEndPoint;
     }

@@ -675,7 +675,7 @@ static bool TestRealSseDiagnosticCounts()
 
   return (Strokes.size() == 157) &&
          (StrokeAn.Points.size() == 158) &&
-         (SegmentAn.Points.size() == 13) &&
+         (SegmentAn.Points.size() == 11) &&
          (StrokeAn.Centers.size() == 18) &&
          (SegmentAn.Centers.size() == 1) &&
          (StrokeAn.Candidates.size() == 17) &&
@@ -7479,6 +7479,24 @@ static bool TestStrokeRequiresPriceProgress()
   return (Strokes.size() == 1) && (Strokes[0].Start.nIndex == 8) && (Strokes[0].End.nIndex == 12);
 }
 
+// 第67/71课：有缺口的特征序列顶分型，若反向特征序列出现分型前原线段先创新高，原线段延续，不在旧顶结束
+static bool TestFeatureSegmentGapNewHighBeforeReversalExtends()
+{
+  const float Px[] = {10, 20, 14, 30, 25, 28, 22, 32, 26, 40, 33, 38, 20, 30, 18, 25, 21, 35};
+  std::vector<Fractal> F;
+  for (int i = 0; i < 18; i++)
+  {
+    bool bTop = (i % 2) == 1;
+    F.push_back(MakeTestFractal(bTop ? CZSC_POINT_TOP : CZSC_POINT_BOTTOM, i * 4,
+                                bTop ? Px[i] : Px[i] + 2, bTop ? Px[i] - 2 : Px[i]));
+  }
+
+  std::vector<Stroke> Strokes = BuildStrokes(F);
+  std::vector<SegmentPoint> Line = BuildLineSegmentPointsByFeature(Strokes);
+  return (Strokes.size() == 17) && (Line.size() >= 2) && (Line[0].nIndex == 0) &&
+         (Line[1].nType == CZSC_POINT_TOP) && (Line[1].nIndex == 36);
+}
+
 static bool TestFeatureLineSegmentEndsAtBottomFractal()
 {
   std::vector<Fractal> F;
@@ -9380,6 +9398,10 @@ int main()
   if (!TestStrokeRequiresPriceProgress())
   {
     return 219;
+  }
+  if (!TestFeatureSegmentGapNewHighBeforeReversalExtends())
+  {
+    return 220;
   }
   return 0;
 }
