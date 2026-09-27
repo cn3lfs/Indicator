@@ -16,31 +16,33 @@ float Mid(const Center &c) { return (c.zg + c.zd) * 0.5f; }
 
 // 相邻走势的分界：前走势最后中枢末端点 → 后走势首中枢首端点之间的极值点；
 // 后继中枢更高取最低点（上一层向上段由此开始），更低取最高点（等值取先出现者）
-std::vector<int> Boundaries(const RecursiveLevel &l)
+std::vector<int> Boundaries(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
+                            const std::vector<Movement> &m)
 {
   std::vector<int> b;
-  const std::vector<Movement> &m = l.movements;
   if (m.empty()) return b;
-  const Center &first = l.centers[static_cast<std::size_t>(m[0].firstCenter)];
+  const Center &first = centers[static_cast<std::size_t>(m[0].firstCenter)];
   b.push_back(first.firstPivot > 0 ? first.firstPivot - 1 : first.firstPivot);  // 首个走势自首中枢的进入点起
   for (std::size_t i = 0; i + 1 < m.size(); i++)
   {
-    const Center &a = l.centers[static_cast<std::size_t>(m[i].lastCenter)];
-    const Center &c = l.centers[static_cast<std::size_t>(m[i + 1].firstCenter)];
+    const Center &a = centers[static_cast<std::size_t>(m[i].lastCenter)];
+    const Center &c = centers[static_cast<std::size_t>(m[i + 1].firstCenter)];
     bool up = Mid(c) > Mid(a);
     int best = a.lastPivot;
     for (int k = a.lastPivot; k <= c.firstPivot; k++)
     {
-      float v = l.pivots[static_cast<std::size_t>(k)].Price(), w = l.pivots[static_cast<std::size_t>(best)].Price();
+      float v = pivots[static_cast<std::size_t>(k)].Price(), w = pivots[static_cast<std::size_t>(best)].Price();
       if (up ? v < w : v > w) best = k;
     }
     b.push_back(best);
   }
-  b.push_back(static_cast<int>(l.pivots.size()) - 1);  // 最后一个走势暂以最后端点结束
+  b.push_back(static_cast<int>(pivots.size()) - 1);  // 最后一个走势暂以最后端点结束
   return b;
 }
 
-// 由下层分界点得到上层端点：相邻同型保留更极端者（等值保留先者），并给出定型时刻
+std::vector<int> Boundaries(const RecursiveLevel &l) { return Boundaries(l.pivots, l.centers, l.movements); }
+
+// 由下层分界点得到上层端点：相邻同型保留更极端者（等值保留先者），异型不推进者并入前组，并给出定型时刻
 void NextPivots(const RecursiveLevel &l, std::vector<Pivot> &pivots, std::vector<int> &finalAt)
 {
   const std::vector<int> &b = l.boundaries;
@@ -60,6 +62,12 @@ void NextPivots(const RecursiveLevel &l, std::vector<Pivot> &pivots, std::vector
     {
       bool more = p.kind == Kind::Top ? p.high > pivots.back().high : p.low < pivots.back().low;
       if (more) pivots.back() = p;
+      finalAt.back() = Later(finalAt.back(), f);
+      continue;
+    }
+    // 异型点须价位推进（底低于前顶、顶高于前底），否则不成端点，并入前一组（其后同型点再取极值）
+    if (!pivots.empty() && (p.kind == Kind::Top ? p.Price() <= pivots.back().Price() : p.Price() >= pivots.back().Price()))
+    {
       finalAt.back() = Later(finalAt.back(), f);
       continue;
     }
@@ -97,6 +105,12 @@ void BuildStructure(RecursiveLevel &l)
 }
 
 }  // namespace
+
+std::vector<int> MovementBoundaries(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
+                                    const std::vector<Movement> &movements)
+{
+  return Boundaries(pivots, centers, movements);
+}
 
 std::vector<RecursiveLevel> BuildRecursion(const Analysis &a, int maxLevels)
 {

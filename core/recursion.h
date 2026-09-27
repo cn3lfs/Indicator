@@ -21,6 +21,10 @@ struct RecursiveLevel
   std::vector<int> boundaries;         // 走势 m 的起止为 pivots[boundaries[m]] → pivots[boundaries[m+1]]（端点下标）
 };
 
+// 相邻走势的分界端点下标（口径见 Boundaries）：走势 m 为 [b[m], b[m+1]]，最后一个暂止于最后端点
+std::vector<int> MovementBoundaries(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
+                                    const std::vector<Movement> &movements);
+
 // 自 Analysis 的最终快照与定型时刻逐层递归；maxLevels 为总层数上限（含第 0 层）
 std::vector<RecursiveLevel> BuildRecursion(const Analysis &analysis, int maxLevels = 16);
 
