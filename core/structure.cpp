@@ -103,6 +103,17 @@ std::size_t CenterStream::FinalCount(std::size_t pivotFinal) const
   return 0;
 }
 
+bool CenterStream::HorizonAfter(std::size_t center, Horizon &out) const
+{
+  for (const Checkpoint &cp : checkpoints_)
+    if (cp.outSize > center)
+    {
+      out = cp.horizon;
+      return true;
+    }
+  return false;
+}
+
 bool CenterStream::Same(const Center &a, const Center &b)
 {
   return a.firstPivot == b.firstPivot && a.lastPivot == b.lastPivot && a.start == b.start && a.end == b.end &&

@@ -21,6 +21,8 @@ public:
   const std::vector<Center> &Centers() const { return out_; }
   // 已定型中枢数：端点前 pivotFinal 个不再改变时，视界落在其内的最后检查点之前的中枢不再改变
   std::size_t FinalCount(std::size_t pivotFinal) const;
+  // 第 center 个中枢确定时的累计读取视界（其后首个检查点记录的视界）；中枢尚未收尾返回 false
+  bool HorizonAfter(std::size_t center, Horizon &out) const;
 
 private:
   struct Checkpoint
