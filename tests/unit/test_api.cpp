@@ -298,7 +298,6 @@ TEST(ApiEdgeCases)
   { czsc_input x = in; x.n = -1; CHECK(rejects(x)); }
   { czsc_input x = in; x.n = 16777217; CHECK(rejects(x)); }
   { czsc_input x = in; x.close = nullptr; CHECK(rejects(x)); }
-  { czsc_input x = in; x.flags = CZSC_FLAG_HIGHER; CHECK(rejects(x)); }
   { czsc_input x = in; x.flags = 0x10; CHECK(rejects(x)); }
   Data nan = d; nan.h[40] = std::numeric_limits<float>::quiet_NaN();
   CHECK(rejects(Input(nan, 0)));
@@ -499,4 +498,95 @@ TEST(ApiMovementCompletion)
   czsc_snapshot_free(hn);
   czsc_snapshot_free(hl);
   czsc_snapshot_free(hh);
+}
+
+// v4：递归走势节点
+namespace
+{
+struct Rec
+{
+  std::vector<czsc_recursive_node> nodes;
+  std::vector<int32_t> children;
+  std::vector<czsc_movement> movements;
+};
+
+Rec BuildRec(const Data &d, int config, int flags = CZSC_FLAG_HIGHER)
+{
+  czsc_input in = Input(d, config, flags);
+  void *h = czsc_snapshot_build(&in);
+  Rec r;
+  if (!h) return r;
+  r.nodes = Get(czsc_recursive_nodes, h);
+  r.children = Get(czsc_recursive_children, h);
+  r.movements = Get(czsc_movements, h);
+  czsc_snapshot_free(h);
+  return r;
+}
+
+const czsc_recursive_node *Find(const Rec &r, int level, int ordinal)
+{
+  for (const czsc_recursive_node &n : r.nodes)
+    if (n.level == level && n.ordinal == ordinal) return &n;
+  return nullptr;
+}
+}  // namespace
+
+TEST(ApiRecursiveNodes)
+{
+  Data d = Rising();
+  CHECK(BuildRec(d, 0, 0).nodes.empty());  // 未置位1不生成
+  Rec r = BuildRec(d, 0);
+  int maxLevel = 0;
+  std::size_t level0 = 0;
+  for (std::size_t i = 0; i < r.nodes.size(); i++)
+  {
+    const czsc_recursive_node &n = r.nodes[i];
+    CHECK(n.size == sizeof(czsc_recursive_node) && n.start <= n.centerStart && n.centerEnd <= n.end + 1);
+    maxLevel = std::max(maxLevel, n.level);
+    if (n.level == 0)
+    {
+      const czsc_movement &m = r.movements[static_cast<std::size_t>(n.ordinal)];
+      CHECK(n.type == m.type && n.centerStart == m.start && n.centerEnd == m.end && n.childCount == 0);
+      level0++;
+    }
+    else
+    {
+      REQUIRE(n.childCount > 0);
+      int prevEnd = -1;
+      for (int k = 0; k < n.childCount; k++)
+      {
+        const czsc_recursive_node &c = r.nodes[static_cast<std::size_t>(r.children[static_cast<std::size_t>(n.firstChild + k)])];
+        CHECK(c.level == n.level - 1 && c.start >= n.start && c.end <= n.end && (prevEnd < 0 || c.start == prevEnd));
+        prevEnd = c.end;
+      }
+      CHECK(n.centerCount >= 1 && (n.type == 0 || n.centerCount >= 2));
+    }
+    if (n.successor >= 0)
+    {
+      const czsc_recursive_node &s = r.nodes[static_cast<std::size_t>(n.successor)];
+      CHECK(s.level == n.level && s.ordinal == n.ordinal + 1 && s.start == n.end && n.completed == s.established);
+    }
+  }
+  CHECK(level0 == r.movements.size() && maxLevel >= 1);
+
+  // 因果：前缀中已定型的节点与全量中同层同序号的节点逐字段相同
+  int compared = 0;
+  for (int k = 3000; k < d.n(); k += 1111)
+  {
+    Data p = d;
+    p.h.resize(static_cast<std::size_t>(k) + 1); p.l.resize(p.h.size()); p.c.resize(p.h.size()); p.v.resize(p.h.size());
+    Rec pr = BuildRec(p, 0);
+    for (const czsc_recursive_node &x : pr.nodes)
+    {
+      if (x.confirmedAt < 0) continue;
+      const czsc_recursive_node *y = Find(r, x.level, x.ordinal);
+      REQUIRE(y != nullptr);
+      CHECK(x.type == y->type && x.start == y->start && x.end == y->end && x.centerStart == y->centerStart &&
+            x.centerEnd == y->centerEnd && x.centerCount == y->centerCount && x.established == y->established &&
+            x.connection == y->connection && x.completed == y->completed && x.confirmedAt == y->confirmedAt &&
+            x.childCount == y->childCount);
+      compared++;
+    }
+  }
+  CHECK(compared > 50);
 }

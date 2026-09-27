@@ -2,6 +2,7 @@
 #include "adapter/czsc_api.h"
 
 #include "core/engine.h"
+#include "core/recursion.h"
 #include "core/structure.h"
 
 #include <algorithm>
@@ -46,6 +47,8 @@ struct Snapshot
   std::vector<czsc_signal> signals;
   std::vector<czsc_event> events;
   std::vector<czsc_bar> bars;
+  std::vector<czsc_recursive_node> nodes;
+  std::vector<int32_t> children;
 };
 
 struct Nested
@@ -324,6 +327,64 @@ void CompleteMovements(const chan::Analysis &a, Snapshot &out)
   }
 }
 
+int Later(int a, int b) { return (a < 0 || b < 0) ? -1 : std::max(a, b); }
+
+// 递归走势节点（第17课）：逐层给出走势的起止连接点、中枢范围、成立/完成时刻、后继与子节点
+void BuildRecursiveNodes(const chan::Analysis &a, Snapshot &out)
+{
+  std::vector<chan::RecursiveLevel> levels = chan::BuildRecursion(a);
+  std::vector<std::size_t> levelBase;
+  for (const chan::RecursiveLevel &l : levels)
+  {
+    levelBase.push_back(out.nodes.size());
+    std::size_t nm = l.movements.size();
+    for (std::size_t m = 0; m < nm; m++)
+    {
+      const chan::Movement &mv = l.movements[m];
+      const chan::Center &first = l.centers[static_cast<std::size_t>(mv.firstCenter)];
+      czsc_recursive_node row = Row<czsc_recursive_node>();
+      row.level = static_cast<int32_t>(levelBase.size() - 1);
+      row.ordinal = static_cast<int32_t>(m);
+      row.type = static_cast<int32_t>(mv.type);
+      row.start = l.pivots[static_cast<std::size_t>(l.boundaries[m])].index;
+      row.end = l.pivots[static_cast<std::size_t>(l.boundaries[m + 1])].index;
+      row.centerStart = mv.start;
+      row.centerEnd = mv.end;
+      row.centerCount = mv.lastCenter - mv.firstCenter + 1;
+      std::size_t third = static_cast<std::size_t>(first.firstPivot) + 3;
+      row.established = row.level == 0 ? l.pivots[third].fractalAt : l.pivotFinalAt[third];
+      row.connection = m + 1 < nm ? row.end : -1;
+      row.completed = -1;
+      row.successor = m + 1 < nm ? static_cast<int32_t>(out.nodes.size() + 1) : -1;
+      row.firstChild = -1;
+      row.childCount = 0;
+      // 起点依赖前一走势（首个走势依赖进入端点），终点依赖后一走势：三者都定型才定型
+      int startFinal = m == 0 ? l.pivotFinalAt[static_cast<std::size_t>(l.boundaries[0])] : l.movementFinalAt[m - 1];
+      int endFinal = m + 1 < nm ? l.movementFinalAt[m + 1] : -1;
+      row.confirmedAt = Later(Later(startFinal, l.movementFinalAt[m]), endFinal);
+      out.nodes.push_back(row);
+    }
+    for (std::size_t m = levelBase.back(); m + 1 < out.nodes.size(); m++)
+      out.nodes[m].completed = out.nodes[m + 1].established;
+  }
+  // 子节点：下一层中起止落在本节点起止之内的节点（上层端点即下层连接点，故为连续的一段）
+  for (std::size_t L = 1; L < levelBase.size(); L++)
+  {
+    std::size_t lo = levelBase[L - 1], hi = levelBase[L];
+    for (std::size_t n = levelBase[L]; n < (L + 1 < levelBase.size() ? levelBase[L + 1] : out.nodes.size()); n++)
+    {
+      czsc_recursive_node &node = out.nodes[n];
+      for (std::size_t c = lo; c < hi; c++)
+      {
+        if (out.nodes[c].start < node.start || out.nodes[c].end > node.end) continue;
+        if (node.firstChild < 0) node.firstChild = static_cast<int32_t>(out.children.size());
+        out.children.push_back(static_cast<int32_t>(c));
+        node.childCount++;
+      }
+    }
+  }
+}
+
 std::string CheckInput(const czsc_input *in, chan::Config &config)
 {
   if (in == nullptr) return "input 为 NULL";
@@ -333,7 +394,6 @@ std::string CheckInput(const czsc_input *in, chan::Config &config)
   if (!c) return "非法配置码 " + std::to_string(in->config) + "：个位 0..2，其余位 0..1，最大 1112";
   config = *c;
   if (in->flags & ~static_cast<int32_t>(CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER)) return "flags 含未定义的位";
-  if (in->flags & CZSC_FLAG_HIGHER) return "CZSC_FLAG_HIGHER（高级别/递归结构，P2）尚未实现";
   if (in->n == 0) return "";
   if (!in->high || !in->low || !in->close || !in->volume) return "high/low/close/volume 均须非空";
   for (int32_t i = 0; i < in->n; i++)
@@ -435,6 +495,7 @@ Snapshot *Build(const czsc_input *in)
   }
   BuildSignals(a, r, (in->flags & CZSC_FLAG_EVENTS) != 0, *out);
   CompleteMovements(a, *out);
+  if (in->flags & CZSC_FLAG_HIGHER) BuildRecursiveNodes(a, *out);
 
   std::vector<int8_t> gaps = chan::Gaps(s);
   std::vector<int8_t> strengths = chan::FractalStrengths(s, a.bars, a.fractals);
@@ -608,5 +669,7 @@ const czsc_breakout *czsc_breakouts(void *h, int32_t *count) { return Table(h, c
 const czsc_signal *czsc_signals(void *h, int32_t *count) { return Table(h, count, &Snapshot::signals); }
 const czsc_event *czsc_events(void *h, int32_t *count) { return Table(h, count, &Snapshot::events); }
 const czsc_bar *czsc_bars(void *h, int32_t *count) { return Table(h, count, &Snapshot::bars); }
+const czsc_recursive_node *czsc_recursive_nodes(void *h, int32_t *count) { return Table(h, count, &Snapshot::nodes); }
+const int32_t *czsc_recursive_children(void *h, int32_t *count) { return Table(h, count, &Snapshot::children); }
 
 }  // extern "C"
