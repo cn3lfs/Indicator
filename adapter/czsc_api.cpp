@@ -290,6 +290,40 @@ void BuildSignals(const chan::Analysis &a, const Resolver &r, bool withEvents, S
   }
 }
 
+// 走势完成证据（第17/29课）：连接段、后继、后继成立时刻；趋势以最后中枢上的反向一类点为末端背驰证据
+void CompleteMovements(const chan::Analysis &a, Snapshot &out)
+{
+  const std::vector<chan::Movement> &m = a.snapshot.movements;
+  const std::vector<chan::Center> &c = a.snapshot.centers;
+  for (std::size_t i = 0; i < m.size(); i++)
+  {
+    czsc_movement &row = out.movements[i];
+    row.connectionStart = c[static_cast<std::size_t>(m[i].lastCenter)].lastPivot;
+    row.connectionEnd = row.successor = row.successorEstablishedAt = row.completedAt = -1;
+    row.completedByIndex = row.completedBy = -1;
+    if (i + 1 < m.size())
+    {
+      const chan::Center &next = c[static_cast<std::size_t>(m[i + 1].firstCenter)];
+      row.connectionEnd = next.firstPivot;
+      row.successor = static_cast<int32_t>(i + 1);
+      row.successorEstablishedAt = a.snapshot.pivots[static_cast<std::size_t>(next.firstPivot) + 3].fractalAt;
+      row.completedAt = row.successorEstablishedAt;
+    }
+    if (m[i].type == chan::MovementType::Consolidation) continue;
+    int32_t want = m[i].type == chan::MovementType::Up ? -1 : 1;
+    for (std::size_t j = 0; j < out.signals.size(); j++)
+    {
+      const czsc_signal &s = out.signals[j];
+      if (s.hindsight && s.type == want && s.center == m[i].lastCenter)
+      {
+        row.completedByIndex = s.index;
+        row.completedBy = static_cast<int32_t>(j);
+        break;
+      }
+    }
+  }
+}
+
 std::string CheckInput(const czsc_input *in, chan::Config &config)
 {
   if (in == nullptr) return "input 为 NULL";
@@ -400,6 +434,7 @@ Snapshot *Build(const czsc_input *in)
     out->breakouts.push_back(row);
   }
   BuildSignals(a, r, (in->flags & CZSC_FLAG_EVENTS) != 0, *out);
+  CompleteMovements(a, *out);
 
   std::vector<int8_t> gaps = chan::Gaps(s);
   std::vector<int8_t> strengths = chan::FractalStrengths(s, a.bars, a.fractals);
@@ -463,6 +498,21 @@ Nested *BuildNested(const Snapshot &low, const Snapshot &high)
     bool sameDirection = row.highSegmentStart >= 0 &&
                          hp[static_cast<std::size_t>(row.highSegmentStart)].kind == (l.type > 0 ? 1 : -1);
     row.smallTurn = !row.insideHighSegment && sameDirection;
+    row.highPrevStartLow = row.highPrevEndLow = row.highCurStartLow = row.highCurEndLow = -1;
+    if (h)
+    {
+      auto lowPivot = [&](int32_t highPivot) -> int32_t {
+        if (highPivot < 0) return -1;
+        int bar = hp[static_cast<std::size_t>(highPivot)].index;
+        auto it = std::lower_bound(low.pivots.begin(), low.pivots.end(), bar,
+                                   [](const czsc_pivot &p, int b) { return p.index < b; });
+        return (it != low.pivots.end() && it->index == bar) ? static_cast<int32_t>(it - low.pivots.begin()) : -1;
+      };
+      row.highPrevStartLow = lowPivot(h->divergence.prevStart);
+      row.highPrevEndLow = lowPivot(h->divergence.prevEnd);
+      row.highCurStartLow = lowPivot(h->divergence.curStart);
+      row.highCurEndLow = lowPivot(h->divergence.curEnd);
+    }
     out->rows.push_back(row);
   }
   return out;

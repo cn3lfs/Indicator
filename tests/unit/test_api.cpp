@@ -101,9 +101,9 @@ TEST(ApiVersionAndStructSizes)
 {
   CHECK(czsc_api_version() == CZSC_API_VERSION);
   // 全部为 4 字节字段、无填充：逐字节确定
-  CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 13 * 4 && sizeof(czsc_movement) == 7 * 4);
+  CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 13 * 4 && sizeof(czsc_movement) == 14 * 4);
   CHECK(sizeof(czsc_divergence) == 17 * 4 && sizeof(czsc_breakout) == 7 * 4 + sizeof(czsc_divergence));
-  CHECK(sizeof(czsc_event) == 4 * 4 && sizeof(czsc_bar) == 8 * 4 && sizeof(czsc_nested) == 9 * 4);
+  CHECK(sizeof(czsc_event) == 4 * 4 && sizeof(czsc_bar) == 8 * 4 && sizeof(czsc_nested) == 13 * 4);
   CHECK(sizeof(czsc_signal) == 12 * 4 + sizeof(czsc_divergence) + 7 * 4);
 }
 
@@ -165,7 +165,12 @@ TEST(ApiCausalConsistency)
       for (std::size_t i = 0; i < pre.c.size(); i++)
         if (pre.c[i].confirmedAt >= 0) CHECK(std::memcmp(&pre.c[i], &all.c[i], sizeof(czsc_center)) == 0);
       for (std::size_t i = 0; i < pre.m.size(); i++)
-        if (pre.m[i].confirmedAt >= 0) CHECK(std::memcmp(&pre.m[i], &all.m[i], sizeof(czsc_movement)) == 0);
+        if (pre.m[i].confirmedAt >= 0)
+        {
+          czsc_movement x = pre.m[i], y = all.m[i];
+          x.completedBy = y.completedBy = 0;  // 信号表下标随快照解析，非因果；其余字段（含 completedByIndex）须不变
+          CHECK(std::memcmp(&x, &y, sizeof x) == 0);
+        }
       for (std::size_t i = 0; i < pre.b.size(); i++)
         if (pre.b[i].confirmedAt >= 0) CHECK(std::memcmp(&pre.b[i], &all.b[i], sizeof(czsc_breakout)) == 0);
       // 信号：按 (K线, 类型, 确认时刻) 找同一段生命；revokedAt 晚于 k 视为未撤销；hindsight 非因果不比
@@ -442,4 +447,56 @@ TEST(ApiNested)
   czsc_snapshot_free(hh);
   czsc_snapshot_free(ho);
   CHECK(czsc_nested_rows(nullptr, nullptr) == nullptr);
+}
+
+// v3：走势完成证据与区间套低级别映射
+TEST(ApiMovementCompletion)
+{
+  Data d = Rising();
+  for (int code : {0, 1100})
+  {
+    Tables t = Build(d, code);
+    int trends = 0, ended = 0;
+    for (std::size_t i = 0; i < t.m.size(); i++)
+    {
+      const czsc_movement &m = t.m[i];
+      CHECK(m.connectionStart == t.c[static_cast<std::size_t>(m.lastCenter)].lastPivot);
+      if (i + 1 < t.m.size())
+      {
+        const czsc_center &next = t.c[static_cast<std::size_t>(t.m[i + 1].firstCenter)];
+        CHECK(m.successor == static_cast<int32_t>(i + 1) && m.connectionEnd == next.firstPivot);
+        CHECK(m.successorEstablishedAt == t.p[static_cast<std::size_t>(next.firstPivot) + 3].fractalAt && m.completedAt == m.successorEstablishedAt);
+        CHECK(m.successorEstablishedAt >= next.start);
+      }
+      else
+      {
+        CHECK(m.successor == -1 && m.completedAt == -1);
+      }
+      if (m.type != 0) trends++;
+      if (m.completedBy >= 0)
+      {
+        const czsc_signal &s = t.s[static_cast<std::size_t>(m.completedBy)];
+        CHECK(m.type != 0 && s.type == (m.type > 0 ? -1 : 1) && s.center == m.lastCenter && s.index == m.completedByIndex);
+        ended++;
+      }
+    }
+    if (code == 0) CHECK(trends > 0 && ended > 0);
+  }
+  czsc_input lo = Input(d, 0), hi = Input(d, 1100);
+  void *hl = czsc_snapshot_build(&lo), *hh = czsc_snapshot_build(&hi), *hn = czsc_nested_build(hl, hh);
+  REQUIRE(hn != nullptr);
+  Tables L = Read(hl), H = Read(hh);
+  int mapped = 0;
+  for (const czsc_nested &r : Get(czsc_nested_rows, hn))
+  {
+    if (r.highSignal < 0) { CHECK(r.highCurStartLow == -1 && r.highPrevStartLow == -1); continue; }
+    const czsc_signal &h = H.s[static_cast<std::size_t>(r.highSignal)];
+    if (r.highCurStartLow >= 0) CHECK(L.p[static_cast<std::size_t>(r.highCurStartLow)].index == H.p[static_cast<std::size_t>(h.divergence.curStart)].index);
+    if (r.highCurEndLow >= 0) CHECK(L.p[static_cast<std::size_t>(r.highCurEndLow)].index == h.index);
+    mapped += r.highCurStartLow >= 0 && r.highCurEndLow >= 0;
+  }
+  CHECK(mapped > 0);
+  czsc_snapshot_free(hn);
+  czsc_snapshot_free(hl);
+  czsc_snapshot_free(hh);
 }

@@ -33,8 +33,9 @@ extern "C" {
 #endif
 
 /* 版本历史：1 = P0 基础结构；2 = 追加 P1 研判语义（czsc_center.lifecycle、czsc_signal.quality 起 7 个字段、
- * czsc_bar.instantDivergence、区间套表 czsc_nested） */
-#define CZSC_API_VERSION 2
+ * czsc_bar.instantDivergence、区间套表 czsc_nested）；3 = 追加走势完成证据（czsc_movement.connectionStart 起 7 个字段）
+ * 与区间套的高级别背驰段低级别端点映射（czsc_nested.highPrevStartLow 起 4 个字段） */
+#define CZSC_API_VERSION 3
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -103,6 +104,14 @@ typedef struct czsc_movement
   int32_t start;          /* 起点K线（首个中枢起点） */
   int32_t end;            /* 终点K线（最后中枢终点） */
   int32_t confirmedAt;    /* 走势定型的K线（其后一个中枢也已定型，分组不再改变）；未定型 -1 */
+  /* ---- v3：完成证据（第17课走势终完美：一个走势类型完成即转化为另一走势类型；第29课背驰-转折） ---- */
+  int32_t connectionStart;        /* 与后继走势的连接段起点 = 本走势最后中枢的末端点，端点表下标 */
+  int32_t connectionEnd;          /* 连接段终点 = 后继走势首个中枢的首端点，端点表下标；无后继 -1 */
+  int32_t successor;              /* 后继走势，走势表下标；无 -1 */
+  int32_t successorEstablishedAt; /* 后继走势首个中枢成立的K线（其第三段终点的分型成立）；无后继 -1 */
+  int32_t completedAt;            /* 本走势完成的K线 = successorEstablishedAt；无后继 -1 */
+  int32_t completedByIndex;       /* 趋势末端的一类买卖点所在K线（上涨看一卖、下跌看一买，须在最后中枢上）；盘整或无 -1 */
+  int32_t completedBy;            /* 同上，信号表下标（事后行）；-1。与信号引用一样随快照解析，非因果字段 */
 } czsc_movement;
 
 /* 背驰度量（第15/24/37课）：当前段 cur 相对前一同向段 prev */
@@ -212,6 +221,11 @@ typedef struct czsc_nested
   int32_t newExtreme;          /* 1 = 低级别背驰创新高/新低（第61课：无新高新低只可能是盘整背驰） */
   int32_t smallTurn;           /* 1 = 小转大候选：低级别背驰落在方向一致的高级别段内、但该段无高级别背驰（第43课）；
                                   其必要条件（最后次级别中枢出现同向三类点，第44课）由调用方结合后续三类信号判断 */
+  /* ---- v3：高级别背驰段映射到低级别端点（线段端点必为笔端点，第67课），低级别快照端点表下标；无 -1 ---- */
+  int32_t highPrevStartLow;    /* 高级别 b 段起点 */
+  int32_t highPrevEndLow;      /* 高级别 b 段终点 */
+  int32_t highCurStartLow;     /* 高级别 c 段起点 */
+  int32_t highCurEndLow;       /* 高级别 c 段终点 */
 } czsc_nested;
 
 CZSC_API int32_t czsc_api_version(void);
