@@ -99,13 +99,14 @@ float TdxCode(int32_t type) { return static_cast<float>(type > 0 ? type : 10 - t
 
 TEST(ApiVersionAndStructSizes)
 {
-  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 5);
+  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 6);
+  CHECK(czsc_build_commit() != nullptr && czsc_build_commit()[0] != 0);
   // 全部为 4 字节字段、无填充：逐字节确定
-  CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 13 * 4 && sizeof(czsc_movement) == 15 * 4);
+  CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 14 * 4 && sizeof(czsc_movement) == 15 * 4);
   CHECK(sizeof(czsc_recursive_node) == 21 * 4 && sizeof(czsc_recursive_center) == 14 * 4 &&
         sizeof(czsc_recursive_connection) == 10 * 4);
   CHECK(sizeof(czsc_divergence) == 17 * 4 && sizeof(czsc_breakout) == 7 * 4 + sizeof(czsc_divergence));
-  CHECK(sizeof(czsc_event) == 4 * 4 && sizeof(czsc_bar) == 8 * 4 && sizeof(czsc_nested) == 13 * 4);
+  CHECK(sizeof(czsc_event) == 4 * 4 && sizeof(czsc_bar) == 10 * 4 && sizeof(czsc_nested) == 13 * 4);
   CHECK(sizeof(czsc_signal) == 12 * 4 + sizeof(czsc_divergence) + 7 * 4);
 }
 
@@ -722,4 +723,37 @@ TEST(ApiRecursiveCentersAndConnections)
     CHECK(compared > 5);
   }
   CHECK(connections > 0);
+}
+
+// v6：中枢成立时刻与均线导出
+TEST(ApiCenterEstablishedAndMovingAverages)
+{
+  Data d = Sse();
+  for (int code : {0, 2, 1100})
+  {
+    Tables t = Build(d, code);
+    for (const czsc_center &c : t.c)
+    {
+      CHECK(c.established == t.p[static_cast<std::size_t>(c.firstPivot) + 3].fractalAt);
+      CHECK(c.established >= t.p[static_cast<std::size_t>(c.firstPivot) + 3].index && (c.confirmedAt < 0 || c.confirmedAt >= c.established));
+    }
+    for (const czsc_movement &m : t.m)
+      if (m.successor >= 0) CHECK(m.successorEstablishedAt == t.c[static_cast<std::size_t>(t.m[static_cast<std::size_t>(m.successor)].firstCenter)].established);
+  }
+  Tables t = Build(d, 0);
+  REQUIRE(t.r.size() == static_cast<std::size_t>(d.n()));
+  // 与 MovingAverage 同口径：收盘价的 5/20 日均值，前 N-1 根为已有K线均值
+  for (int i = 0; i < d.n(); i++)
+  {
+    double s5 = 0, s20 = 0;
+    int w5 = 0, w20 = 0;
+    for (int j = i; j >= 0 && j > i - 20; j--)
+    {
+      if (j > i - 5) { s5 += d.c[static_cast<std::size_t>(j)]; w5++; }
+      s20 += d.c[static_cast<std::size_t>(j)];
+      w20++;
+    }
+    const czsc_bar &b = t.r[static_cast<std::size_t>(i)];
+    CHECK(std::fabs(b.maShort - s5 / w5) <= 1e-3 * std::fabs(s5 / w5) && std::fabs(b.maLong - s20 / w20) <= 1e-3 * std::fabs(s20 / w20));
+  }
 }

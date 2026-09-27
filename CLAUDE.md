@@ -62,6 +62,7 @@ cd D:/github/czsc-tdx
 面向 nextjs-quant（koffi FFI）的纯 C 快照接口，契约即头文件；需求见 `docs/nextjs-quant-adapter.md`，P2 结论见
 `docs/nextjs-quant-p2-feasibility.md`。改结构体布局或语义须递增 `CZSC_API_VERSION` 并只在末尾追加字段；
 `confirmedAt` 是“定型”时刻（`Analysis::*FinalAt`），信号行冻结于确认当时。
+`czsc_build_commit()` 由 Makefile 的 `BUILD_COMMIT`（`git rev-parse` + 未提交改动时 `-dirty`）写入 adapter 目标；本机 clang 直编为 "unknown"。发布前须先提交再 `make release`，否则 DLL 带 -dirty。
 
 ## 缠论知识来源
 
