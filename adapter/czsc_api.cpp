@@ -534,6 +534,7 @@ Snapshot *Build(const czsc_input *in)
     row.confirmedAt = a.centerFinalAt[i];
     row.relationToPrev = i == 0 ? 0 : static_cast<int32_t>(chan::Relate(a.snapshot.centers[i - 1], c));
     row.lifecycle = -1;
+    row.established = a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot) + 3].fractalAt;
     if (i > 0)
     {
       const chan::Center &prev = a.snapshot.centers[i - 1];
@@ -581,6 +582,8 @@ Snapshot *Build(const czsc_input *in)
     row.dea = a.energy.dea[i];
     row.macd = (a.energy.dif[i] - a.energy.dea[i]) * 2.0f;
     row.kiss = static_cast<int32_t>(a.ma.kisses[i]);
+    row.maShort = a.ma.shortMa[i];
+    row.maLong = a.ma.longMa[i];
     row.gap = gaps[i];
     row.fractalStrength = strengths[i];
     row.instantDivergence = a.instantWarning[i];
@@ -670,6 +673,11 @@ const T *Table(void *h, int32_t *count, std::vector<T> Snapshot::*member)
 extern "C" {
 
 int32_t czsc_api_version(void) { return CZSC_API_VERSION; }
+
+#ifndef CZSC_BUILD_COMMIT
+#define CZSC_BUILD_COMMIT "unknown"
+#endif
+const char *czsc_build_commit(void) { return CZSC_BUILD_COMMIT; }
 
 const char *czsc_last_error(void) { return g_error; }
 

@@ -36,8 +36,9 @@ extern "C" {
  * czsc_bar.instantDivergence、区间套表 czsc_nested）；3 = 追加走势完成证据（czsc_movement.connectionStart 起 7 个字段）
  * 与区间套的高级别背驰段低级别端点映射（czsc_nested.highPrevStartLow 起 4 个字段）；4 = 实现 CZSC_FLAG_HIGHER：
  * 递归走势节点表 czsc_recursive_node 与子节点表（第17课递归定义）；5 = 中阴（czsc_movement.zhongyinStart）、
- * 递归节点追加 firstCenter 起 5 个字段、递归中枢表 czsc_recursive_center 与同级别连接段表 czsc_recursive_connection */
-#define CZSC_API_VERSION 5
+ * 递归节点追加 firstCenter 起 5 个字段、递归中枢表 czsc_recursive_center 与同级别连接段表 czsc_recursive_connection；
+ * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit() */
+#define CZSC_API_VERSION 6
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -94,6 +95,9 @@ typedef struct czsc_center
   /* ---- v2 ---- */
   int32_t lifecycle;      /* 相对前一中枢（第18/20课）：0 延伸（[ZD,ZG] 重叠）/ 1 扩展（仅 GG/DD 重叠）/
                              2 新生上 / 3 新生下；首个中枢 -1 */
+  /* ---- v6 ---- */
+  int32_t established;    /* 中枢成立的K线 = 第三个成员段终端点（端点表 firstPivot+3）的分型成立；
+                             与第 0 层递归节点 established、czsc_recursive_center.established 同口径 */
 } czsc_center;
 
 /* 走势类型（第17课）：盘整 = 1 个中枢；趋势 = 连续同向关系的 >=2 个中枢 */
@@ -211,6 +215,9 @@ typedef struct czsc_bar
   /* ---- v2 ---- */
   int32_t instantDivergence; /* 即时背驰预警（第24课）：当时已知的最后端点起的未完成段创新极值且相对前一同向段背驰，
                                 向上段 +1（见顶预警）/ 向下段 -1（见底预警）/ 0 */
+  /* ---- v6：均线吻所用的同一组均线（第11课），价格 = 收盘价；前 N-1 根为已有K线的算术平均（窗口不足时不补空） ---- */
+  float maShort;          /* MA5 */
+  float maLong;           /* MA20 */
 } czsc_bar;
 
 /* 区间套（第27/61课；小转大候选见第43/44课）：低级别一类信号 → 高级别结构。由两个同一数据的快照生成。 */
@@ -234,6 +241,9 @@ typedef struct czsc_nested
 } czsc_nested;
 
 CZSC_API int32_t czsc_api_version(void);
+/* v6：构建时写入的源码 git commit（12 位短哈希，构建时工作区有未提交改动则加 "-dirty"）；未经 make 构建为 "unknown"。
+ * 返回静态字符串，勿释放 */
+CZSC_API const char *czsc_build_commit(void);
 CZSC_API const char *czsc_last_error(void);
 CZSC_API void *czsc_snapshot_build(const czsc_input *input);
 CZSC_API void czsc_snapshot_free(void *snapshot);

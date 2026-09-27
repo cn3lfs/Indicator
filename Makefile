@@ -27,6 +27,8 @@ RM=rm -f
 CXFLAGS=-I. -finput-charset=UTF-8 -std=c++17 -O2 -DCZSC_BUILDING
 LDFLAGS=
 DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
+# 源码版本写入 adapter（czsc_build_commit）；工作区有未提交改动时加 -dirty。release 流程先 clean，确保重新写入
+BUILD_COMMIT:=$(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)$(shell git diff --quiet HEAD -- 2>/dev/null || echo -dirty)
 
 # 目标：core/ 领域引擎，tdx/ 通达信适配层，tests/unit/ 单元测试（均为通配收录，新增文件无需改本文件）
 BUILD_DIR=build
@@ -110,5 +112,9 @@ clean:
 %.o: %.cpp
 	@echo [CX] $<
 	@$(CXX) $(CXFLAGS) -c -o $@ $<
+
+adapter/%.o: adapter/%.cpp
+	@echo [CX] $<
+	@$(CXX) $(CXFLAGS) -DCZSC_BUILD_COMMIT='"$(BUILD_COMMIT)"' -c -o $@ $<
 
 -include $(DEPENDS)
