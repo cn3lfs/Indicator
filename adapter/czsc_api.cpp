@@ -49,6 +49,8 @@ struct Snapshot
   std::vector<czsc_bar> bars;
   std::vector<czsc_recursive_node> nodes;
   std::vector<int32_t> children;
+  std::vector<czsc_recursive_center> rcenters;
+  std::vector<czsc_recursive_connection> connections;
 };
 
 struct Nested
@@ -298,9 +300,12 @@ void CompleteMovements(const chan::Analysis &a, Snapshot &out)
 {
   const std::vector<chan::Movement> &m = a.snapshot.movements;
   const std::vector<chan::Center> &c = a.snapshot.centers;
+  std::vector<int> bound = chan::MovementBoundaries(a.snapshot.pivots, c, m);
   for (std::size_t i = 0; i < m.size(); i++)
   {
     czsc_movement &row = out.movements[i];
+    // 中阴开始（第89课）：连接极值点之后的下一端点分型成立
+    row.zhongyinStart = i + 1 < m.size() ? a.snapshot.pivots[static_cast<std::size_t>(bound[i + 1]) + 1].fractalAt : -1;
     row.connectionStart = c[static_cast<std::size_t>(m[i].lastCenter)].lastPivot;
     row.connectionEnd = row.successor = row.successorEstablishedAt = row.completedAt = -1;
     row.completedByIndex = row.completedBy = -1;
@@ -330,14 +335,53 @@ void CompleteMovements(const chan::Analysis &a, Snapshot &out)
 int Later(int a, int b) { return (a < 0 || b < 0) ? -1 : std::max(a, b); }
 
 // 递归走势节点（第17课）：逐层给出走势的起止连接点、中枢范围、成立/完成时刻、后继与子节点
-void BuildRecursiveNodes(const chan::Analysis &a, Snapshot &out)
+// 下一层节点 [lo, hi) 中起止落在 [start, end] 内的连续一段；定型取成员中最晚者（任一未定型则 -1）
+void Members(const Snapshot &out, std::size_t lo, std::size_t hi, int start, int end, int32_t &first, int32_t &count,
+             int &finalAt)
+{
+  first = -1;
+  count = 0;
+  for (std::size_t c = lo; c < hi; c++)
+  {
+    const czsc_recursive_node &n = out.nodes[c];
+    if (n.start < start || n.end > end) continue;
+    if (first < 0) first = static_cast<int32_t>(c);
+    count++;
+    finalAt = Later(finalAt, n.confirmedAt);
+  }
+}
+
+void BuildRecursiveNodes(const chan::Analysis &a, const chan::Series &s, Snapshot &out)
 {
   std::vector<chan::RecursiveLevel> levels = chan::BuildRecursion(a);
   std::vector<std::size_t> levelBase;
   for (const chan::RecursiveLevel &l : levels)
   {
+    std::size_t L = levelBase.size();
     levelBase.push_back(out.nodes.size());
     std::size_t nm = l.movements.size();
+    // 本层中枢（level >= 1）：成员为下一层节点（第17课）
+    int32_t centerBase = static_cast<int32_t>(out.rcenters.size());
+    if (L > 0)
+      for (std::size_t c = 0; c < l.centers.size(); c++)
+      {
+        const chan::Center &k = l.centers[c];
+        czsc_recursive_center row = Row<czsc_recursive_center>();
+        row.level = static_cast<int32_t>(L);
+        row.ordinal = static_cast<int32_t>(c);
+        row.start = k.start;
+        row.end = k.end;
+        row.zg = k.zg;
+        row.zd = k.zd;
+        row.gg = k.gg;
+        row.dd = k.dd;
+        row.direction = k.direction;
+        row.established = l.pivotFinalAt[static_cast<std::size_t>(k.firstPivot) + 3];
+        int f = l.centerFinalAt[c];
+        Members(out, levelBase[L - 1], levelBase[L], k.start, k.end, row.firstMember, row.memberCount, f);
+        row.confirmedAt = f;
+        out.rcenters.push_back(row);
+      }
     for (std::size_t m = 0; m < nm; m++)
     {
       const chan::Movement &mv = l.movements[m];
@@ -362,10 +406,41 @@ void BuildRecursiveNodes(const chan::Analysis &a, Snapshot &out)
       int startFinal = m == 0 ? l.pivotFinalAt[static_cast<std::size_t>(l.boundaries[0])] : l.movementFinalAt[m - 1];
       int endFinal = m + 1 < nm ? l.movementFinalAt[m + 1] : -1;
       row.confirmedAt = Later(Later(startFinal, l.movementFinalAt[m]), endFinal);
+      row.firstCenter = (L > 0 ? centerBase : 0) + mv.firstCenter;
+      row.lastCenter = (L > 0 ? centerBase : 0) + mv.lastCenter;
+      row.high = s.high[static_cast<std::size_t>(row.start)];
+      row.low = s.low[static_cast<std::size_t>(row.start)];
+      for (int i = row.start; i <= row.end; i++)
+      {
+        row.high = std::max(row.high, s.high[static_cast<std::size_t>(i)]);
+        row.low = std::min(row.low, s.low[static_cast<std::size_t>(i)]);
+      }
+      row.zhongyinStart = -1;
+      if (m + 1 < nm)
+      {
+        std::size_t after = static_cast<std::size_t>(l.boundaries[m + 1]) + 1;  // 连接极值点之后的下一端点
+        row.zhongyinStart = L == 0 ? l.pivots[after].fractalAt : l.pivotFinalAt[after];
+      }
       out.nodes.push_back(row);
     }
     for (std::size_t m = levelBase.back(); m + 1 < out.nodes.size(); m++)
       out.nodes[m].completed = out.nodes[m + 1].established;
+    // 同级别连接段（level >= 1）：前走势最后中枢末端点 → 后走势首中枢首端点，成员为下一层节点链
+    if (L > 0)
+      for (std::size_t m = 0; m + 1 < nm; m++)
+      {
+        czsc_recursive_connection row = Row<czsc_recursive_connection>();
+        row.level = static_cast<int32_t>(L);
+        row.ordinal = static_cast<int32_t>(m);
+        row.left = static_cast<int32_t>(levelBase[L] + m);
+        row.right = row.left + 1;
+        row.start = l.centers[static_cast<std::size_t>(l.movements[m].lastCenter)].end;
+        row.end = l.centers[static_cast<std::size_t>(l.movements[m + 1].firstCenter)].start;
+        int f = l.movementFinalAt[m];  // 两端由后继首中枢截止，其定型即本走势分组定型
+        Members(out, levelBase[L - 1], levelBase[L], row.start, row.end, row.firstMember, row.memberCount, f);
+        row.confirmedAt = f;
+        out.connections.push_back(row);
+      }
   }
   // 子节点：下一层中起止落在本节点起止之内的节点（上层端点即下层连接点，故为连续的一段）
   for (std::size_t L = 1; L < levelBase.size(); L++)
@@ -495,7 +570,7 @@ Snapshot *Build(const czsc_input *in)
   }
   BuildSignals(a, r, (in->flags & CZSC_FLAG_EVENTS) != 0, *out);
   CompleteMovements(a, *out);
-  if (in->flags & CZSC_FLAG_HIGHER) BuildRecursiveNodes(a, *out);
+  if (in->flags & CZSC_FLAG_HIGHER) BuildRecursiveNodes(a, s, *out);
 
   std::vector<int8_t> gaps = chan::Gaps(s);
   std::vector<int8_t> strengths = chan::FractalStrengths(s, a.bars, a.fractals);
@@ -671,5 +746,10 @@ const czsc_event *czsc_events(void *h, int32_t *count) { return Table(h, count, 
 const czsc_bar *czsc_bars(void *h, int32_t *count) { return Table(h, count, &Snapshot::bars); }
 const czsc_recursive_node *czsc_recursive_nodes(void *h, int32_t *count) { return Table(h, count, &Snapshot::nodes); }
 const int32_t *czsc_recursive_children(void *h, int32_t *count) { return Table(h, count, &Snapshot::children); }
+const czsc_recursive_center *czsc_recursive_centers(void *h, int32_t *count) { return Table(h, count, &Snapshot::rcenters); }
+const czsc_recursive_connection *czsc_recursive_connections(void *h, int32_t *count)
+{
+  return Table(h, count, &Snapshot::connections);
+}
 
 }  // extern "C"

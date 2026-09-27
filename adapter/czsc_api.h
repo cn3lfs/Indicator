@@ -35,8 +35,9 @@ extern "C" {
 /* 版本历史：1 = P0 基础结构；2 = 追加 P1 研判语义（czsc_center.lifecycle、czsc_signal.quality 起 7 个字段、
  * czsc_bar.instantDivergence、区间套表 czsc_nested）；3 = 追加走势完成证据（czsc_movement.connectionStart 起 7 个字段）
  * 与区间套的高级别背驰段低级别端点映射（czsc_nested.highPrevStartLow 起 4 个字段）；4 = 实现 CZSC_FLAG_HIGHER：
- * 递归走势节点表 czsc_recursive_node 与子节点表（第17课递归定义） */
-#define CZSC_API_VERSION 4
+ * 递归走势节点表 czsc_recursive_node 与子节点表（第17课递归定义）；5 = 中阴（czsc_movement.zhongyinStart）、
+ * 递归节点追加 firstCenter 起 5 个字段、递归中枢表 czsc_recursive_center 与同级别连接段表 czsc_recursive_connection */
+#define CZSC_API_VERSION 5
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -113,6 +114,9 @@ typedef struct czsc_movement
   int32_t completedAt;            /* 本走势完成的K线 = successorEstablishedAt；无后继 -1 */
   int32_t completedByIndex;       /* 趋势末端的一类买卖点所在K线（上涨看一卖、下跌看一买，须在最后中枢上）；盘整或无 -1 */
   int32_t completedBy;            /* 同上，信号表下标（事后行）；-1。与信号引用一样随快照解析，非因果字段 */
+  /* ---- v5：中阴阶段（第89课：前走势完成后、后继走势类型确立前）。中阴结束 = successorEstablishedAt ---- */
+  int32_t zhongyinStart;          /* 中阴开始的K线 = 与后继的连接极值点之后的下一端点分型成立（此后前走势不破该点即不能延续）；
+                                     无后继 -1。口径见 chan-ambiguity-decisions.md「中阴阶段」 */
 } czsc_movement;
 
 /* 背驰度量（第15/24/37课）：当前段 cur 相对前一同向段 prev */
@@ -245,8 +249,11 @@ CZSC_API const czsc_event *czsc_events(void *snapshot, int32_t *count);   /* 未
 CZSC_API const czsc_bar *czsc_bars(void *snapshot, int32_t *count);        /* n 条 */
 
 /* 递归走势节点（flags 位1，第17课：某级别中枢由至少三个连续次级别走势类型重叠构成）。
- * 第 0 层 = 本配置级别的走势（与 czsc_movements 一一对应）；第 L+1 层以第 L 层相邻走势之间的连接点为端点，
- * 再构中枢、分走势，逐层向上直到不能成枢。节点按 (level, ordinal) 升序排列。多义处的取舍见 chan-ambiguity-decisions.md。 */
+ * level 与配置级别的关系：level 0 = 本配置级别的走势（与 czsc_movements 按 ordinal 一一对应，其中枢即 czsc_centers）；
+ * level L+1 以 level L 相邻走势之间的连接点为端点，再构中枢、分走势，逐层向上直到不能成枢。
+ * 节点按 (level, ordinal) 升序排列；表内下标随数据长度变化，跨快照比对请用 (level, ordinal)。
+ * children（czsc_recursive_children）指向下一层（level-1）的节点，不是本层中枢；本层中枢见 firstCenter/lastCenter。
+ * 多义处的取舍见 chan-ambiguity-decisions.md。 */
 typedef struct czsc_recursive_node
 {
   uint32_t size;          /* sizeof(czsc_recursive_node) */
@@ -265,13 +272,56 @@ typedef struct czsc_recursive_node
   int32_t firstChild;     /* 子节点在 czsc_recursive_children 中的起始位置；第 0 层无子节点为 -1 */
   int32_t childCount;     /* 子节点个数（下一层的节点，按时间顺序） */
   int32_t confirmedAt;    /* 节点定型的K线（起止与分组都不再改变）；未定型 -1 */
+  /* ---- v5 ---- */
+  int32_t firstCenter;    /* 首个本层中枢：level 0 为 czsc_centers 下标，level >= 1 为 czsc_recursive_centers 下标 */
+  int32_t lastCenter;     /* 最后本层中枢，同上 */
+  float high;             /* 节点 [start, end] 内最高价 */
+  float low;              /* 节点 [start, end] 内最低价 */
+  int32_t zhongyinStart;  /* 中阴开始的K线（口径同 czsc_movement.zhongyinStart；上层为该端点定型）；无后继 -1。中阴结束 = completed */
 } czsc_recursive_node;
+
+/* 递归中枢（flags 位1，v5）：level >= 1 的中枢，按 (level, ordinal) 升序；level 0 的中枢即 czsc_centers，不在此表 */
+typedef struct czsc_recursive_center
+{
+  uint32_t size;          /* sizeof(czsc_recursive_center) */
+  int32_t level;          /* 层级（>= 1），与节点同一套编号 */
+  int32_t ordinal;        /* 本层内序号 */
+  int32_t start;          /* 起点K线（首个成员端点） */
+  int32_t end;            /* 终点K线（最后成员端点） */
+  float zg;               /* 与 czsc_center 同义（第20课：[ZD,ZG] 成枢即固定） */
+  float zd;
+  float gg;
+  float dd;
+  int32_t direction;      /* 进入段方向：+1 / -1 */
+  int32_t firstMember;    /* 首个成员 = 下一层（level-1）节点，czsc_recursive_nodes 下标；成员在节点表中连续 */
+  int32_t memberCount;    /* 成员个数（第17课：至少三个次级别走势类型） */
+  int32_t established;    /* 中枢成立的K线（第三个成员段的终端点定型）；未定型 -1 */
+  int32_t confirmedAt;    /* 定型K线（自身与全部成员均定型）；未定型 -1 */
+} czsc_recursive_center;
+
+/* 同级别连接段（flags 位1，v5，第18课中枢定理一、第17/33课结合律）：level >= 1 相邻两个走势之间的连接段，
+ * 前走势最后中枢末端点 → 后走势首中枢首端点。level 0 的连接段见 czsc_movement.connectionStart/End，不在此表 */
+typedef struct czsc_recursive_connection
+{
+  uint32_t size;          /* sizeof(czsc_recursive_connection) */
+  int32_t level;          /* 层级（>= 1） */
+  int32_t ordinal;        /* = left 节点的 ordinal */
+  int32_t left;           /* 前走势，czsc_recursive_nodes 下标 */
+  int32_t right;          /* 后走势，czsc_recursive_nodes 下标 */
+  int32_t start;          /* 起点K线 */
+  int32_t end;            /* 终点K线 */
+  int32_t firstMember;    /* 覆盖连接段的下一层节点链，czsc_recursive_nodes 下标（连续，首尾相接） */
+  int32_t memberCount;
+  int32_t confirmedAt;    /* 定型K线（两侧分组与全部成员均定型）；未定型 -1 */
+} czsc_recursive_connection;
 
 /* 区间套：low、high 须为同一输入数据（n 与 H/L/C/V 逐字节相同）、配置不同的两个快照（通常 0 与 1100）。
  * 返回新句柄（用 czsc_snapshot_free 释放，与 low/high 的生命期独立）；不合法返回 NULL 并设置错误。 */
 CZSC_API void *czsc_nested_build(void *low, void *high);
 CZSC_API const czsc_recursive_node *czsc_recursive_nodes(void *snapshot, int32_t *count);  /* 未置位1时为空 */
 CZSC_API const int32_t *czsc_recursive_children(void *snapshot, int32_t *count);          /* 子节点的节点表下标 */
+CZSC_API const czsc_recursive_center *czsc_recursive_centers(void *snapshot, int32_t *count);          /* v5，未置位1时为空 */
+CZSC_API const czsc_recursive_connection *czsc_recursive_connections(void *snapshot, int32_t *count);  /* v5，未置位1时为空 */
 CZSC_API const czsc_nested *czsc_nested_rows(void *nested, int32_t *count);
 
 #ifdef __cplusplus
