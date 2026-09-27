@@ -99,9 +99,11 @@ float TdxCode(int32_t type) { return static_cast<float>(type > 0 ? type : 10 - t
 
 TEST(ApiVersionAndStructSizes)
 {
-  CHECK(czsc_api_version() == CZSC_API_VERSION);
+  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 5);
   // 全部为 4 字节字段、无填充：逐字节确定
-  CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 13 * 4 && sizeof(czsc_movement) == 14 * 4);
+  CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 13 * 4 && sizeof(czsc_movement) == 15 * 4);
+  CHECK(sizeof(czsc_recursive_node) == 21 * 4 && sizeof(czsc_recursive_center) == 14 * 4 &&
+        sizeof(czsc_recursive_connection) == 10 * 4);
   CHECK(sizeof(czsc_divergence) == 17 * 4 && sizeof(czsc_breakout) == 7 * 4 + sizeof(czsc_divergence));
   CHECK(sizeof(czsc_event) == 4 * 4 && sizeof(czsc_bar) == 8 * 4 && sizeof(czsc_nested) == 13 * 4);
   CHECK(sizeof(czsc_signal) == 12 * 4 + sizeof(czsc_divergence) + 7 * 4);
@@ -508,6 +510,8 @@ struct Rec
   std::vector<czsc_recursive_node> nodes;
   std::vector<int32_t> children;
   std::vector<czsc_movement> movements;
+  std::vector<czsc_recursive_center> centers;
+  std::vector<czsc_recursive_connection> connections;
 };
 
 Rec BuildRec(const Data &d, int config, int flags = CZSC_FLAG_HIGHER)
@@ -519,6 +523,8 @@ Rec BuildRec(const Data &d, int config, int flags = CZSC_FLAG_HIGHER)
   r.nodes = Get(czsc_recursive_nodes, h);
   r.children = Get(czsc_recursive_children, h);
   r.movements = Get(czsc_movements, h);
+  r.centers = Get(czsc_recursive_centers, h);
+  r.connections = Get(czsc_recursive_connections, h);
   czsc_snapshot_free(h);
   return r;
 }
@@ -589,4 +595,131 @@ TEST(ApiRecursiveNodes)
     }
   }
   CHECK(compared > 50);
+}
+
+// v5：递归中枢、同级别连接段、中阴
+namespace
+{
+// 成员链：同为 level-1、首尾相接、覆盖 [start, end]
+bool Chain(const Rec &r, int level, int first, int count, int start, int end)
+{
+  if (first < 0 || count <= 0) return false;
+  int prevEnd = start;
+  for (int k = 0; k < count; k++)
+  {
+    const czsc_recursive_node &c = r.nodes[static_cast<std::size_t>(first + k)];
+    if (c.level != level - 1 || c.start != prevEnd) return false;
+    prevEnd = c.end;
+  }
+  return prevEnd == end;
+}
+
+// 下标 → (level, ordinal)，跨前缀比对用
+std::pair<int, int> Key(const Rec &r, int index)
+{
+  if (index < 0) return {-1, -1};
+  const czsc_recursive_node &n = r.nodes[static_cast<std::size_t>(index)];
+  return {n.level, n.ordinal};
+}
+}  // namespace
+
+TEST(ApiRecursiveCentersAndConnections)
+{
+  Data d = Rising();
+  CHECK(BuildRec(d, 0, 0).centers.empty() && BuildRec(d, 0, 0).connections.empty());
+  std::size_t connections = 0;
+  for (int cfg : {0, 2})
+  {
+    Rec r = BuildRec(d, cfg);
+    REQUIRE(!r.centers.empty());
+    connections += r.connections.size();
+    for (std::size_t i = 0; i < r.centers.size(); i++)
+    {
+      const czsc_recursive_center &c = r.centers[i];
+      CHECK(c.size == sizeof c && c.level >= 1 && c.zd <= c.zg && c.dd <= c.zd && c.zg <= c.gg && c.start < c.end);
+      CHECK(c.memberCount >= 3 && Chain(r, c.level, c.firstMember, c.memberCount, c.start, c.end));
+      CHECK(c.confirmedAt < 0 || (c.established >= 0 && c.confirmedAt >= c.established));
+      if (i > 0 && r.centers[i - 1].level == c.level) CHECK(r.centers[i - 1].ordinal + 1 == c.ordinal);
+    }
+    int zy = 0;
+    for (std::size_t i = 0; i < r.nodes.size(); i++)
+    {
+      const czsc_recursive_node &n = r.nodes[i];
+      CHECK(n.low <= n.high && n.firstCenter >= 0 && n.lastCenter - n.firstCenter + 1 == n.centerCount);
+      if (n.level > 0)
+      {
+        const czsc_recursive_center &f = r.centers[static_cast<std::size_t>(n.firstCenter)];
+        const czsc_recursive_center &l = r.centers[static_cast<std::size_t>(n.lastCenter)];
+        CHECK(f.level == n.level && f.start == n.centerStart && l.end == n.centerEnd);
+        for (int k = 0; k < n.childCount; k++)
+        {
+          const czsc_recursive_node &c = r.nodes[static_cast<std::size_t>(r.children[static_cast<std::size_t>(n.firstChild + k)])];
+          CHECK(c.high <= n.high && c.low >= n.low);
+        }
+      }
+      else
+      {
+        const czsc_movement &m = r.movements[static_cast<std::size_t>(n.ordinal)];
+        CHECK(n.firstCenter == m.firstCenter && n.lastCenter == m.lastCenter && n.zhongyinStart == m.zhongyinStart);
+      }
+      // 中阴：连接点之后开始，不晚于后继成立（= 完成）结束
+      if (n.successor >= 0)
+      {
+        CHECK(n.zhongyinStart > n.end && (n.completed < 0 || n.zhongyinStart <= n.completed));
+        zy += n.completed >= 0;
+      }
+      else CHECK(n.zhongyinStart == -1);
+    }
+    CHECK(zy > 0);
+    for (const czsc_recursive_connection &c : r.connections)
+    {
+      const czsc_recursive_node &a = r.nodes[static_cast<std::size_t>(c.left)], &b = r.nodes[static_cast<std::size_t>(c.right)];
+      CHECK(c.size == sizeof c && a.level == c.level && b.level == c.level && a.ordinal == c.ordinal && b.ordinal == c.ordinal + 1);
+      CHECK(c.start == a.centerEnd && c.end == b.centerStart && c.start < c.end);
+      CHECK(Chain(r, c.level, c.firstMember, c.memberCount, c.start, c.end));
+    }
+
+    // 因果：前缀中已定型的中枢/连接段与全量中同层同序号者逐字段相同（成员以 (level, ordinal) 比对）
+    int compared = 0;
+    for (int k = 3000; k < d.n(); k += 1111)
+    {
+      Data p = d;
+      p.h.resize(static_cast<std::size_t>(k) + 1); p.l.resize(p.h.size()); p.c.resize(p.h.size()); p.v.resize(p.h.size());
+      Rec pr = BuildRec(p, cfg);
+      for (const czsc_recursive_center &x : pr.centers)
+      {
+        if (x.confirmedAt < 0) continue;
+        const czsc_recursive_center *y = nullptr;
+        for (const czsc_recursive_center &c : r.centers)
+          if (c.level == x.level && c.ordinal == x.ordinal) y = &c;
+        REQUIRE(y != nullptr);
+        CHECK(x.start == y->start && x.end == y->end && x.zg == y->zg && x.zd == y->zd && x.gg == y->gg && x.dd == y->dd &&
+              x.direction == y->direction && x.memberCount == y->memberCount && x.established == y->established &&
+              x.confirmedAt == y->confirmedAt && Key(pr, x.firstMember) == Key(r, y->firstMember));
+        compared++;
+      }
+      for (const czsc_recursive_connection &x : pr.connections)
+      {
+        if (x.confirmedAt < 0) continue;
+        const czsc_recursive_connection *y = nullptr;
+        for (const czsc_recursive_connection &c : r.connections)
+          if (c.level == x.level && c.ordinal == x.ordinal) y = &c;
+        REQUIRE(y != nullptr);
+        CHECK(x.start == y->start && x.end == y->end && x.memberCount == y->memberCount && x.confirmedAt == y->confirmedAt &&
+              Key(pr, x.firstMember) == Key(r, y->firstMember) && Key(pr, x.left) == Key(r, y->left));
+        compared++;
+      }
+      for (const czsc_recursive_node &x : pr.nodes)
+      {
+        if (x.confirmedAt < 0) continue;
+        const czsc_recursive_node *y = Find(r, x.level, x.ordinal);
+        REQUIRE(y != nullptr);
+        CHECK(x.high == y->high && x.low == y->low && x.zhongyinStart == y->zhongyinStart);
+      }
+      for (std::size_t i = 0; i < pr.movements.size(); i++)
+        if (pr.movements[i].confirmedAt >= 0) CHECK(pr.movements[i].zhongyinStart == r.movements[i].zhongyinStart);
+    }
+    CHECK(compared > 5);
+  }
+  CHECK(connections > 0);
 }
