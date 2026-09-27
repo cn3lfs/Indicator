@@ -70,3 +70,13 @@ v3 规定 `completedAt = successorEstablishedAt`，即“前走势完成”和�
 ## 4. nextjs-quant 侧
 
 交付后，我们用新表重建 C4 的走势、连接和关联结构（signal→level 0 节点的关联用 `czsc_signal.movement`，已可得），恢复上述 7 个策略（日线与五分钟各算一个），移除“结构缺口”。在此之前，这些策略会明确报出缺口，不伪造数据。
+
+## 5. 答复（api v5，czsc-tdx 侧）
+
+- **R1**：`czsc_recursive_center`（level >= 1，按 (level, ordinal) 排序，成员 = 下一层节点连续区间）+ `czsc_recursive_node` 末尾追加 `firstCenter/lastCenter/high/low/zhongyinStart`。level 0 节点的中枢引用指向 `czsc_centers`，已写入头文件。
+- **R2**：`czsc_recursive_connection`（level >= 1；另加 `ordinal` = 左节点序号，便于跨前缀比对）。level 0 复用 `czsc_movement.connectionStart/End`。
+- **R3 口径结论**（已登记 `chan-ambiguity-decisions.md`「中阴阶段」）：
+  1. 旧口径“离开最后中枢且观察到不回”**不符合原文**：按第20课，这是第三类买卖点，其后形成同向新中枢，标志的是走势延续而不是完成。替代口径：前走势的完成点（事后）= 与后继的连接极值点；最早当下可知 = 该极值点之后的下一端点可知之时（第 0 层为分型成立，上层为端点定型），记为 `zhongyinStart`。此时前走势已不能在不破该点的前提下延续，但是否完成仍要等后继走势确立才被确认（第17课），这正是第89课所说的“方向不明确”的中阴阶段。
+  2. 中阴结束 = 后继走势首个中枢成立（`successorEstablishedAt` / 节点 `completed`）：确认。`completedAt` 语义不变。
+- **R4**：头文件已写明 level 与配置级别的关系，以及 children 指向下一层节点。关于高层一类买卖点：可行。上层端点沿用下层端点的累积 MACD 字段，第24课的面积比较可以直接复用。但建议**单独输出高层信号表**，不要在 `czsc_signal` 中加 `level` 字段，理由是 `czsc_signal` 与引擎逐步出现/失效的事件、冻结语义绑定，而递归层是事后快照上的逐层构造，没有当下事件。本轮不实现。
+- **修正**：v4 的上层端点只保证顶底交替、不保证价位推进，曾在 SSE 上产出“底高于前顶”的端点，第 1 层中枢因此退化为 ZG = ZD。v5 已修正（不推进的连接点并入前一组）。受此影响，SSE 日线配置 0 已无第 1 层，配置 2 有 1 个第 1 层中枢；golden 中连接段为 0 行。连接段在 6 轮放大数据（`Rising`）上由单测覆盖。
