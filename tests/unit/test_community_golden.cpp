@@ -2,6 +2,7 @@
 #include "check.h"
 #include "sse_data.h"
 #include "core/engine.h"
+#include "core/morphology.h"
 #include <cstdlib>
 #include <cstdio>
 #include <fstream>
@@ -33,6 +34,25 @@ TEST(GoldenCommunityStrokesSse)
     }
     for (const auto &e : a.events)
       out << "事件 " << e.bar << " " << e.signal.index << " " << static_cast<int>(e.signal.type) << " " << e.revoked << "\n";
+  }
+  for (int place : {10000, 20000})
+  {
+    for (int stroke = 0; stroke <= 4; ++stroke)
+    {
+      int code = place + 1100 + stroke;
+      auto config = *chan::Config::Decode(code);
+      auto a = chan::Analyze(s, config);
+      out << "## 线段分界配置 " << code << " 端点 " << a.snapshot.pivots.size() << "\n";
+      for (std::size_t i = 0; i < a.snapshot.pivots.size(); ++i)
+      {
+        const auto &p = a.snapshot.pivots[i];
+        int index = chan::DisplayPivotIndex(p, config);
+        std::snprintf(line, sizeof line, "端点 %zu 显示%d 极值%d %d %.2f 分型%d 定型%d\n", i, index, p.index,
+                      static_cast<int>(p.kind), p.kind == chan::Kind::Top ? SSE_DAILY_HIGH[index] : SSE_DAILY_LOW[index],
+                      p.fractalAt, a.pivotFinalAt[i]);
+        out << line;
+      }
+    }
   }
   std::string here = __FILE__;
   std::size_t slash = here.find_last_of("/\\");

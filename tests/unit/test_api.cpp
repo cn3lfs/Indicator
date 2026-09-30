@@ -101,10 +101,10 @@ float TdxCode(int32_t type) { return static_cast<float>(type > 0 ? type : 10 - t
 
 TEST(ApiVersionAndStructSizes)
 {
-  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 7);
+  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 8);
   CHECK(czsc_build_commit() != nullptr && czsc_build_commit()[0] != 0);
   // 全部为 4 字节字段、无填充：逐字节确定
-  CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 14 * 4 && sizeof(czsc_movement) == 15 * 4);
+  CHECK(sizeof(czsc_pivot) == 7 * 4 && sizeof(czsc_center) == 14 * 4 && sizeof(czsc_movement) == 15 * 4);
   CHECK(sizeof(czsc_recursive_node) == 21 * 4 && sizeof(czsc_recursive_center) == 14 * 4 &&
         sizeof(czsc_recursive_connection) == 10 * 4);
   CHECK(sizeof(czsc_divergence) == 17 * 4 && sizeof(czsc_breakout) == 7 * 4 + sizeof(czsc_divergence));
@@ -765,14 +765,22 @@ TEST(ApiConfigOptionsAndAllLegalSse)
   CHECK(sizeof(czsc_config_option) == 116 && alignof(czsc_config_option) == 1);
   CHECK(offsetof(czsc_config_option, key) == 20 && offsetof(czsc_config_option, label) == 52 && offsetof(czsc_config_option, lessons) == 84);
   int count = czsc_config_options(nullptr, 0);
-  REQUIRE(count > 0);
+  REQUIRE(count == 14);
   std::vector<czsc_config_option> options(static_cast<std::size_t>(count) + 1);
   options.back().size = 123;
   CHECK(czsc_config_options(options.data(), count) == count && options.back().size == 123);
   CHECK(czsc_config_options(options.data(), 1) == 1);
   CHECK(czsc_config_options(nullptr, 1) == 0 && czsc_config_options(options.data(), -1) == 0);
+  for (int i = 11; i < 14; ++i)
+  {
+    const auto &o = options[static_cast<std::size_t>(i)];
+    const char *keys[] = {"segmentEnd.extreme", "segmentEnd.first", "segmentEnd.last"};
+    CHECK(o.place == 10000 && o.value == i - 11 && o.isDefault == (i == 11) &&
+          o.original == (i == 11) && std::strcmp(o.key, keys[i - 11]) == 0);
+    CHECK(std::strcmp(o.lessons, i == 11 ? "67" : "") == 0);
+  }
   std::vector<int> codes{0};
-  for (int place : {1, 10, 100, 1000})
+  for (int place : {1, 10, 100, 1000, 10000})
   {
     std::vector<int> next;
     int defaults = 0;
@@ -789,9 +797,10 @@ TEST(ApiConfigOptionsAndAllLegalSse)
     codes = next;
   }
   Data d = Sse();
-  for (int code = -1; code <= 10000; ++code)
+  for (int code = -1; code <= 30000; ++code)
   {
-    bool listed = std::find(codes.begin(), codes.end(), code) != codes.end();
+    bool listed = std::find(codes.begin(), codes.end(), code) != codes.end() &&
+        (code < 10000 || (code / 1000) % 10 == 1);
     CHECK(czsc_config_valid(code) == static_cast<int>(listed));
     CHECK(czsc_config_valid(code) == static_cast<int>(chan::Config::Decode(code).has_value()));
     if (!listed) continue;
@@ -813,4 +822,69 @@ TEST(ApiConfigOptionsAndAllLegalSse)
     Get(czsc_recursive_connections, h);
     czsc_snapshot_free(h);
   }
+}
+
+TEST(ApiSegmentBoundaryProjection)
+{
+  CHECK(offsetof(czsc_pivot, extremeIndex) == 24 && sizeof(czsc_pivot) == 28);
+  Data d = Sse();
+  int shiftedFirst = 0, shiftedLast = 0;
+  for (int stroke = 0; stroke <= 4; ++stroke)
+  {
+    int baseCode = 1100 + stroke;
+    czsc_input baseIn = Input(d, baseCode, CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER);
+    void *base = czsc_snapshot_build(&baseIn);
+    REQUIRE(base != nullptr);
+    Tables expected = Read(base);
+    for (int place : {10000, 20000})
+    {
+      czsc_input in = Input(d, baseCode + place, CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER);
+      void *h = czsc_snapshot_build(&in);
+      REQUIRE(h != nullptr);
+      Tables t = Read(h);
+      REQUIRE(t.p.size() == expected.p.size());
+      CHECK(Bytes(t.c, expected.c) && Bytes(t.m, expected.m) && Bytes(t.b, expected.b) &&
+            Bytes(t.s, expected.s) && Bytes(t.e, expected.e) && Bytes(t.r, expected.r));
+      CHECK(Bytes(Get(czsc_recursive_nodes, h), Get(czsc_recursive_nodes, base)) &&
+            Bytes(Get(czsc_recursive_children, h), Get(czsc_recursive_children, base)) &&
+            Bytes(Get(czsc_recursive_centers, h), Get(czsc_recursive_centers, base)) &&
+            Bytes(Get(czsc_recursive_connections, h), Get(czsc_recursive_connections, base)));
+      for (std::size_t i = 0; i < t.p.size(); ++i)
+      {
+        const auto &p = t.p[i];
+        REQUIRE(p.index >= 0 && p.index < d.n());
+        CHECK(p.extremeIndex == expected.p[i].index && p.kind == expected.p[i].kind &&
+              p.fractalAt == expected.p[i].fractalAt && p.confirmedAt == expected.p[i].confirmedAt);
+        CHECK(p.price == (p.kind > 0 ? d.h[p.index] : d.l[p.index]));
+        if (i) CHECK(p.index > t.p[i-1].index && p.kind == -t.p[i-1].kind);
+        if (p.index != p.extremeIndex) (place == 10000 ? shiftedFirst : shiftedLast)++;
+      }
+      // 因果前缀中已经定型的显示映射，逐字节不回改。
+      for (int n = 100; n < d.n(); n += 83)
+      {
+        czsc_input pre = in; pre.n = n;
+        void *ph = czsc_snapshot_build(&pre);
+        REQUIRE(ph != nullptr);
+        for (const auto &p : Get(czsc_pivots, ph))
+        {
+          if (p.confirmedAt < 0) continue;
+          auto it = std::find_if(t.p.begin(), t.p.end(), [&](const auto &q) { return q.extremeIndex == p.extremeIndex; });
+          REQUIRE(it != t.p.end());
+          CHECK(std::memcmp(&p, &*it, sizeof p) == 0);
+        }
+        czsc_snapshot_free(ph);
+      }
+      // 区间套高级别到低级别的端点映射必须按真实极值，而非显示下标。
+      czsc_input lowIn = Input(d, stroke);
+      void *low = czsc_snapshot_build(&lowIn);
+      REQUIRE(low != nullptr);
+      void *nb = czsc_nested_build(low, base), *nd = czsc_nested_build(low, h);
+      REQUIRE(nb != nullptr && nd != nullptr);
+      CHECK(Bytes(Get(czsc_nested_rows, nb), Get(czsc_nested_rows, nd)));
+      czsc_snapshot_free(nb); czsc_snapshot_free(nd); czsc_snapshot_free(low);
+      czsc_snapshot_free(h);
+    }
+    czsc_snapshot_free(base);
+  }
+  CHECK(shiftedFirst > 0 && shiftedLast > 0);
 }

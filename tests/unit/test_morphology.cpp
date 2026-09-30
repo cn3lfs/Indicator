@@ -132,3 +132,65 @@ TEST(CommunityStrokeBoundaries)
   REQUIRE(ends.size() == 3);
   CHECK(ends[0].index == 1 && ends[1].index == 3 && ends[2].index == 5);
 }
+
+// 三根包含特征笔；社区投影不改变第67/71课极值判定（方案a）。
+TEST(SegmentMergedBoundaryExamples)
+{
+  auto pivots = [](std::vector<float> prices, bool mirror) {
+    std::vector<Pivot> out;
+    for (std::size_t i = 0; i < prices.size(); ++i)
+    {
+      Pivot p; p.index = static_cast<int>(i);
+      p.kind = (i % 2 == 0) != mirror ? Kind::Bottom : Kind::Top;
+      p.high = p.low = mirror ? -prices[i] : prices[i];
+      out.push_back(p);
+    }
+    return out;
+  };
+  for (bool mirror : {false, true})
+  {
+    for (int test = 0; test < 3; ++test)
+    {
+      std::vector<float> prices = test == 0
+        ? std::vector<float>{0,10,5,15,7,18,6,20,4,14,3,13,2}
+        : std::vector<float>{0,10,5,15,7,20,4,18,8,14,3,13,2};
+      if (test == 2) prices[7] = 20; // 等值极值沿用后一笔
+      auto s = pivots(prices, mirror);
+      auto ends = SegmentPivotsFeature(s);
+      REQUIRE(ends.size() >= 2);
+      const auto &p = ends[1];
+      CHECK(p.index == (test == 1 ? 5 : 7));
+      CHECK(p.firstFeatureIndex == 3 && p.lastFeatureIndex == 7);
+      for (int digit = 0; digit < 3; ++digit)
+      {
+        auto config = *Config::Decode(1100 + digit * 10000);
+        CHECK(DisplayPivotIndex(p, config) == (digit == 0 ? p.index : digit == 1 ? 3 : 7));
+      }
+      // 从非极值首笔开始重算会被组内更高/低点破坏；投影仍保留3，不偷偷回退到极值。
+      SegmentStream stream(SegmentMethod::Feature);
+      for (std::size_t n = 4; n <= s.size(); ++n)
+      {
+        std::vector<Pivot> prefix(s.begin(), s.begin() + n);
+        stream.Update(prefix, n - 1);
+        auto batch = SegmentPivotsFeature(prefix);
+        REQUIRE(stream.Pivots().size() == batch.size());
+        for (std::size_t i = 0; i < batch.size(); ++i)
+          CHECK(stream.Pivots()[i].index == batch[i].index &&
+                stream.Pivots()[i].firstFeatureIndex == batch[i].firstFeatureIndex &&
+                stream.Pivots()[i].lastFeatureIndex == batch[i].lastFeatureIndex);
+      }
+    }
+    // 无包含时三种输出位置相同。
+    auto plain = SegmentPivotsFeature(pivots({0,10,5,15,7,12,4,11,3}, mirror));
+    REQUIRE(plain.size() >= 2);
+    CHECK(plain[1].index == plain[1].firstFeatureIndex && plain[1].index == plain[1].lastFeatureIndex);
+    // 缺口确认从真实极值7开始，不从显示首笔3开始；新极值则撤销该候选。
+    auto gap = pivots({0,10,5,15,12,18,11,20,10,14,3,13,6,14,5,13}, mirror);
+    auto confirmed = SegmentPivotsFeature(gap);
+    REQUIRE(confirmed.size() >= 2);
+    CHECK(confirmed[1].index == 7 && confirmed[1].firstFeatureIndex == 3 && confirmed[1].lastFeatureIndex == 7);
+    gap[9].high = gap[9].low = mirror ? -21 : 21;
+    auto invalidated = SegmentPivotsFeature(gap);
+    CHECK(invalidated.size() < 2 || invalidated[1].index != 7);
+  }
+}

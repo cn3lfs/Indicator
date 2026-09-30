@@ -1,6 +1,7 @@
 #include "tdx/exports.h"
 
 #include "core/engine.h"
+#include "core/morphology.h"
 #include "core/structure.h"
 
 #include <algorithm>
@@ -138,7 +139,10 @@ void Pivots(int count, float *out, float *high, float *low, float *config)
 {
   Run(count, out, high, low, config, [&](const Analysis &a) {
     for (const chan::Pivot &p : a.snapshot.pivots)
-      if (InRange(p.index, count)) out[p.index] = static_cast<float>(static_cast<int>(p.kind));
+    {
+      int index = chan::DisplayPivotIndex(p, a.config);
+      if (InRange(index, count)) out[index] = static_cast<float>(static_cast<int>(p.kind));
+    }
   });
 }
 

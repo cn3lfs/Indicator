@@ -33,6 +33,14 @@ enum class SegmentMethod : int
   Feature = 1,    // 特征序列（第67/71课）
 };
 
+// 万位：社区显示口径；第67/71课的极值划分判定不变。
+enum class SegmentEnd : int
+{
+  Extreme = 0,
+  First = 1,
+  Last = 2,
+};
+
 struct Config
 {
   StrokeRule stroke = StrokeRule::Strict;
@@ -40,13 +48,15 @@ struct Config
   CenterUnit unit = CenterUnit::Stroke;
   SegmentMethod segment = SegmentMethod::Heuristic;
 
-  // 十进制位编码：个位笔(0/1/2/3/4)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)
+  SegmentEnd segmentEnd = SegmentEnd::Extreme;
+
+  // 十进制位编码：个位笔(0/1/2/3/4)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)、万位分界显示(0/1/2，仅特征序列)
   int Encode() const;
   static std::optional<Config> Decode(int code);
 
   bool operator==(const Config &o) const
   {
-    return stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment;
+    return stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd;
   }
 };
 

@@ -44,3 +44,20 @@ TEST(SeriesRejectsMismatchedClose)
   CHECK(Series::FromRaw(3, h, l, good).HasClose());
   CHECK(!Series::FromRaw(3, h, l, bad).HasClose());  // 越界收盘价视为错配，回落 (H+L)/2
 }
+
+TEST(SegmentEndConfigRoundTrip)
+{
+  int count = 0;
+  for (int code = 0; code < 30000; ++code)
+  {
+    auto c = Config::Decode(code);
+    if (!c) continue;
+    CHECK(c->Encode() == code);
+    CHECK(c->segmentEnd == SegmentEnd::Extreme || c->segment == SegmentMethod::Feature);
+    ++count;
+  }
+  CHECK(count == 80);
+  CHECK(!Config::Decode(10000) && !Config::Decode(20100) && !Config::Decode(31000));
+  CHECK(Config::Decode(11100) && Config::Decode(21100));
+  CHECK(!(*Config::Decode(1100) == *Config::Decode(11100)));
+}

@@ -48,6 +48,9 @@ struct Pivot
   float high = 0;
   float low = 0;
   int fractalAt = -1;  // 端点所在分型成立的K线（端点此后仍可能被延伸替换，定型时刻见 Analysis::pivotFinalAt）
+  // 社区显示位置：分析index始终是真实极值（第67/71课）；-1表示无合并分型映射。
+  int firstFeatureIndex = -1;
+  int lastFeatureIndex = -1;
   // 动力学：截至 index 的累积 MACD 柱（代数和/红/绿）与 DIF/DEA
   float energy = 0;
   float energyRed = 0;

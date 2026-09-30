@@ -93,3 +93,32 @@ README 配置码说明、`czsc_api.h` 注释、CLAUDE.md 的 api 版本同步更
 ### 兼容性验收说明
 
 需求方已明确同意采用api v8：配置0/1100的所有v7业务字段逐字节不变，允许 `czsc_pivot.size` 从24变28和末尾新增 `extremeIndex`。其他导出表必须完整逐字节不变；旧golden不改。不能声称两版完整pivot表字节相同。
+
+### R1/R3/R4：实现与验收
+
+万位0/1/2已实现；千位0与非零万位组合非法。选项表新增 `segmentEnd.extreme/first/last` 三行（place=10000，original分别1/0/0），共14行、80个合法配置。百位0时只输出笔，万位不影响笔级业务数据。
+`Element.firstInner` 保留最初笔起点，`lastInner` 每次包含合并更新；输出极值仍由原有highAt/lowAt及等价取后一笔规则决定。`SegmentStream` 检查点保存投影映射，dirty比较也覆盖首末位置变化。核心分析端点不移动，TDX 1号及结构化pivot表投影位置移动。
+区间套的背驰包含判定、所属高级别线段查找、高低端点映射全部按 `extremeIndex`，否则显示移动会污染研判结果。
+
+API v8 `czsc_pivot`：保留原字段顺序，仅尾部追加。仍为原有4字节对齐POD（没有对该结构新增pack(1)），所有字段4字节，无填充，总size28，32/64位一致。
+
+| 字段 | 偏移 | 字节数 |
+|---|---:|---:|
+| size | 0 | 4 |
+| index | 4 | 4 |
+| kind | 8 | 4 |
+| price | 12 | 4 |
+| fractalAt | 16 | 4 |
+| confirmedAt | 20 | 4 |
+| extremeIndex（v8） | 24 | 4 |
+
+`czsc_config_option` 仍pack(1)、size116；所有其他v7结构体的字段、布局与size不变。FFI必须将pivot步长更新为28，不能继续按v7步长读取。
+
+验收：`make test` 40 cases、0 failed checks；覆盖80个合法配置SSE全表冒烟，新分界×5种笔的顶底交替/位置/下游表字节一致，因果前缀、增量/参照与已定型显示映射不回改。
+手工用例同时测试上/下方向：三根特征笔包含合并，极值在末笔/中间笔、等价极值取后一笔、无包含三选项相同，以及缺口确认和再创新极值否决候选。
+`tests/fixtures/sse-community.txt` 仅追加10段新显示口径，原有内容逐字节保留；`tests/unit/golden` 未修改。
+以a271e5c（v7）在SSE真实C/V、EVENTS|HIGHER下构建配置0/1100，比较11张表：只归一化pivot的size并去掉尾部新增字段，所有旧字段与其他整张表逐字节一致，且新增extremeIndex=index。两者SHA256均为 `18524fa6f5b68331fab265d3f3c965e335c16ecffd68b246de920185603d7101`。
+
+### 未做项
+
+未采用方案(b)或改变线段分析分组，避免背离第67/71课；不增加中枢扩张计算开关，v3结论不变（万位现在专用于线段分界显示）。nextjs-quant的设置、FFI升级及其tsc/vitest属于需求方接入，本次未修改该仓库。未执行DLL release打包/宿主加载测试，本次验证为WSL原生测试及v7/v8导出数据比对。

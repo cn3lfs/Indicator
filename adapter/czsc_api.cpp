@@ -2,6 +2,7 @@
 #include "adapter/czsc_api.h"
 
 #include "core/engine.h"
+#include "core/morphology.h"
 #include "core/recursion.h"
 #include "core/structure.h"
 
@@ -511,9 +512,11 @@ Snapshot *Build(const czsc_input *in)
   {
     const chan::Pivot &p = a.snapshot.pivots[i];
     czsc_pivot row = Row<czsc_pivot>();
-    row.index = p.index;
+    row.index = chan::DisplayPivotIndex(p, config);
+    row.extremeIndex = p.index;
     row.kind = static_cast<int32_t>(p.kind);
-    row.price = p.Price();
+    row.price = row.index == p.index ? p.Price()
+        : (p.kind == chan::Kind::Top ? in->high[row.index] : in->low[row.index]);
     row.fractalAt = p.fractalAt;
     row.confirmedAt = a.pivotFinalAt[i];
     out->pivots.push_back(row);
@@ -620,13 +623,13 @@ Nested *BuildNested(const Snapshot &low, const Snapshot &high)
     {
       const czsc_signal &h = high.signals[j];
       if (h.type != l.type || h.divergence.curStart < 0) continue;
-      int cStart = hp[static_cast<std::size_t>(h.divergence.curStart)].index;
+      int cStart = hp[static_cast<std::size_t>(h.divergence.curStart)].extremeIndex;
       if (cStart > l.index || l.index > h.index) continue;
       const czsc_signal *best = row.highSignal >= 0 ? &high.signals[static_cast<std::size_t>(row.highSignal)] : nullptr;
       if (!best || h.index < best->index || (h.index == best->index && h.confirmedAt >= 0 && best->confirmedAt < 0))
         row.highSignal = static_cast<int32_t>(j);  // 取包含它的最近（最早结束）的高级别背驰段
     }
-    auto it = std::upper_bound(hp.begin(), hp.end(), l.index, [](int b, const czsc_pivot &p) { return b < p.index; });
+    auto it = std::upper_bound(hp.begin(), hp.end(), l.index, [](int b, const czsc_pivot &p) { return b < p.extremeIndex; });
     row.highSegmentStart = it == hp.begin() ? -1 : static_cast<int32_t>(it - hp.begin()) - 1;
     row.highSegmentEnd = it == hp.end() ? -1 : static_cast<int32_t>(it - hp.begin());
     row.insideHighSegment = row.highSignal >= 0;
@@ -642,10 +645,10 @@ Nested *BuildNested(const Snapshot &low, const Snapshot &high)
     {
       auto lowPivot = [&](int32_t highPivot) -> int32_t {
         if (highPivot < 0) return -1;
-        int bar = hp[static_cast<std::size_t>(highPivot)].index;
+        int bar = hp[static_cast<std::size_t>(highPivot)].extremeIndex;
         auto it = std::lower_bound(low.pivots.begin(), low.pivots.end(), bar,
-                                   [](const czsc_pivot &p, int b) { return p.index < b; });
-        return (it != low.pivots.end() && it->index == bar) ? static_cast<int32_t>(it - low.pivots.begin()) : -1;
+                                   [](const czsc_pivot &p, int b) { return p.extremeIndex < b; });
+        return (it != low.pivots.end() && it->extremeIndex == bar) ? static_cast<int32_t>(it - low.pivots.begin()) : -1;
       };
       row.highPrevStartLow = lowPivot(h->divergence.prevStart);
       row.highPrevEndLow = lowPivot(h->divergence.prevEnd);
@@ -693,6 +696,9 @@ int32_t czsc_config_options(czsc_config_option *out, int32_t capacity)
     {sizeof(czsc_config_option), 100, 1, 0, 1, "center.segment", "线段中枢", "63"},
     {sizeof(czsc_config_option), 1000, 0, 1, 0, "segment.heuristic", "启发式", ""},
     {sizeof(czsc_config_option), 1000, 1, 0, 1, "segment.feature", "特征序列", "67/71"},
+    {sizeof(czsc_config_option), 10000, 0, 1, 1, "segmentEnd.extreme", "极值笔", "67"},
+    {sizeof(czsc_config_option), 10000, 1, 0, 0, "segmentEnd.first", "合并起始笔", ""},
+    {sizeof(czsc_config_option), 10000, 2, 0, 0, "segmentEnd.last", "合并最后笔", ""},
   };
   const int32_t count = static_cast<int32_t>(sizeof options / sizeof options[0]);
   if (capacity < 0 || (!out && capacity > 0)) return 0;

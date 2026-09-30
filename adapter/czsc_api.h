@@ -37,8 +37,8 @@ extern "C" {
  * 与区间套的高级别背驰段低级别端点映射（czsc_nested.highPrevStartLow 起 4 个字段）；4 = 实现 CZSC_FLAG_HIGHER：
  * 递归走势节点表 czsc_recursive_node 与子节点表（第17课递归定义）；5 = 中阴（czsc_movement.zhongyinStart）、
  * 递归节点追加 firstCenter 起 5 个字段、递归中枢表 czsc_recursive_center 与同级别连接段表 czsc_recursive_connection；
- * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit()；7 = 配置自描述 */
-#define CZSC_API_VERSION 7
+ * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit()；7 = 配置自描述；8 = czsc_pivot.extremeIndex 与万位显示分界 */
+#define CZSC_API_VERSION 8
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -59,7 +59,7 @@ extern "C" {
 typedef struct czsc_config_option
 {
   uint32_t size;
-  int32_t place; /* 1 / 10 / 100 / 1000 */
+  int32_t place; /* 1 / 10 / 100 / 1000 / 10000 */
   int32_t value;
   int32_t isDefault;
   int32_t original; /* 1 原文；0 社区/非原文 */
@@ -82,7 +82,8 @@ typedef struct czsc_input
   const float *close;     /* n 个收盘价（必填，须落在 [low,high]；MACD 用真实收盘价） */
   const float *volume;    /* n 个成交量（必填，须有限且 >= 0；用于放量湿吻判定） */
   int32_t config;         /* 配置码：个位笔 0严格/1新笔/2czsc笔/3社区4K笔/4社区分型笔；十位 0严格收笔/1允许次高低；
-                             百位 0笔中枢/1线段中枢；千位 0启发式线段/1特征序列线段。常用 0 与 1100；千位2/非零万位非法。扩张显示由前端过滤递归表，信号照常计算 */
+                             百位 0笔中枢/1线段中枢；千位 0启发式线段/1特征序列线段。常用 0 与 1100；千位2非法；万位0极值/1合并首笔/2合并末笔，仅千位1允许非零万位。
+                             万位仅改变线段端点显示，分析保持极值；扩张显示由前端过滤递归表 */
   int32_t flags;          /* CZSC_FLAG_* 组合，未定义的位须为 0 */
 } czsc_input;
 
@@ -90,12 +91,17 @@ typedef struct czsc_input
 typedef struct czsc_pivot
 {
   uint32_t size;          /* sizeof(czsc_pivot) */
-  int32_t index;          /* 极值所在K线 */
+  int32_t index;          /* 显示分界K线，万位0为极值；笔级不受万位影响 */
   int32_t kind;           /* +1 顶 / -1 底 */
-  float price;            /* 顶取该分型K线最高价，底取最低价 */
-  int32_t fractalAt;      /* 该端点所在分型成立的K线（右侧首根非包含K线）；端点此后仍可能被延伸替换 */
+  float price;            /* 显示index的原始K线高/低；用于画线，分析价位见extremeIndex */
+  int32_t fractalAt;      /* 真实极值分型成立的K线；显示分界可不同于极值，见extremeIndex */
   int32_t confirmedAt;    /* 端点定型的K线（其后第二个端点出现，不再延伸或重新细化）；未定型 -1 */
+  /* ---- v8：社区显示口径只改index/price；下游分析仍按真实极值 ---- */
+  int32_t extremeIndex;   /* 真实分析端点K线；默认/笔级等于index。offset24，size28，无填充 */
 } czsc_pivot;
+
+/* 下游中枢/走势/背驰/信号/递归表均按extremeIndex计算，表序号不受显示投影影响。
+ * 信号index可不同于其pivot行的显示index；fractalAt和established仍按真实极值。 */
 
 /* 中枢（第17/18/20课）：进入段之后三段重叠成枢，[ZD,ZG] 成枢即固定，与之重叠的段延伸 GG/DD */
 typedef struct czsc_center

@@ -97,6 +97,8 @@ private:
 std::vector<Pivot> StrokePivots(const std::vector<Fractal> &ends);
 std::vector<Pivot> SegmentPivotsHeuristic(const std::vector<Pivot> &strokes);
 std::vector<Pivot> SegmentPivotsFeature(const std::vector<Pivot> &strokes);
+// 仅用于输出投影；不可将此位置作为中枢/背驰/买卖点输入。
+int DisplayPivotIndex(const Pivot &pivot, const Config &config);
 std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &config);
 
 }  // namespace chan

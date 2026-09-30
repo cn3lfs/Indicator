@@ -2,6 +2,7 @@
 #include "check.h"
 #include "sse_data.h"
 #include "core/engine.h"
+#include "core/morphology.h"
 #include "tdx/exports.h"
 
 #include <vector>
@@ -118,5 +119,24 @@ TEST(TdxGapsAndFractalStrength)
     tdx::Gaps(t, pg.data(), s.h.data(), s.l.data(), cfg.data());
     tdx::FractalStrength(t, pf.data(), s.h.data(), s.l.data(), cfg.data());
     for (int i = 0; i < t; i++) CHECK(pg[static_cast<std::size_t>(i)] == fullG[static_cast<std::size_t>(i)] && pf[static_cast<std::size_t>(i)] == fullF[static_cast<std::size_t>(i)]);
+  }
+}
+
+TEST(TdxSegmentBoundaryProjection)
+{
+  tdx::ResetForTesting();
+  Sse s;
+  auto series = chan::Series::FromRaw(s.n, s.h.data(), s.l.data());
+  for (int code : {11100, 21100, 11104, 21104})
+  {
+    auto config = *chan::Config::Decode(code);
+    auto analysis = chan::Analyze(series, config);
+    std::vector<float> expected(s.n, 0);
+    for (const auto &p : analysis.snapshot.pivots)
+      expected[chan::DisplayPivotIndex(p, config)] = static_cast<int>(p.kind);
+    CHECK(Call(tdx::Pivots, s, static_cast<float>(code)) == expected);
+    // 显示配置只移动端点；中枢、信号、失效价投影不变。
+    for (auto f : {tdx::CenterHigh, tdx::CenterLow})
+      CHECK(Call(f, s, static_cast<float>(code)) == Call(f, s, static_cast<float>(code % 10000)));
   }
 }

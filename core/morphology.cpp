@@ -122,7 +122,7 @@ bool MoreExtremePivot(const Pivot &base, const Pivot &p)
 // 特征序列元素：以向上笔开始的线段，其向下笔为元素（反之亦然）
 struct Element
 {
-  std::size_t inner, outer, highAt, lowAt;
+  std::size_t inner, outer, highAt, lowAt, firstInner, lastInner;
   float high, low;
 };
 
@@ -131,6 +131,7 @@ bool MakeElement(const std::vector<Pivot> &p, std::size_t start, std::size_t k, 
   if (start + 2 + 2 * k >= size) return false;
   e.inner = start + 1 + 2 * k;
   e.outer = start + 2 + 2 * k;
+  e.firstInner = e.lastInner = e.inner;
   Range r = Between(p[e.inner], p[e.outer]);
   e.high = r.high;
   e.low = r.low;
@@ -180,6 +181,7 @@ public:
           if (cur.low <= last.low) { last.low = cur.low; last.lowAt = cur.lowAt; }
         }
         last.outer = cur.outer;
+        last.lastInner = cur.inner;  // 社区显示映射，合并价格与极值归属不变。
         if (direction_ == 0) direction_ = d;
         continue;
       }
@@ -218,7 +220,14 @@ bool AnyFeatureFractal(const std::vector<Pivot> &p, std::size_t start, int dir, 
 
 // 线段终点（第67课）：无缺口在分型极值结束；有缺口须反向特征序列分型确认，且须在原线段
 // 再创新极值之前出现（第67/71课；与极值持平不算突破）
-int FindSegmentEnd(const std::vector<Pivot> &p, std::size_t start, int dir, Horizon &h)
+struct SegmentBoundary
+{
+  int extreme = -1;
+  int firstIndex = -1;
+  int lastIndex = -1;
+};
+
+SegmentBoundary FindSegmentEnd(const std::vector<Pivot> &p, std::size_t start, int dir, Horizon &h)
 {
   FeatureSequence fs(p, start, p.size(), h);
   for (std::size_t i = 1; fs.Settle(i + 1); i++)
@@ -226,7 +235,8 @@ int FindSegmentEnd(const std::vector<Pivot> &p, std::size_t start, int dir, Hori
     const std::vector<Element> &s = fs.seq;
     if (!FeatureFractal(s[i - 1], s[i], s[i + 1], dir)) continue;
     std::size_t end = dir > 0 ? s[i].highAt : s[i].lowAt;
-    if (Overlap(s[i - 1].low, s[i - 1].high, s[i].low, s[i].high)) return static_cast<int>(end);
+    SegmentBoundary boundary{static_cast<int>(end), p[s[i].firstInner].index, p[s[i].lastInner].index};
+    if (Overlap(s[i - 1].low, s[i - 1].high, s[i].low, s[i].high)) return boundary;
     std::size_t limit = end + 2;
     while (limit < p.size() && !(MoreExtremePivot(p[end], p[limit]) && p[limit].Price() != p[end].Price()))
     {
@@ -238,14 +248,14 @@ int FindSegmentEnd(const std::vector<Pivot> &p, std::size_t start, int dir, Hori
     if (AnyFeatureFractal(p, end, -dir, limit, reverse))
     {
       h.Read(reverse.max);
-      return static_cast<int>(end);
+      return boundary;
     }
     if (limit < p.size()) h.Read(limit); else h.Bound();
     h.Read(reverse.max);
     if (reverse.unbounded) h.Bound();
   }
   h.Bound();
-  return -1;
+  return {};
 }
 
 // 线段前提：前三笔有重叠（第65课）
@@ -463,7 +473,9 @@ int SegmentStream::Update(const std::vector<Pivot> &s, std::size_t dirty)
   }
   std::size_t k = 0;
   while (k < oldTail.size() && keep + k < out_.size() && oldTail[k].index == out_[keep + k].index &&
-         oldTail[k].kind == out_[keep + k].kind)
+         oldTail[k].kind == out_[keep + k].kind &&
+         oldTail[k].firstFeatureIndex == out_[keep + k].firstFeatureIndex &&
+         oldTail[k].lastFeatureIndex == out_[keep + k].lastFeatureIndex)
     k++;
   return (k == oldTail.size() && keep + k == out_.size()) ? -1 : static_cast<int>(keep + k);
 }
@@ -513,7 +525,8 @@ void SegmentStream::RunFeature(const std::vector<Pivot> &s, bool fresh)
   {
     Save();
     int dir = s[start_].kind == Kind::Bottom ? 1 : -1;
-    int end = FindSegmentEnd(s, start_, dir, horizon_);
+    SegmentBoundary boundary = FindSegmentEnd(s, start_, dir, horizon_);
+    int end = boundary.extreme;
     std::size_t limit = end < 0 ? s.size() : static_cast<std::size_t>(end) + 1;
     std::size_t extreme = StartBreak(s, start_, limit, horizon_);
     if (extreme != start_)
@@ -523,7 +536,13 @@ void SegmentStream::RunFeature(const std::vector<Pivot> &s, bool fresh)
       continue;
     }
     if (end < 0 || static_cast<std::size_t>(end) <= start_ || !FirstThreeOverlap(s, start_, horizon_)) return;
-    if (out_.back().index != s[static_cast<std::size_t>(end)].index) out_.push_back(s[static_cast<std::size_t>(end)]);
+    if (out_.back().index != s[static_cast<std::size_t>(end)].index)
+    {
+      Pivot pivot = s[static_cast<std::size_t>(end)];
+      pivot.firstFeatureIndex = boundary.firstIndex;
+      pivot.lastFeatureIndex = boundary.lastIndex;
+      out_.push_back(pivot);
+    }
     start_ = static_cast<std::size_t>(end);
   }
 }
@@ -604,6 +623,16 @@ std::vector<Pivot> SegmentPivotsFeature(const std::vector<Pivot> &s)
   SegmentStream st(SegmentMethod::Feature);
   st.Update(s, 0);
   return st.Pivots();
+}
+
+int DisplayPivotIndex(const Pivot &pivot, const Config &config)
+{
+  if (config.unit == CenterUnit::Segment && config.segment == SegmentMethod::Feature)
+  {
+    if (config.segmentEnd == SegmentEnd::First && pivot.firstFeatureIndex >= 0) return pivot.firstFeatureIndex;
+    if (config.segmentEnd == SegmentEnd::Last && pivot.lastFeatureIndex >= 0) return pivot.lastFeatureIndex;
+  }
+  return pivot.index;
 }
 
 std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &c)
