@@ -54,6 +54,30 @@ TEST(GoldenCommunityStrokesSse)
       }
     }
   }
+  auto real = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
+  for (int method : {0, 1000})
+  {
+    for (int unit : {0, 100})
+    {
+      for (int stroke = 0; stroke <= 4; ++stroke)
+      {
+        int code = 100000 + method + unit + stroke;
+        auto a = chan::Analyze(real, *chan::Config::Decode(code));
+        out << "## 中枢构成配置 " << code << " 中枢 " << a.snapshot.centers.size() << " 信号 " << a.snapshot.signals.size() << " 事件 " << a.events.size() << "\n";
+        for (std::size_t i = 0; i < a.snapshot.centers.size(); ++i)
+        {
+          const auto &c = a.snapshot.centers[i];
+          std::snprintf(line, sizeof line, "中枢 %d-%d %d-%d 方向%d ZD %.2f ZG %.2f DD %.2f GG %.2f 定型%d\n",
+            c.start, c.end, c.firstPivot, c.lastPivot, c.direction, c.zd, c.zg, c.dd, c.gg, a.centerFinalAt[i]);
+          out << line;
+        }
+        for (const auto &sig : a.snapshot.signals)
+          out << "信号 " << sig.index << " " << static_cast<int>(sig.type) << " " << sig.stop << "\n";
+        for (const auto &e : a.events)
+          out << "事件 " << e.bar << " " << e.signal.index << " " << static_cast<int>(e.signal.type) << " " << e.revoked << "\n";
+      }
+    }
+  }
   std::string here = __FILE__;
   std::size_t slash = here.find_last_of("/\\");
   std::string path = (slash == std::string::npos ? "." : here.substr(0, slash)) + "/../fixtures/sse-community.txt";

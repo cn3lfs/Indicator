@@ -41,6 +41,13 @@ enum class SegmentEnd : int
   Last = 2,
 };
 
+// 十万位：按父线段筛选笔中枢是社区/非原文口径；线段级保持进入段。
+enum class CenterFormation : int
+{
+  Entry = 0,
+  Segment = 1,
+};
+
 struct Config
 {
   StrokeRule stroke = StrokeRule::Strict;
@@ -50,13 +57,15 @@ struct Config
 
   SegmentEnd segmentEnd = SegmentEnd::Extreme;
 
-  // 十进制位编码：个位笔(0/1/2/3/4)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)、万位分界显示(0/1/2，仅特征序列)
+  CenterFormation centerFormation = CenterFormation::Entry;
+
+  // 十进制位编码：个位笔(0/1/2/3/4)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)、万位分界显示(0/1/2，仅特征序列)、十万位中枢构成(0/1)
   int Encode() const;
   static std::optional<Config> Decode(int code);
 
   bool operator==(const Config &o) const
   {
-    return stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd;
+    return stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd && centerFormation == o.centerFormation;
   }
 };
 

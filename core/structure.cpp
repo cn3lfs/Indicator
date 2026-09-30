@@ -90,7 +90,8 @@ int CenterStream::Update(const std::vector<Pivot> &p, std::size_t dirty)
   // 只保留并比较被续算覆盖的尾部，之前的中枢不变
   std::vector<Center> oldTail(out_.begin() + static_cast<std::ptrdiff_t>(keep), out_.end());
   out_.resize(keep);
-  Run(p, i);
+  scoped_ = false;
+  Run(p, i, p.empty() ? 0 : p.size() - 1, 0, false);
   std::size_t k = 0;
   while (k < oldTail.size() && keep + k < out_.size() && Same(oldTail[k], out_[keep + k])) k++;
   return (k == oldTail.size() && keep + k == out_.size()) ? -1 : static_cast<int>(keep + k);
@@ -98,9 +99,61 @@ int CenterStream::Update(const std::vector<Pivot> &p, std::size_t dirty)
 
 std::size_t CenterStream::FinalCount(std::size_t pivotFinal) const
 {
+  std::size_t count = 0;
   for (std::size_t k = checkpoints_.size(); k-- > 0;)
-    if (checkpoints_[k].horizon.Before(pivotFinal)) return checkpoints_[k].outSize;
-  return 0;
+    if (checkpoints_[k].horizon.Before(pivotFinal)) { count = checkpoints_[k].outSize; break; }
+  if (scoped_)
+  {
+    std::size_t stable = 0;
+    while (stable < count && out_[stable].end <= finalScopeBar_) ++stable;
+    count = stable;
+  }
+  return count;
+}
+
+std::vector<CenterScope> CenterScopes(const std::vector<Pivot> &strokes, const std::vector<Pivot> &segments)
+{
+  std::vector<CenterScope> scopes;
+  if (strokes.empty() || segments.empty()) return scopes;
+  auto position = [&](int bar) {
+    return static_cast<std::size_t>(std::lower_bound(strokes.begin(), strokes.end(), bar,
+      [](const Pivot &p, int index) { return p.index < index; }) - strokes.begin());
+  };
+  for (std::size_t k = 0; k < segments.size(); ++k)
+  {
+    std::size_t first = position(segments[k].index);
+    bool closed = k + 1 < segments.size();
+    std::size_t last = closed ? position(segments[k + 1].index) : strokes.size() - 1;
+    if (first >= strokes.size() || last >= strokes.size() || first >= last) continue;
+    scopes.push_back({first, last, segments[k].kind == Kind::Bottom ? 1 : -1, closed});
+  }
+  return scopes;
+}
+
+int CenterStream::UpdateScoped(const std::vector<Pivot> &p, const std::vector<CenterScope> &scopes, int finalScopeBar)
+{
+  // 父线段归属可在笔dirty之前改写；新口径暂以全区间重建保证因果一致。
+  std::vector<Center> old = out_;
+  out_.clear(); checkpoints_.clear(); horizon_ = Horizon();
+  scoped_ = true; finalScopeBar_ = finalScopeBar;
+  for (const auto &scope : scopes)
+  {
+    Run(p, scope.first + 1, scope.last, scope.direction, scope.closed);
+    // 即使没有后一个成枢尝试，也记录父段边界读取视界。
+    horizon_.Read(scope.last);
+    if (!scope.closed) horizon_.Bound();
+    checkpoints_.push_back({scope.last, out_.size(), horizon_});
+  }
+  std::size_t k = 0;
+  while (k < old.size() && k < out_.size() && Same(old[k], out_[k])) ++k;
+  return k == old.size() && k == out_.size() ? -1 : static_cast<int>(k);
+}
+
+std::vector<Center> BuildCentersInSegments(const std::vector<Pivot> &p, const std::vector<Pivot> &segments)
+{
+  CenterStream stream;
+  stream.UpdateScoped(p, CenterScopes(p, segments));
+  return stream.Centers();
 }
 
 bool CenterStream::HorizonAfter(std::size_t center, Horizon &out) const
@@ -120,29 +173,31 @@ bool CenterStream::Same(const Center &a, const Center &b)
          a.zg == b.zg && a.zd == b.zd && a.gg == b.gg && a.dd == b.dd && a.direction == b.direction;
 }
 
-void CenterStream::Run(const std::vector<Pivot> &p, std::size_t i)
+void CenterStream::Run(const std::vector<Pivot> &p, std::size_t i, std::size_t limit, int direction, bool closed)
 {
   if (p.size() < 4)
   {
     horizon_.Bound();
     return;
   }
-  while (i + 3 < p.size())
+  while (i + 3 <= limit)
   {
+    // 父段上升从顶起笔，下跌从底起笔；不将社区归属规则冒充第17课定义。
+    if (direction != 0 && (p[i].kind == Kind::Top ? 1 : -1) != direction) { ++i; continue; }
     checkpoints_.push_back({i, out_.size(), horizon_});
     Center c;
     horizon_.Read(i + 3);
     if (!TryForm(p, i, c))
     {
-      i++;
+      i += direction == 0 ? 1 : 2;
       continue;
     }
-    c.direction = p[i - 1].kind == Kind::Bottom ? 1 : -1;
+    c.direction = direction != 0 ? direction : (p[i - 1].kind == Kind::Bottom ? 1 : -1);
 
     std::size_t k = i + 3;
     bool leftByPrevious = false;
     bool ended = false;
-    while (k + 1 < p.size())
+    while (k + 1 <= limit)
     {
       horizon_.Read(k + 1);
       Range r = Between(p[k], p[k + 1]);
@@ -154,8 +209,8 @@ void CenterStream::Run(const std::vector<Pivot> &p, std::size_t i)
       }
       int leaveDir = 0;
       bool leave = LeaveAttempt(c, p[k], p[k + 1], leaveDir);
-      if (leave && k + 2 >= p.size()) horizon_.Bound();  // 离开后尚无回试：取决于数据尽头
-      if (leave && k + 2 < p.size())
+      if (leave && k + 2 > limit && !closed) horizon_.Bound();  // 离开后尚无回试：取决于数据尽头
+      if (leave && k + 2 <= limit)
       {
         horizon_.Read(k + 2);
         int retestDir = MoveDirection(p[k + 1], p[k + 2]);
@@ -178,7 +233,7 @@ void CenterStream::Run(const std::vector<Pivot> &p, std::size_t i)
       ended = true;
       break;
     }
-    if (!ended) horizon_.Bound();  // 延伸到数据尽头，中枢未结束
+    if (!ended) { if (closed) horizon_.Read(limit); else horizon_.Bound(); }  // 延伸到数据尽头，中枢未结束
 
     // 第18课定理三：离开段不属于本中枢，退回终点并按保留端点重算 GG/DD，离开段作下一中枢进入段
     if (leftByPrevious && k > i + 3)
@@ -198,7 +253,7 @@ void CenterStream::Run(const std::vector<Pivot> &p, std::size_t i)
     out_.push_back(c);
     i = k + 1;
   }
-  horizon_.Bound();
+  if (!closed) horizon_.Bound();
 }
 
 std::vector<Center> BuildCenters(const std::vector<Pivot> &p)

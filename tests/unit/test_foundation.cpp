@@ -61,3 +61,17 @@ TEST(SegmentEndConfigRoundTrip)
   CHECK(Config::Decode(11100) && Config::Decode(21100));
   CHECK(!(*Config::Decode(1100) == *Config::Decode(11100)));
 }
+
+TEST(CenterFormationConfigRoundTrip)
+{
+  int count = 0;
+  for (int code = 0; code < 130000; ++code)
+  {
+    auto c = Config::Decode(code);
+    if (!c) continue;
+    CHECK(c->Encode() == code);
+    ++count;
+  }
+  CHECK(count == 160 && !Config::Decode(200000));
+  CHECK(Config::Decode(100000)->centerFormation == CenterFormation::Segment);
+}

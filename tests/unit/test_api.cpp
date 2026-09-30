@@ -3,6 +3,7 @@
 #include "sse_data.h"
 #include "adapter/czsc_api.h"
 #include "core/engine.h"
+#include "core/structure.h"
 #include "tdx/exports.h"
 
 #include <algorithm>
@@ -101,7 +102,7 @@ float TdxCode(int32_t type) { return static_cast<float>(type > 0 ? type : 10 - t
 
 TEST(ApiVersionAndStructSizes)
 {
-  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 8);
+  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 9);
   CHECK(czsc_build_commit() != nullptr && czsc_build_commit()[0] != 0);
   // 全部为 4 字节字段、无填充：逐字节确定
   CHECK(sizeof(czsc_pivot) == 7 * 4 && sizeof(czsc_center) == 14 * 4 && sizeof(czsc_movement) == 15 * 4);
@@ -765,7 +766,7 @@ TEST(ApiConfigOptionsAndAllLegalSse)
   CHECK(sizeof(czsc_config_option) == 116 && alignof(czsc_config_option) == 1);
   CHECK(offsetof(czsc_config_option, key) == 20 && offsetof(czsc_config_option, label) == 52 && offsetof(czsc_config_option, lessons) == 84);
   int count = czsc_config_options(nullptr, 0);
-  REQUIRE(count == 14);
+  REQUIRE(count == 16);
   std::vector<czsc_config_option> options(static_cast<std::size_t>(count) + 1);
   options.back().size = 123;
   CHECK(czsc_config_options(options.data(), count) == count && options.back().size == 123);
@@ -779,8 +780,14 @@ TEST(ApiConfigOptionsAndAllLegalSse)
           o.original == (i == 11) && std::strcmp(o.key, keys[i - 11]) == 0);
     CHECK(std::strcmp(o.lessons, i == 11 ? "67" : "") == 0);
   }
+  for (int i = 14; i < 16; ++i)
+  {
+    const auto &o = options[static_cast<std::size_t>(i)];
+    CHECK(o.place == 100000 && o.value == i - 14 && o.isDefault == (i == 14) && o.original == 0 &&
+          std::strcmp(o.key, i == 14 ? "center.entry" : "center.segment") == 0 && o.lessons[0] == 0);
+  }
   std::vector<int> codes{0};
-  for (int place : {1, 10, 100, 1000, 10000})
+  for (int place : {1, 10, 100, 1000, 10000, 100000})
   {
     std::vector<int> next;
     int defaults = 0;
@@ -797,10 +804,10 @@ TEST(ApiConfigOptionsAndAllLegalSse)
     codes = next;
   }
   Data d = Sse();
-  for (int code = -1; code <= 30000; ++code)
+  for (int code = -1; code <= 130000; ++code)
   {
     bool listed = std::find(codes.begin(), codes.end(), code) != codes.end() &&
-        (code < 10000 || (code / 1000) % 10 == 1);
+        ((code / 10000) % 10 == 0 || (code / 1000) % 10 == 1);
     CHECK(czsc_config_valid(code) == static_cast<int>(listed));
     CHECK(czsc_config_valid(code) == static_cast<int>(chan::Config::Decode(code).has_value()));
     if (!listed) continue;
@@ -887,4 +894,57 @@ TEST(ApiSegmentBoundaryProjection)
     czsc_snapshot_free(base);
   }
   CHECK(shiftedFirst > 0 && shiftedLast > 0);
+}
+
+TEST(ApiParentSegmentCenters)
+{
+  Data d = Sse();
+  for (int algorithm : {0, 1000})
+  {
+    for (int stroke = 0; stroke <= 4; ++stroke)
+    {
+      int code = 100000 + algorithm + stroke;
+      Tables all = Build(d, code);
+      chan::Series series; series.high = d.h; series.low = d.l; series.close = d.c; series.volume = d.v;
+      auto config = *chan::Config::Decode(code);
+      auto a = chan::Analyze(series, config);
+      auto segments = algorithm ? chan::SegmentPivotsFeature(a.snapshot.pivots) : chan::SegmentPivotsHeuristic(a.snapshot.pivots);
+      auto scopes = chan::CenterScopes(a.snapshot.pivots, segments);
+      for (const auto &c : all.c)
+      {
+        REQUIRE(c.firstPivot >= 1 && static_cast<std::size_t>(c.firstPivot) + 3 < all.p.size());
+        auto owner = std::find_if(scopes.begin(), scopes.end(), [&](const auto &scope) {
+          return scope.first < static_cast<std::size_t>(c.firstPivot) && static_cast<std::size_t>(c.lastPivot) <= scope.last;
+        });
+        REQUIRE(owner != scopes.end());
+        CHECK(c.direction == owner->direction && all.p[c.firstPivot].kind == c.direction);
+        float lo = -std::numeric_limits<float>::infinity(), hi = std::numeric_limits<float>::infinity();
+        for (int i = c.firstPivot; i < c.firstPivot + 3; ++i)
+        {
+          lo = std::max(lo, std::min(all.p[i].price, all.p[i+1].price));
+          hi = std::min(hi, std::max(all.p[i].price, all.p[i+1].price));
+        }
+        CHECK(c.zd == lo && c.zg == hi && lo <= hi);
+      }
+      // 已定型中枢不得回改；父段可能先于笔dirty改写，所以跨前缀按完整字段比对。
+      for (int n = 100; n < d.n(); n += 137)
+      {
+        Data pre = Sse(n);
+        Tables t = Build(pre, code);
+        for (const auto &c : t.c)
+        {
+          if (c.confirmedAt < 0) continue;
+          auto it = std::find_if(all.c.begin(), all.c.end(), [&](const auto &q) { return q.start == c.start; });
+          REQUIRE(it != all.c.end());
+          CHECK(std::memcmp(&c, &*it, sizeof c) == 0);
+        }
+      }
+      // 万位投影不得影响笔级归属与分析；线段级方案ii保持原结果。
+      if (algorithm)
+      {
+        CHECK(Same(all, Build(d, code + 10000)) && Same(all, Build(d, code + 20000)));
+      }
+      CHECK(Same(Build(d, algorithm + 100 + stroke), Build(d, code + 100)));
+    }
+  }
 }

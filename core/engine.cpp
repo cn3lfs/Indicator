@@ -86,11 +86,20 @@ public:
     }
     else
     {
+      if (config_.centerFormation == CenterFormation::Segment)
+        segments_.Update(strokePivots_, static_cast<std::size_t>(dirty));
       Energize(strokePivots_, static_cast<std::size_t>(dirty));
     }
     if (changed)
     {
-      int dc = centers_.Update(pivots_, static_cast<std::size_t>(dirty));
+      int dc;
+      if (config_.unit == CenterUnit::Stroke && config_.centerFormation == CenterFormation::Segment)
+      {
+        std::size_t stable = segments_.FinalCount(strokes_.FinalCount());
+        int finalBar = stable >= 2 ? segments_.Pivots()[stable - 1].index : -1;
+        dc = centers_.UpdateScoped(pivots_, CenterScopes(pivots_, segments_.Pivots()), finalBar);
+      }
+      else dc = centers_.Update(pivots_, static_cast<std::size_t>(dirty));
       int dm = UpdateMovements(centers_.Centers(), moves_, dc);
       signals_.Update(pivots_, centers_.Centers(), moves_, dirty, dc, dm, bar, emit, events);
     }
@@ -200,7 +209,12 @@ Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, 
   std::vector<Fractal> prefix(fractals.begin(), fractals.begin() + static_cast<std::ptrdiff_t>(count));
   s.pivots = BuildPivots(prefix, config);
   AssignEnergy(s.pivots, tables);
-  s.centers = BuildCenters(s.pivots);
+  if (config.unit == CenterUnit::Stroke && config.centerFormation == CenterFormation::Segment)
+  {
+    auto segments = config.segment == SegmentMethod::Feature ? SegmentPivotsFeature(s.pivots) : SegmentPivotsHeuristic(s.pivots);
+    s.centers = BuildCentersInSegments(s.pivots, segments);
+  }
+  else s.centers = BuildCenters(s.pivots);
   s.movements = BuildMovements(s.centers);
   s.breakouts = BuildBreakouts(s.pivots, s.centers);
   s.signals = BuildSignals(s.pivots, s.centers, s.movements, s.breakouts, &tables);

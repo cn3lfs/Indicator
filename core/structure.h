@@ -13,11 +13,23 @@ namespace chan
 // 离开段后回抽不回 [ZD,ZG] 即破坏，离开段归入下一中枢的进入段（第18课定理一/三）。
 std::vector<Center> BuildCenters(const std::vector<Pivot> &pivots);
 
+// 社区父段区间：均为分析端点表下标，closed表示已观察到后继端点，非“已定型”。
+struct CenterScope
+{
+  std::size_t first, last;
+  int direction;
+  bool closed;
+};
+std::vector<CenterScope> CenterScopes(const std::vector<Pivot> &strokes, const std::vector<Pivot> &segments);
+std::vector<Center> BuildCentersInSegments(const std::vector<Pivot> &strokes, const std::vector<Pivot> &segments);
+
 // 中枢流：Update(pivots, dirty) 表示端点从 dirty 起可能变化；返回首个变化的中枢下标（无变化 -1）
 class CenterStream
 {
 public:
   int Update(const std::vector<Pivot> &pivots, std::size_t dirty);
+  // 新口径显式重建；finalScopeBar为两端已定型的最后父段终点，-1表示均未定型。
+  int UpdateScoped(const std::vector<Pivot> &pivots, const std::vector<CenterScope> &scopes, int finalScopeBar = -1);
   const std::vector<Center> &Centers() const { return out_; }
   // 已定型中枢数：端点前 pivotFinal 个不再改变时，视界落在其内的最后检查点之前的中枢不再改变
   std::size_t FinalCount(std::size_t pivotFinal) const;
@@ -30,12 +42,14 @@ private:
     std::size_t i, outSize;
     Horizon horizon;
   };
-  void Run(const std::vector<Pivot> &p, std::size_t i);
+  void Run(const std::vector<Pivot> &p, std::size_t i, std::size_t limit, int direction, bool closed);
   static bool Same(const Center &a, const Center &b);
 
   std::vector<Center> out_;
   std::vector<Checkpoint> checkpoints_;
   Horizon horizon_;
+  bool scoped_ = false;
+  int finalScopeBar_ = -1;
 };
 
 // 中心定理二（第20课）：后DD>前GG 上涨，后GG<前DD 下跌，否则扩展（形成高级别中枢）

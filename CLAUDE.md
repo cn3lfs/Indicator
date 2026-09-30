@@ -38,7 +38,7 @@ b（前中枢终点→最后中枢起点）背驰；同一中枢区只留最极�
 - 签名固定 `void f(int count, float *out, float *a, float *b, float *c)`，只有 3 个输入：H、L、配置码。
 - 真实收盘价/成交量走 40 号注册（`tdx/exports.cpp` 边界全局），须逐根落在 [L,H] 才被采用，否则回落 (H+L)/2。
 - 无效数 `0xF8F8F8F8` 由 `Series::FromRaw` 清洗（向前填充）。
-- 配置码十进制位：个位笔(0/1/2/3/4)、十位笔结束、百位中枢构件、千位线段法、万位分界显示(0/1/2，仅特征序列允许非零万位)；非法输出全 0。
+- 配置码十进制位：个位笔(0/1/2/3/4)、十位笔结束、百位中枢构件、千位线段法、万位分界显示(0/1/2，仅特征序列允许非零万位)、十万位中枢构成(0进入段/1笔中枢服从父线段，社区口径)；非法输出全 0。
 
 ## 本机构建与测试（无 make/g++/mingw，只有 clang）
 
@@ -57,11 +57,11 @@ cd D:/github/czsc-tdx
   （曾因 `thread_local std::string` 发生）。改动 `adapter/` 后，用 x64 程序 LoadLibrary 加载 `build/CZSC64.dll`
   调一次 `czsc_snapshot_build` 并正常退出，作为发布前冒烟检查。
 
-## 结构化接口（adapter/czsc_api.h，api v8）
+## 结构化接口（adapter/czsc_api.h，api v9）
 
 面向 nextjs-quant（koffi FFI）的纯 C 快照接口，契约即头文件；需求见 `docs/nextjs-quant-adapter.md`，P2 结论见
 `docs/nextjs-quant-p2-feasibility.md`。改结构体布局或语义须递增 `CZSC_API_VERSION` 并只在末尾追加字段；
-v8的 `czsc_pivot` 在偏移24追加 `extremeIndex`，size28；index/price只供显示，核心/下游仍按真实极值计算。
+v9保持v8结构体布局；`czsc_pivot` 在偏移24追加 `extremeIndex`，size28；index/price只供显示，核心/下游仍按真实极值计算。
 `confirmedAt` 是“定型”时刻（`Analysis::*FinalAt`），信号行冻结于确认当时。
 `czsc_build_commit()` 由 Makefile 的 `BUILD_COMMIT`（`git rev-parse` + 未提交改动时 `-dirty`）写入 adapter 目标；本机 clang 直编为 "unknown"。发布前须先提交再 `make release`，否则 DLL 带 -dirty。
 
@@ -73,3 +73,5 @@ v8的 `czsc_pivot` 在偏移24追加 `extremeIndex`，size28；index/price只供
 ## 进度跟踪
 
 `todos.json`（gitignore）记录各轮路线图；提交按“一个特性一组提交”。
+
+十万位1按父线段筛选笔中枢，三笔与延伸不跨父段；父段未定型则中枢未定型。归属与显示分离，线段级沿用进入段（方案ii）。新模式为社区分析口径，默认0保持原续算路径；新模式当前按父区间重建，修改时须保持因果/参照及父段定型依赖。

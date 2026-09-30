@@ -94,3 +94,31 @@ TEST(FirstBuyWithAbcContext)
   CHECK(buy1->quality == 1);  // 无 MACD 表：回零/标准背驰不置，故非强质
   CHECK(sell3->pivot == 10 && (sell3->context & kContextFirstRetest));
 }
+
+TEST(ParentSegmentCenterDirectionAndBounds)
+{
+  for (int mirror : {1, -1})
+  {
+    const float prices[] = {0,10,5,20,12,18,13,25,15,24};
+    std::vector<Pivot> p;
+    for (int i = 0; i < 10; ++i)
+      p.push_back(P(((i % 2 == 0) == (mirror == 1)) ? Kind::Bottom : Kind::Top, i, prices[i] * mirror));
+    std::vector<Pivot> parents{p[0], p[7]};
+    auto old = BuildCenters(p), now = BuildCentersInSegments(p, parents);
+    REQUIRE(!old.empty() && !now.empty());
+    // 第一组反向三笔不重叠；旧规则成反方向枢，新规则跳到下一反向首笔。
+    CHECK(old[0].firstPivot == 2 && old[0].direction == -mirror);
+    CHECK(now[0].firstPivot == 3 && now[0].direction == mirror && now[0].lastPivot <= 7);
+    CHECK(now[0].zd == (mirror == 1 ? 13 : -18) && now[0].zg == (mirror == 1 ? 18 : -13));
+    CHECK(now[0].lastPivot == 7); // 延伸不可越过父线段终点
+    auto crossed = BuildCentersInSegments(p, {p[0], p[5]});
+    for (const auto &c : crossed) CHECK(c.firstPivot >= 6); // 三笔跨父边界不能成枢
+    CHECK(BuildCentersInSegments(p, {}).empty()); // 无父起点，不猜方向
+    CenterStream stream;
+    auto scopes = CenterScopes(p, parents);
+    stream.UpdateScoped(p, scopes);
+    CHECK(stream.FinalCount(p.size()) == 0); // 父线段尚未定型
+    stream.UpdateScoped(p, scopes, 7);
+    CHECK(stream.FinalCount(p.size()) >= 1); // 父段两端稳定后才允许定型
+  }
+}

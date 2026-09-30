@@ -37,8 +37,8 @@ extern "C" {
  * 与区间套的高级别背驰段低级别端点映射（czsc_nested.highPrevStartLow 起 4 个字段）；4 = 实现 CZSC_FLAG_HIGHER：
  * 递归走势节点表 czsc_recursive_node 与子节点表（第17课递归定义）；5 = 中阴（czsc_movement.zhongyinStart）、
  * 递归节点追加 firstCenter 起 5 个字段、递归中枢表 czsc_recursive_center 与同级别连接段表 czsc_recursive_connection；
- * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit()；7 = 配置自描述；8 = czsc_pivot.extremeIndex 与万位显示分界 */
-#define CZSC_API_VERSION 8
+ * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit()；7 = 配置自描述；8 = czsc_pivot.extremeIndex 与万位显示分界；9 = 十万位中枢构成分析口径，布局不变 */
+#define CZSC_API_VERSION 9
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -59,7 +59,7 @@ extern "C" {
 typedef struct czsc_config_option
 {
   uint32_t size;
-  int32_t place; /* 1 / 10 / 100 / 1000 / 10000 */
+  int32_t place; /* 1 / 10 / 100 / 1000 / 10000 / 100000 */
   int32_t value;
   int32_t isDefault;
   int32_t original; /* 1 原文；0 社区/非原文 */
@@ -83,7 +83,8 @@ typedef struct czsc_input
   const float *volume;    /* n 个成交量（必填，须有限且 >= 0；用于放量湿吻判定） */
   int32_t config;         /* 配置码：个位笔 0严格/1新笔/2czsc笔/3社区4K笔/4社区分型笔；十位 0严格收笔/1允许次高低；
                              百位 0笔中枢/1线段中枢；千位 0启发式线段/1特征序列线段。常用 0 与 1100；千位2非法；万位0极值/1合并首笔/2合并末笔，仅千位1允许非零万位。
-                             万位仅改变线段端点显示，分析保持极值；扩张显示由前端过滤递归表 */
+                             万位仅改变线段端点显示，分析保持极值；十万位0按进入段/1笔中枢服从所属分析线段，线段中枢仍按进入段。
+                             新模式三笔与延伸限于父段，父段未定型则中枢未定型；扩张显示由前端过滤递归表 */
   int32_t flags;          /* CZSC_FLAG_* 组合，未定义的位须为 0 */
 } czsc_input;
 
@@ -115,7 +116,7 @@ typedef struct czsc_center
   float zd;               /* 中枢下沿 ZD = 成枢三段低点的最大值 */
   float gg;               /* 波动上沿 GG = 成员段最高点 */
   float dd;               /* 波动下沿 DD = 成员段最低点 */
-  int32_t direction;      /* 进入段方向：+1 向上进入 / -1 向下进入 */
+  int32_t direction;      /* 默认/线段级：进入段方向；十万位1笔级：父分析线段方向。进入段仍firstPivot-1 */
   int32_t confirmedAt;    /* 中枢定型的K线（终点、GG/DD 不再改变）；未定型 -1 */
   int32_t relationToPrev; /* 与前一中枢（第20课中心定理二）：1 上涨 / -1 下跌 / 2 扩展 / 0 首个中枢 */
   /* ---- v2 ---- */

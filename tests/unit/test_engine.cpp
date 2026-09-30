@@ -158,3 +158,25 @@ TEST(InstantWarningIsCausal)
     }
   }
 }
+
+TEST(ParentCentersIncrementalReferenceAndCausality)
+{
+  auto full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
+  for (int method : {0, 1000})
+  {
+    for (int stroke = 0; stroke <= 4; ++stroke)
+    {
+      int code = 100000 + method + stroke;
+      auto config = *chan::Config::Decode(code);
+      auto all = chan::Analyze(full, config);
+      CHECK(Same(all.events, chan::AnalyzeReference(full, config).events));
+      for (int n = 100; n < full.Size(); n += 89)
+      {
+        auto pre = chan::Series::FromRaw(n, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
+        std::vector<chan::SignalEvent> expected;
+        for (const auto &e : all.events) if (e.bar < n) expected.push_back(e);
+        CHECK(Same(chan::Analyze(pre, config).events, expected));
+      }
+    }
+  }
+}
