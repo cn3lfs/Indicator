@@ -57,7 +57,7 @@ cd D:/github/czsc-tdx
   （曾因 `thread_local std::string` 发生）。改动 `adapter/` 后，用 x64 程序 LoadLibrary 加载 `build/CZSC64.dll`
   调一次 `czsc_snapshot_build` 并正常退出，作为发布前冒烟检查。
 
-## 结构化接口（adapter/czsc_api.h）
+## 结构化接口（adapter/czsc_api.h，api v7）
 
 面向 nextjs-quant（koffi FFI）的纯 C 快照接口，契约即头文件；需求见 `docs/nextjs-quant-adapter.md`，P2 结论见
 `docs/nextjs-quant-p2-feasibility.md`。改结构体布局或语义须递增 `CZSC_API_VERSION` 并只在末尾追加字段；

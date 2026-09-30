@@ -37,8 +37,8 @@ extern "C" {
  * 与区间套的高级别背驰段低级别端点映射（czsc_nested.highPrevStartLow 起 4 个字段）；4 = 实现 CZSC_FLAG_HIGHER：
  * 递归走势节点表 czsc_recursive_node 与子节点表（第17课递归定义）；5 = 中阴（czsc_movement.zhongyinStart）、
  * 递归节点追加 firstCenter 起 5 个字段、递归中枢表 czsc_recursive_center 与同级别连接段表 czsc_recursive_connection；
- * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit() */
-#define CZSC_API_VERSION 6
+ * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit()；7 = 配置自描述 */
+#define CZSC_API_VERSION 7
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -52,6 +52,26 @@ extern "C" {
 /* czsc_input.flags 位定义 */
 #define CZSC_FLAG_EVENTS 0x1u     /* 位0：生成当下事件流（czsc_events） */
 #define CZSC_FLAG_HIGHER 0x2u     /* 位1：生成递归走势节点（czsc_recursive_nodes / czsc_recursive_children，v4） */
+
+/* v7 配置自描述：pack(1)，size=116，32/64位一致；字符串 UTF-8/NUL。
+ * original=1 表示原文规则来源，工程边界仍见决策表。 */
+#pragma pack(push, 1)
+typedef struct czsc_config_option
+{
+  uint32_t size;
+  int32_t place; /* 1 / 10 / 100 / 1000 */
+  int32_t value;
+  int32_t isDefault;
+  int32_t original; /* 1 原文；0 社区/非原文 */
+  char key[32];
+  char label[32];
+  char lessons[32]; /* 非原文为空 */
+} czsc_config_option;
+#pragma pack(pop)
+CZSC_API int32_t czsc_config_valid(int32_t config);
+/* NULL/0 查询条数；否则返回实际写入 min(capacity,总数)。负容量或 NULL/正容量返回0。
+ * 调用方须提供完整 v7 结构体空间。 */
+CZSC_API int32_t czsc_config_options(czsc_config_option *out, int32_t capacity);
 
 typedef struct czsc_input
 {

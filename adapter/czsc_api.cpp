@@ -674,6 +674,32 @@ extern "C" {
 
 int32_t czsc_api_version(void) { return CZSC_API_VERSION; }
 
+int32_t czsc_config_valid(int32_t config)
+{
+  return chan::Config::Decode(config).has_value() ? 1 : 0;
+}
+
+int32_t czsc_config_options(czsc_config_option *out, int32_t capacity)
+{
+  static const czsc_config_option options[] = {
+    {sizeof(czsc_config_option), 1, 0, 1, 1, "stroke.strict", "老笔（严格）", "62/65"},
+    {sizeof(czsc_config_option), 1, 1, 0, 0, "stroke.new", "新笔", ""},
+    {sizeof(czsc_config_option), 1, 2, 0, 0, "stroke.czsc", "czsc笔", ""},
+    {sizeof(czsc_config_option), 10, 0, 1, 1, "endpoint.extreme", "极值点", "65"},
+    {sizeof(czsc_config_option), 10, 1, 0, 0, "endpoint.first", "允许次高次低", ""},
+    {sizeof(czsc_config_option), 100, 0, 1, 0, "center.stroke", "笔中枢", ""},
+    {sizeof(czsc_config_option), 100, 1, 0, 1, "center.segment", "线段中枢", "63"},
+    {sizeof(czsc_config_option), 1000, 0, 1, 0, "segment.heuristic", "启发式", ""},
+    {sizeof(czsc_config_option), 1000, 1, 0, 1, "segment.feature", "特征序列", "67/71"},
+  };
+  const int32_t count = static_cast<int32_t>(sizeof options / sizeof options[0]);
+  if (capacity < 0 || (!out && capacity > 0)) return 0;
+  if (!out) return count;
+  const int32_t written = std::min(capacity, count);
+  for (int32_t i = 0; i < written; ++i) out[i] = options[i];
+  return written;
+}
+
 #ifndef CZSC_BUILD_COMMIT
 #define CZSC_BUILD_COMMIT "unknown"
 #endif

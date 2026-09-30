@@ -5,6 +5,8 @@
 #include "core/engine.h"
 #include "tdx/exports.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -99,7 +101,7 @@ float TdxCode(int32_t type) { return static_cast<float>(type > 0 ? type : 10 - t
 
 TEST(ApiVersionAndStructSizes)
 {
-  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 6);
+  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 7);
   CHECK(czsc_build_commit() != nullptr && czsc_build_commit()[0] != 0);
   // 全部为 4 字节字段、无填充：逐字节确定
   CHECK(sizeof(czsc_pivot) == 6 * 4 && sizeof(czsc_center) == 14 * 4 && sizeof(czsc_movement) == 15 * 4);
@@ -755,5 +757,60 @@ TEST(ApiCenterEstablishedAndMovingAverages)
     }
     const czsc_bar &b = t.r[static_cast<std::size_t>(i)];
     CHECK(std::fabs(b.maShort - s5 / w5) <= 1e-3 * std::fabs(s5 / w5) && std::fabs(b.maLong - s20 / w20) <= 1e-3 * std::fabs(s20 / w20));
+  }
+}
+
+TEST(ApiConfigOptionsAndAllLegalSse)
+{
+  CHECK(sizeof(czsc_config_option) == 116 && alignof(czsc_config_option) == 1);
+  CHECK(offsetof(czsc_config_option, key) == 20 && offsetof(czsc_config_option, label) == 52 && offsetof(czsc_config_option, lessons) == 84);
+  int count = czsc_config_options(nullptr, 0);
+  REQUIRE(count > 0);
+  std::vector<czsc_config_option> options(static_cast<std::size_t>(count) + 1);
+  options.back().size = 123;
+  CHECK(czsc_config_options(options.data(), count) == count && options.back().size == 123);
+  CHECK(czsc_config_options(options.data(), 1) == 1);
+  CHECK(czsc_config_options(nullptr, 1) == 0 && czsc_config_options(options.data(), -1) == 0);
+  std::vector<int> codes{0};
+  for (int place : {1, 10, 100, 1000})
+  {
+    std::vector<int> next;
+    int defaults = 0;
+    for (int i = 0; i < count; ++i)
+    {
+      const auto &o = options[static_cast<std::size_t>(i)];
+      CHECK(o.size == sizeof o && o.key[31] == 0 && o.label[31] == 0 && o.lessons[31] == 0);
+      if (!o.original) CHECK(o.lessons[0] == 0);
+      if (o.place != place) continue;
+      defaults += o.isDefault;
+      for (int code : codes) next.push_back(code + place * o.value);
+    }
+    CHECK(defaults == 1);
+    codes = next;
+  }
+  Data d = Sse();
+  for (int code = -1; code <= 10000; ++code)
+  {
+    bool listed = std::find(codes.begin(), codes.end(), code) != codes.end();
+    CHECK(czsc_config_valid(code) == static_cast<int>(listed));
+    CHECK(czsc_config_valid(code) == static_cast<int>(chan::Config::Decode(code).has_value()));
+    if (!listed) continue;
+    czsc_input in = Input(d, code, CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER);
+    void *h = czsc_snapshot_build(&in);
+    REQUIRE(h != nullptr);
+    Tables t = Read(h);
+    CHECK(t.r.size() == d.h.size());
+    for (std::size_t i = 1; i < t.p.size(); ++i)
+      CHECK(t.p[i].kind == -t.p[i-1].kind && t.p[i].index > t.p[i-1].index);
+    for (const auto &c : t.c)
+    {
+      REQUIRE(c.firstPivot >= 0 && static_cast<std::size_t>(c.firstPivot) + 3 < t.p.size());
+      CHECK(c.zd < c.zg && c.established == t.p[static_cast<std::size_t>(c.firstPivot) + 3].fractalAt);
+    }
+    CHECK(Get(czsc_recursive_nodes, h).size() >= t.m.size());
+    for (const auto &c : Get(czsc_recursive_centers, h)) CHECK(c.zd < c.zg);
+    Get(czsc_recursive_children, h);
+    Get(czsc_recursive_connections, h);
+    czsc_snapshot_free(h);
   }
 }
