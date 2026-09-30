@@ -61,7 +61,13 @@ TEST(TdxProjectionsMatchEngine)
     }
     std::vector<float> zg = Call(tdx::CenterHigh, s, code), zd = Call(tdx::CenterLow, s, code);
     for (const chan::Center &c : a.snapshot.centers)
-      CHECK(zg[static_cast<std::size_t>(c.start)] == c.zg && zd[static_cast<std::size_t>(c.end)] == c.zd);
+    {
+      int boxEnd = a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot + 3)].index;
+      for (int i = c.start; i <= boxEnd; i++)
+        CHECK(zg[static_cast<std::size_t>(i)] == c.zg && zd[static_cast<std::size_t>(i)] == c.zd);
+      for (int i = boxEnd + 1; i <= c.end; i++)
+        CHECK(zg[static_cast<std::size_t>(i)] == 0.0f && zd[static_cast<std::size_t>(i)] == 0.0f);
+    }
   }
   // SSE 笔级：2021-01-25 一卖当下出现后失效
   std::vector<float> rev = Call(tdx::Revokes, s, 0.0f);

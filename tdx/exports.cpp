@@ -146,7 +146,11 @@ void CenterHigh(int count, float *out, float *high, float *low, float *config)
 {
   Run(count, out, high, low, config, [&](const Analysis &a) {
     for (const chan::Center &c : a.snapshot.centers)
-      for (int i = std::max(c.start, 0); i <= c.end && i < count; i++) out[i] = c.zg;
+    {
+      // 显示口径：只画最初三笔／三段（第17/18课成枢构件），延伸仍由结构层计算。
+      int end = a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot + 3)].index;
+      for (int i = std::max(c.start, 0); i <= end && i < count; i++) out[i] = c.zg;
+    }
   });
 }
 
@@ -154,7 +158,10 @@ void CenterLow(int count, float *out, float *high, float *low, float *config)
 {
   Run(count, out, high, low, config, [&](const Analysis &a) {
     for (const chan::Center &c : a.snapshot.centers)
-      for (int i = std::max(c.start, 0); i <= c.end && i < count; i++) out[i] = c.zd;
+    {
+      int end = a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot + 3)].index;
+      for (int i = std::max(c.start, 0); i <= end && i < count; i++) out[i] = c.zd;
+    }
   });
 }
 
