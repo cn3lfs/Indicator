@@ -10,6 +10,8 @@ enum class StrokeRule : int
 {
   Strict = 0,  // 合并K线跨度 ≥4（顶底之间至少一根独立K线，第62课）
   New = 1,     // 合并K线跨度 ≥3 且原始K线跨度 ≥4（新笔）
+  FourK = 3,   // 社区/非原文：原始极值下标差≥3，两分型不共用合并K线
+  Fractal = 4, // 社区/非原文：相邻顶底直接连接，仅须顶高于底
   Czsc = 2,    // 合并K线跨度 ≥3 且两端分型K线区间互不包含（借鉴 waditu/czsc check_bi）
 };
 
@@ -38,7 +40,7 @@ struct Config
   CenterUnit unit = CenterUnit::Stroke;
   SegmentMethod segment = SegmentMethod::Heuristic;
 
-  // 十进制位编码：个位笔(0/1/2)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)
+  // 十进制位编码：个位笔(0/1/2/3/4)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)
   int Encode() const;
   static std::optional<Config> Decode(int code);
 

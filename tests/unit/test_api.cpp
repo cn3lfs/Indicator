@@ -298,7 +298,7 @@ TEST(ApiEdgeCases)
   };
   Data d = Sse(100);
   czsc_input in = Input(d, 0);
-  for (int bad : {3, 20, 200, 2000, 9999, -1}) { czsc_input x = in; x.config = bad; CHECK(rejects(x)); }
+  for (int bad : {5, 20, 200, 2000, 9999, -1}) { czsc_input x = in; x.config = bad; CHECK(rejects(x)); }
   { czsc_input x = in; x.size = 8; CHECK(rejects(x)); }
   { czsc_input x = in; x.n = -1; CHECK(rejects(x)); }
   { czsc_input x = in; x.n = 16777217; CHECK(rejects(x)); }

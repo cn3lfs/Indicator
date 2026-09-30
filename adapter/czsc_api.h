@@ -81,7 +81,7 @@ typedef struct czsc_input
   const float *low;       /* n 个最低价 */
   const float *close;     /* n 个收盘价（必填，须落在 [low,high]；MACD 用真实收盘价） */
   const float *volume;    /* n 个成交量（必填，须有限且 >= 0；用于放量湿吻判定） */
-  int32_t config;         /* 配置码：个位笔 0严格/1新笔/2czsc笔；十位 0严格收笔/1允许次高低；
+  int32_t config;         /* 配置码：个位笔 0严格/1新笔/2czsc笔/3社区4K笔/4社区分型笔；十位 0严格收笔/1允许次高低；
                              百位 0笔中枢/1线段中枢；千位 0启发式线段/1特征序列线段。常用 0 与 1100 */
   int32_t flags;          /* CZSC_FLAG_* 组合，未定义的位须为 0 */
 } czsc_input;

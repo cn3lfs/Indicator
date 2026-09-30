@@ -685,6 +685,8 @@ int32_t czsc_config_options(czsc_config_option *out, int32_t capacity)
     {sizeof(czsc_config_option), 1, 0, 1, 1, "stroke.strict", "老笔（严格）", "62/65"},
     {sizeof(czsc_config_option), 1, 1, 0, 0, "stroke.new", "新笔", ""},
     {sizeof(czsc_config_option), 1, 2, 0, 0, "stroke.czsc", "czsc笔", ""},
+    {sizeof(czsc_config_option), 1, 3, 0, 0, "stroke.4k", "4K笔", ""},
+    {sizeof(czsc_config_option), 1, 4, 0, 0, "stroke.fractal", "分型笔", ""},
     {sizeof(czsc_config_option), 10, 0, 1, 1, "endpoint.extreme", "极值点", "65"},
     {sizeof(czsc_config_option), 10, 1, 0, 0, "endpoint.first", "允许次高次低", ""},
     {sizeof(czsc_config_option), 100, 0, 1, 0, "center.stroke", "笔中枢", ""},

@@ -105,3 +105,30 @@ TEST(StrokeRules)
   REQUIRE(ce.size() == 2);
   CHECK(ce[0].index == 8 && ce[1].index == 12);
 }
+
+TEST(CommunityStrokeBoundaries)
+{
+  auto pair = [](int merged, int raw, float topHigh = 20, float topLow = 15) {
+    Fractal a, b;
+    a.kind = Kind::Bottom; a.index = 1; a.merged = 1; a.low = 8; a.high = 10;
+    b.kind = Kind::Top; b.index = 1 + raw; b.merged = 1 + merged; b.high = topHigh; b.low = topLow;
+    return std::vector<Fractal>{a, b};
+  };
+  Config four = *Config::Decode(3), fractal = *Config::Decode(4);
+  // 原始极值含两端4根，合并分型不共用K线；没有独立合并K线仍允许。
+  CHECK(BuildStrokeEnds(pair(3, 3), four).size() == 2);
+  CHECK(BuildStrokeEnds(pair(3, 3), Config{}).size() == 1);
+  CHECK(BuildStrokeEnds(pair(3, 3), *Config::Decode(1)).size() == 1);
+  CHECK(BuildStrokeEnds(pair(2, 9), four).size() == 1);
+  CHECK(BuildStrokeEnds(pair(3, 2), four).size() == 1);
+  CHECK(BuildStrokeEnds(pair(4, 4), four).size() == 2);
+  // 分型笔允许共用分型K线，无最小跨度；只按顶底极值判断。
+  CHECK(BuildStrokeEnds(pair(2, 2, 9, 7), fractal).size() == 2);
+  CHECK(BuildStrokeEnds(pair(2, 2, 8, 7), fractal).size() == 1);
+  auto f = pair(2, 2);
+  Fractal c = f[0]; c.index = 5; c.merged = 5; c.low = 6;
+  f.push_back(c);
+  auto ends = BuildStrokeEnds(f, fractal);
+  REQUIRE(ends.size() == 3);
+  CHECK(ends[0].index == 1 && ends[1].index == 3 && ends[2].index == 5);
+}

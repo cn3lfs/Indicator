@@ -34,7 +34,7 @@ TEST(TdxRejectsInvalidConfig)
 {
   tdx::ResetForTesting();
   Sse s;
-  for (float bad : {3.0f, 20.0f, -1.0f, 0.5f, 99999.0f})
+  for (float bad : {5.0f, 20.0f, -1.0f, 0.5f, 99999.0f})
     CHECK(NonZero(Call(tdx::Pivots, s, bad)) == 0);
   std::vector<float> out(4, 7.0f);
   tdx::Pivots(4, out.data(), nullptr, nullptr, nullptr);

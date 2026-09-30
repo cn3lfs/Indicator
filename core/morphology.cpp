@@ -46,6 +46,9 @@ bool SpanEnough(const Fractal &a, const Fractal &b, const Config &c)
   int merged = b.merged - a.merged;
   switch (c.stroke)
   {
+    // 社区/非原文口径，需求方固定；第62/77课独立K线要求不用于此选项。
+    case StrokeRule::FourK: return merged >= 3 && (b.index - a.index) >= 3;
+    case StrokeRule::Fractal: return true;
     case StrokeRule::New: return merged >= 3 && (b.index - a.index) >= 4;
     case StrokeRule::Czsc: return merged >= 3;
     default: return merged >= 4;
@@ -67,6 +70,9 @@ bool Nested(const Fractal &a, const Fractal &b, const Config &c)
 
 bool ValidStroke(const Fractal &a, const Fractal &b, const Config &c)
 {
+  // 分型笔只检查顶高于底，不采用第62课上升/下降K线价位推进要求。
+  if (c.stroke == StrokeRule::Fractal)
+    return a.kind == Kind::Bottom ? b.high > a.low : a.high > b.low;
   return SpanEnough(a, b, c) && PriceProgress(a, b) && !Nested(a, b, c);
 }
 
@@ -398,7 +404,7 @@ int StrokeStream::Add(std::size_t k)
   }
   // 末端点永不细化；其前一端点的“下一端点”变了，须按已定型的前前端点重新细化
   changed = raw_.size() - 1;
-  if (config_.strokeEnd == StrokeEnd::Extreme && raw_.size() >= 3)
+  if (config_.strokeEnd == StrokeEnd::Extreme && config_.stroke != StrokeRule::Fractal && raw_.size() >= 3)
   {
     std::size_t i = raw_.size() - 2;
     Fractal refined = RefineOne(ends_[i - 1], raw_[i], raw_[i + 1], *fractals_, config_);

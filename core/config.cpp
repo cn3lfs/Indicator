@@ -16,7 +16,7 @@ std::optional<Config> Config::Decode(int code)
     return std::nullopt;
   }
   int d0 = code % 10, d1 = (code / 10) % 10, d2 = (code / 100) % 10, d3 = (code / 1000) % 10;
-  if (d0 > 2 || d1 > 1 || d2 > 1 || d3 > 1)
+  if (d0 > 4 || d1 > 1 || d2 > 1 || d3 > 1)
   {
     return std::nullopt;
   }

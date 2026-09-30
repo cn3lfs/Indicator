@@ -14,7 +14,7 @@ TEST(ConfigRoundTrip)
     REQUIRE(c.has_value());
     CHECK(c->Encode() == code);
   }
-  CHECK(!Config::Decode(3).has_value());     // 个位笔类型只允许 0/1/2
+  CHECK(!Config::Decode(5).has_value());     // 个位笔类型只允许 0/1/2/3/4
   CHECK(!Config::Decode(20).has_value());
   CHECK(!Config::Decode(-1).has_value());
   CHECK(!Config::Decode(10000).has_value());
