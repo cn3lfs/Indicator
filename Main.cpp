@@ -40,6 +40,8 @@ static PluginTCalcFuncInfo Info[] =
   {41, &tdx::EarlySignals},
   {42, &tdx::EarlyRevokes},
   {43, &tdx::EarlyStops},
+  {44, &tdx::RecentLiveBuys},
+  {45, &tdx::RecentLiveSells},
   {0, NULL},
 };
 

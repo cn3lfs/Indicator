@@ -1,4 +1,5 @@
 #include "tdx/exports.h"
+#include "tdx/event_projection.h"
 
 #include "core/engine.h"
 #include "core/morphology.h"
@@ -189,6 +190,23 @@ void EarlySignals(int count, float *out, float *high, float *low, float *config)
 void EarlyRevokes(int count, float *out, float *high, float *low, float *config)
 {
   Run(count, out, high, low, config, [&](const Analysis &a) { WriteEvents(count, out, a.events, true, Code); }, true);
+}
+
+// 精确关联原买卖点的近三根有效信号，避免旧点失效误伤新点。
+void RecentLiveBuys(int count, float *out, float *high, float *low, float *config)
+{
+  Run(count, out, high, low, config, [&](const Analysis &a) {
+    auto values = RecentLiveSignals(a.events, count, true);
+    std::copy(values.begin(), values.end(), out);
+  }, true);
+}
+
+void RecentLiveSells(int count, float *out, float *high, float *low, float *config)
+{
+  Run(count, out, high, low, config, [&](const Analysis &a) {
+    auto values = RecentLiveSignals(a.events, count, false);
+    std::copy(values.begin(), values.end(), out);
+  }, true);
 }
 
 void EarlyStops(int count, float *out, float *high, float *low, float *config)

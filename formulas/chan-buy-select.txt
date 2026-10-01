@@ -1,7 +1,4 @@
-{选股：最近 3 根K线内出现了候选买点（一/二/三买），且其间没有买点失效}
+{选股：最近3根出现且自身尚未结构失效的买点，按原位置+类型关联}
 XC:=TDXDLL1(40,C,V,0);
-BS:=TDXDLL1(41,H,L,0);
-XX:=TDXDLL1(42,H,L,0);
-BUY:=BS>=1 AND BS<=3;
-LOST:=XX>=1 AND XX<=3;
-COUNT(BUY,3)>0 AND COUNT(LOST,3)=0;
+LIVE:=TDXDLL1(44,H,L,101000);
+LIVE>=1 AND LIVE<=3;

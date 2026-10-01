@@ -4,6 +4,7 @@
 #include "core/engine.h"
 #include "core/morphology.h"
 #include "tdx/exports.h"
+#include "tdx/event_projection.h"
 
 #include <vector>
 
@@ -165,4 +166,52 @@ TEST(TdxEarlySignalsUseSeparateCacheAndStops)
   }
   CHECK(fast == expected && stops == expectedStops && revokes == expectedRevokes);
   CHECK(NonZero(Call(tdx::EarlySignals, s, -1)) == 0);
+}
+
+TEST(TdxDirectedCentersExcludeEnteringAndLeavingStrokes)
+{
+  tdx::ResetForTesting();
+  Sse s;
+  auto c = *chan::Config::Decode(101000);
+  auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
+  std::vector<float> zg(s.n), zd(s.n);
+  for (const auto &center : a.snapshot.centers)
+  {
+    const auto &first = a.snapshot.pivots[center.firstPivot];
+    CHECK((first.kind == chan::Kind::Top ? 1 : -1) == center.direction);
+    int end = a.snapshot.pivots[center.firstPivot + 3].index;
+    for (int i = center.start; i <= end; ++i) { zg[i] = center.zg; zd[i] = center.zd; }
+  }
+  CHECK(Call(tdx::CenterHigh, s, 101000) == zg && Call(tdx::CenterLow, s, 101000) == zd);
+}
+
+TEST(RecentLiveSignalsRevokeTheExactOriginalPoint)
+{
+  chan::Signal old, fresh, sell, hidden;
+  old.index = 1; old.type = chan::SignalType::Buy1; old.priority = 30;
+  fresh.index = 2; fresh.type = chan::SignalType::Buy1; fresh.priority = 30;
+  sell.index = 3; sell.type = chan::SignalType::Sell3; sell.priority = 20;
+  hidden.index = 4; hidden.type = chan::SignalType::Buy2; hidden.priority = 10;
+  std::vector<chan::SignalEvent> events{{5,old,false},{6,fresh,false},{7,old,true},{7,sell,false},
+    {8,fresh,true},{9,hidden,false},{9,fresh,false},{10,fresh,true}};
+  auto buys = tdx::RecentLiveSignals(events, 13, true);
+  auto sells = tdx::RecentLiveSignals(events, 13, false);
+  CHECK(buys[5] == 1 && buys[6] == 1 && buys[7] == 1); // 旧点撤销不影响新点，即使同属一买。
+  CHECK(buys[8] == 0 && buys[10] == 0); // 不复活未显示的同根二买。
+  CHECK(sells[7] == 13 && sells[8] == 13 && sells[9] == 13 && sells[10] == 0);
+  for (int bar = 0; bar < 13; ++bar)
+  {
+    std::vector<chan::SignalEvent> prefix;
+    for (const auto &e : events) if (e.bar <= bar) prefix.push_back(e);
+    CHECK(tdx::RecentLiveSignals(prefix, bar + 1, true).back() == buys[bar]);
+  }
+}
+
+TEST(TdxRecentLiveOutputsMatchSignalIdentityProjection)
+{
+  tdx::ResetForTesting(); Sse s;
+  auto c = *chan::Config::Decode(101000); c.earlySignals = true;
+  auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
+  CHECK(Call(tdx::RecentLiveBuys, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, true));
+  CHECK(Call(tdx::RecentLiveSells, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, false));
 }

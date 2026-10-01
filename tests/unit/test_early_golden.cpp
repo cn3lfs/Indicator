@@ -26,3 +26,22 @@ TEST(GoldenEarlySignalsSse)
   std::ostringstream expected; expected << f.rdbuf();
   CHECK(out.str() == expected.str());
 }
+
+TEST(GoldenDirectedEarlySignalsSse)
+{
+  auto s = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
+  auto c = *chan::Config::Decode(101000); c.earlySignals = true;
+  auto a = chan::Analyze(s, c);
+  std::ostringstream out;
+  for (const auto &center : a.snapshot.centers)
+    out << "center " << center.start << " " << a.snapshot.pivots[center.firstPivot + 3].index << " "
+        << center.direction << " " << center.zg << " " << center.zd << "\n";
+  for (const auto &e : a.events)
+    out << "event " << e.bar << " " << e.signal.index + 1 << " " << static_cast<int>(e.signal.type)
+        << " " << e.revoked << " " << e.signal.stop << "\n";
+  const char *path = "tests/fixtures/directed-early-signals-sse.txt";
+  if (std::getenv("CHAN_UPDATE_EARLY_GOLDEN")) { std::ofstream f(path); f << out.str(); }
+  std::ifstream f(path); REQUIRE(f.good());
+  std::ostringstream expected; expected << f.rdbuf();
+  CHECK(out.str() == expected.str());
+}

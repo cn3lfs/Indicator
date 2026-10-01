@@ -26,6 +26,10 @@ void EarlySignals(int count, float *out, float *high, float *low, float *config)
 void EarlyRevokes(int count, float *out, float *high, float *low, float *config);
 void EarlyStops(int count, float *out, float *high, float *low, float *config);
 
+// 44/45 近三根内仍有效的最新买/卖点；按(index,type)精确撤销，同根与41号取胜一致。
+void RecentLiveBuys(int count, float *out, float *high, float *low, float *config);
+void RecentLiveSells(int count, float *out, float *high, float *low, float *config);
+
 // 测试用：清空旁路注册与缓存
 void ResetForTesting();
 

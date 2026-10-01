@@ -184,7 +184,7 @@ TEST(ParentCentersIncrementalReferenceAndCausality)
 TEST(EarlyEngineMatchesReferenceAndEveryPrefix)
 {
   auto full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
-  for (int code : {0, 2, 1100, 100000})
+  for (int code : {0, 2, 1100, 100000, 101000})
   {
     auto c = *chan::Config::Decode(code);
     c.earlySignals = true;

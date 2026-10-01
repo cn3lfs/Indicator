@@ -17,8 +17,10 @@ def valid_config(text):
     if not re.fullmatch(r"\d+", text):
         return False
     code = int(text)
-    digits = [code // 10 ** k % 10 for k in range(4)]
-    return code <= 9999 and digits[0] <= 2 and all(d <= 1 for d in digits[1:])
+    digits = [code // 10 ** k % 10 for k in range(6)]
+    return (code <= 129999 and digits[0] <= 4 and
+            all(digits[k] <= 1 for k in [1, 2, 3, 5]) and
+            digits[4] <= 2 and (digits[3] != 0 or digits[4] == 0))
 
 
 def check(path, numbers):

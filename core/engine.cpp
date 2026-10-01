@@ -283,11 +283,13 @@ Analysis AnalyzeReference(const Series &series, const Config &config, int window
     if (k + 1 < f.size() && f[k + 1].confirmedAt == bar) continue;
     bool baseline = bar < from;
     if (!config.earlySignals && baseline && k + 1 < f.size() && f[k + 1].confirmedAt < from) continue;
-    std::map<SignalKey, Signal> now = Confirmed(BuildSnapshot(f, k + 1, tables, config), config.earlySignals);
+    Snapshot snapshot = BuildSnapshot(f, k + 1, tables, config);
+    std::map<SignalKey, Signal> now = Confirmed(snapshot, config.earlySignals);
     if (config.earlySignals)
       for (auto it = now.begin(); it != now.end();)
       {
-        if (seen.count(it->first) && !active.count(it->first)) it = now.erase(it);
+        if (!active.count(it->first) && (seen.count(it->first) ||
+            it->second.pivot + 1 != static_cast<int>(snapshot.pivots.size()))) it = now.erase(it);
         else { seen.insert(it->first); ++it; }
       }
     if (!baseline)

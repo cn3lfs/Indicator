@@ -143,6 +143,14 @@ TEST(EarlyThirdSignalsDoNotWaitForNextStroke)
     CHECK(e[0].bar == 25 && e[0].signal.index == 24);
     CHECK(e[0].signal.type == (mirror == 1 ? SignalType::Buy3 : SignalType::Sell3));
     CHECK(e[0].signal.stop == mirror * 15);
+    // 首次看到的结构若买卖点已在上一笔，不得补发旧点。
+    auto historical = p;
+    historical.push_back(P(mirror == 1 ? Kind::Top : Kind::Bottom, 28, mirror * 22));
+    auto hc = BuildCenters(historical); auto hm = BuildMovements(hc);
+    SignalStream late; late.SetEarlySignals(true);
+    std::vector<SignalEvent> lateEvents;
+    late.Update(historical, hc, hm, 0, 0, 0, 29, true, lateEvents);
+    CHECK(lateEvents.empty());
     // 回试端点延伸入中枢，原候选立即失效；随后同一旧点恢复也不重复提示。
     auto original = p;
     p.back().high = p.back().low = mirror * 8;
@@ -154,5 +162,23 @@ TEST(EarlyThirdSignalsDoNotWaitForNextStroke)
     p = original; c = BuildCenters(p); m = BuildMovements(c);
     early.Update(p, c, m, 6, 0, 0, 27, true, e);
     CHECK(e.size() == 2);
+  }
+}
+
+TEST(DirectedCenterExcludesEnteringAndLeavingStrokes)
+{
+  for (int mirror : {1, -1})
+  {
+    const float prices[] = {1,10,4,9,5,20};
+    std::vector<Pivot> p;
+    for (int i = 0; i < 6; ++i)
+      p.push_back(P(((i % 2 == 0) == (mirror == 1)) ? Kind::Bottom : Kind::Top, i * 4, mirror * prices[i]));
+    auto centers = BuildCentersInSegments(p, {p.front(), p.back()});
+    REQUIRE(centers.size() == 1);
+    const auto &c = centers.front();
+    CHECK(c.direction == mirror && c.firstPivot == 1);
+    CHECK(c.start == 4 && p[c.firstPivot + 3].index == 16);
+    // 进入笔0->1、离开笔4->5均不在最初三笔绘制区间1->4内。
+    CHECK(c.zd == (mirror == 1 ? 5 : -9) && c.zg == (mirror == 1 ? 9 : -5));
   }
 }
