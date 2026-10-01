@@ -102,7 +102,7 @@ float TdxCode(int32_t type) { return static_cast<float>(type > 0 ? type : 10 - t
 
 TEST(ApiVersionAndStructSizes)
 {
-  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 9);
+  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 10);
   CHECK(czsc_build_commit() != nullptr && czsc_build_commit()[0] != 0);
   // 全部为 4 字节字段、无填充：逐字节确定
   CHECK(sizeof(czsc_pivot) == 7 * 4 && sizeof(czsc_center) == 14 * 4 && sizeof(czsc_movement) == 15 * 4);
@@ -766,7 +766,7 @@ TEST(ApiConfigOptionsAndAllLegalSse)
   CHECK(sizeof(czsc_config_option) == 116 && alignof(czsc_config_option) == 1);
   CHECK(offsetof(czsc_config_option, key) == 20 && offsetof(czsc_config_option, label) == 52 && offsetof(czsc_config_option, lessons) == 84);
   int count = czsc_config_options(nullptr, 0);
-  REQUIRE(count == 16);
+  REQUIRE(count == 18);
   std::vector<czsc_config_option> options(static_cast<std::size_t>(count) + 1);
   options.back().size = 123;
   CHECK(czsc_config_options(options.data(), count) == count && options.back().size == 123);
@@ -786,8 +786,15 @@ TEST(ApiConfigOptionsAndAllLegalSse)
     CHECK(o.place == 100000 && o.value == i - 14 && o.isDefault == (i == 14) && o.original == 0 &&
           std::strcmp(o.key, i == 14 ? "center.entry" : "center.segment") == 0 && o.lessons[0] == 0);
   }
+  for (int i = 16; i < 18; ++i)
+  {
+    const auto &o = options[i];
+    CHECK(o.place == 1000000 && o.value == i - 16 && o.isDefault == (i == 16) && o.original == 0);
+    CHECK(std::strcmp(o.key, i == 16 ? "stroke.innerAllowed" : "stroke.innerBounded") == 0 && o.lessons[0] == 0);
+  }
+  CHECK(czsc_config_valid(1000010) == 0 && czsc_config_valid(1001104) == 1);
   std::vector<int> codes{0};
-  for (int place : {1, 10, 100, 1000, 10000, 100000})
+  for (int place : {1, 10, 100, 1000, 10000, 100000, 1000000})
   {
     std::vector<int> next;
     int defaults = 0;
@@ -803,11 +810,13 @@ TEST(ApiConfigOptionsAndAllLegalSse)
     CHECK(defaults == 1);
     codes = next;
   }
+  std::sort(codes.begin(), codes.end());
   Data d = Sse();
-  for (int code = -1; code <= 130000; ++code)
+  for (int code = -1; code <= 1130000; ++code)
   {
-    bool listed = std::find(codes.begin(), codes.end(), code) != codes.end() &&
-        ((code / 10000) % 10 == 0 || (code / 1000) % 10 == 1);
+    bool listed = std::binary_search(codes.begin(), codes.end(), code) &&
+        ((code / 10000) % 10 == 0 || (code / 1000) % 10 == 1) &&
+        (code / 1000000 == 0 || (code / 10) % 10 == 0);
     CHECK(czsc_config_valid(code) == static_cast<int>(listed));
     CHECK(czsc_config_valid(code) == static_cast<int>(chan::Config::Decode(code).has_value()));
     if (!listed) continue;

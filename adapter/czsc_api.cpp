@@ -701,6 +701,8 @@ int32_t czsc_config_options(czsc_config_option *out, int32_t capacity)
     {sizeof(czsc_config_option), 10000, 2, 0, 0, "segmentEnd.last", "合并最后笔", ""},
     {sizeof(czsc_config_option), 100000, 0, 1, 0, "center.entry", "按进入段", ""},
     {sizeof(czsc_config_option), 100000, 1, 0, 0, "center.segment", "服从所在线段", ""},
+    {sizeof(czsc_config_option), 1000000, 0, 1, 0, "stroke.innerAllowed", "允许超出", ""},
+    {sizeof(czsc_config_option), 1000000, 1, 0, 0, "stroke.innerBounded", "不得超出", ""},
   };
   const int32_t count = static_cast<int32_t>(sizeof options / sizeof options[0]);
   if (capacity < 0 || (!out && capacity > 0)) return 0;

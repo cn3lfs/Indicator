@@ -57,11 +57,11 @@ cd D:/github/czsc-tdx
   （曾因 `thread_local std::string` 发生）。改动 `adapter/` 后，用 x64 程序 LoadLibrary 加载 `build/CZSC64.dll`
   调一次 `czsc_snapshot_build` 并正常退出，作为发布前冒烟检查。
 
-## 结构化接口（adapter/czsc_api.h，api v9）
+## 结构化接口（adapter/czsc_api.h，api v10）
 
 面向 nextjs-quant（koffi FFI）的纯 C 快照接口，契约即头文件；需求见 `docs/nextjs-quant-adapter.md`，P2 结论见
 `docs/nextjs-quant-p2-feasibility.md`。改结构体布局或语义须递增 `CZSC_API_VERSION` 并只在末尾追加字段；
-v9保持v8结构体布局；`czsc_pivot` 在偏移24追加 `extremeIndex`，size28；index/price只供显示，核心/下游仍按真实极值计算。
+v10保持v9/v8结构体布局；`czsc_pivot` 在偏移24追加 `extremeIndex`，size28；index/price只供显示，核心/下游仍按真实极值计算。
 `confirmedAt` 是“定型”时刻（`Analysis::*FinalAt`），信号行冻结于确认当时。
 `czsc_build_commit()` 由 Makefile 的 `BUILD_COMMIT`（`git rev-parse` + 未提交改动时 `-dirty`）写入 adapter 目标；本机 clang 直编为 "unknown"。发布前须先提交再 `make release`，否则 DLL 带 -dirty。
 
@@ -77,15 +77,20 @@ v9保持v8结构体布局；`czsc_pivot` 在偏移24追加 `extremeIndex`，size
 十万位1按父线段筛选笔中枢，三笔与延伸不跨父段；父段未定型则中枢未定型。归属与显示分离，线段级沿用进入段（方案ii）。新模式为社区分析口径，默认0保持原续算路径；新模式当前按父区间重建，修改时须保持因果/参照及父段定型依赖。
 
 通达信主图/选股改用41/42/43号快速候选/失效/失效价：Config::earlySignals仅供内部调用，
-不参与Encode/Decode及api v9。快速流分型确认即准入，不等下一反向笔；同一(index,type)只出现一次，
+不参与Encode/Decode及api v10。快速流分型确认即准入，不等下一反向笔；同一(index,type)只出现一次，
 失效后不再重新激活旧点。缓存键须区分快速与旧模式。旧5/6/7与C快照保持原语义；复盘公式已删除。
 
-43号快速失效价统一为买卖点端点分型极值（买low/卖high），事件发出后冻结；三类不用中枢边界。旧7号及api v9语义不变。
+43号快速失效价统一为买卖点端点分型极值（买low/卖high），事件发出后冻结；三类不用中枢边界。旧7号及api v10语义不变。
 
 TDX主图/选股用101000统一方向中枢和快速信号（同红线1100特征序列父方向），旧0默认不变。
-主图不显示结构失效文字，仅保留分型极值止损点；选股44/45号按原买卖点身份过滤结构撤销。C api仍v9。
+主图不显示结构失效文字，仅保留分型极值止损点；选股44/45号按原买卖点身份过滤结构撤销。C api仍v10。
 
 44号近三根内有效最新买点码，45号对应卖点码；同根先按41号优先级选出可显示信号。
 结构撤销按原(index,type)精确移除，不按撤销当天或仅按买卖类型关联；
 因此同类型旧买点失效不会误伤新买点，未显示过的同根低优先级点也不参与选股。
 超过三根的信号退出选股窗口。42号原撤销码保留兼容，不再用“任意失效COUNT”决定选股。
+
+百万位0旧笔路径/1原始H/L闭区间包络（含端点，等价允许，社区）；百万位1+十位1非法。
+缓存键(config.Encode(),earlySignals,H/L/C/V指纹,count)，earlySignals独立字段。新笔流仅修正未定型末两个
+已确认分型端点并校验两侧，否则拒绝成笔；所有构造路径必须提供清洗后的原始Series，不能退回分型价近似。
+api v10只增加配置语义与metadata两行，C结构体布局不变。
