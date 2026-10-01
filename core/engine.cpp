@@ -22,7 +22,11 @@ std::map<SignalKey, Signal> Confirmed(const Snapshot &s, bool early)
     if (sig.pivot < 0 || (!early && static_cast<std::size_t>(sig.pivot) + 1 >= s.pivots.size())) continue;
     SignalKey key{sig.index, static_cast<int>(sig.type)};
     auto it = out.find(key);
-    if (it == out.end() || it->second.priority < sig.priority) out[key] = sig;
+    if (it == out.end() || it->second.priority < sig.priority)
+    {
+      out[key] = sig;
+      if (early) out[key].stop = s.pivots[static_cast<std::size_t>(sig.pivot)].Price();
+    }
   }
   return out;
 }

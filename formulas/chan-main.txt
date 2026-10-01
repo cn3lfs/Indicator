@@ -5,7 +5,7 @@ SEG:=TDXDLL1(1,H,L,1100);       { 线段端点：特征序列法 }
 ZG:=TDXDLL1(2,H,L,0);           { 笔中枢上沿 }
 ZD:=TDXDLL1(3,H,L,0);           { 笔中枢下沿 }
 BS:=TDXDLL1(41,H,L,0);           { 快速候选买卖点：分型确认即提示，后续可失效 }
-ST:=TDXDLL1(43,H,L,0);          { 候选提示时的失效价 }
+ST:=TDXDLL1(43,H,L,0);          { 买卖点端点分型极值失效价 }
 XX:=TDXDLL1(42,H,L,0);           { 此前出现过、在此被否定的信号 }
 
 { 笔（黄细线）与线段（红粗线） }
@@ -19,12 +19,12 @@ DRAWLINE(SEG=1,H,SEG=-1,L,0),COLORRED,LINETHICK2;
 中枢下沿:IF(ZD>0,ZD,DRAWNULL),COLORMAGENTA,LINETHICK1;
 
 { 当下买卖点（K线下方/上方）与失效标记 }
-DRAWTEXT(BS=1,L,'一买候选'),COLORRED;
-DRAWTEXT(BS=2,L,'二买候选'),COLORRED;
-DRAWTEXT(BS=3,L,'三买候选'),COLORRED;
-DRAWTEXT(BS=11,H,'一卖候选'),COLORGREEN;
-DRAWTEXT(BS=12,H,'二卖候选'),COLORGREEN;
-DRAWTEXT(BS=13,H,'三卖候选'),COLORGREEN;
+DRAWTEXT(BS=1,L,'一买'),COLORRED;
+DRAWTEXT(BS=2,L,'二买'),COLORRED;
+DRAWTEXT(BS=3,L,'三买'),COLORRED;
+DRAWTEXT(BS=11,H,'一卖'),COLORGREEN;
+DRAWTEXT(BS=12,H,'二卖'),COLORGREEN;
+DRAWTEXT(BS=13,H,'三卖'),COLORGREEN;
 DRAWTEXT(XX>0,H,'失效'),COLORGRAY;
 
 买点失效价:IF(BS>=1 AND BS<=3,ST,DRAWNULL),POINTDOT,COLORRED;

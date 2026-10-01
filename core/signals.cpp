@@ -686,8 +686,11 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
     auto aIt = active_.find(key);
     if (winner && aIt == active_.end())
     {
-      if (emit) appear.push_back({bar, *winner, false});
-      active_[key] = *winner;
+      Signal signal = *winner;
+      // 用户指定的社区止损口径：快速候选统一取信号端点分型极值，三类不再用中枢边界。
+      if (earlySignals_) signal.stop = p[static_cast<std::size_t>(signal.pivot)].Price();
+      if (emit) appear.push_back({bar, signal, false});
+      active_[key] = signal;
       if (earlySignals_) seen_.insert(key);
     }
     else if (!winner && aIt != active_.end())
@@ -697,7 +700,9 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
     }
     else if (winner)
     {
+      float stop = aIt->second.stop;
       aIt->second = *winner;
+      if (earlySignals_) aIt->second.stop = stop;  // 已提示的失效价冻结，不随后续结构改变。
     }
   }
   events.insert(events.end(), appear.begin(), appear.end());

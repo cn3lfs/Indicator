@@ -193,7 +193,12 @@ TEST(EarlyEngineMatchesReferenceAndEveryPrefix)
     CHECK(Same(chan::Analyze(full, c, 700).events, chan::AnalyzeReference(full, c, 700).events));
     std::set<std::pair<int, int>> appeared;
     for (const auto &e : all.events)
-      if (!e.revoked) CHECK(appeared.insert({e.signal.index, static_cast<int>(e.signal.type)}).second);
+      if (!e.revoked)
+      {
+        CHECK(appeared.insert({e.signal.index, static_cast<int>(e.signal.type)}).second);
+        bool buy = static_cast<int>(e.signal.type) <= 3;
+        CHECK(e.signal.stop == (buy ? full.low[e.signal.index] : full.high[e.signal.index]));
+      }
     for (int t = 120; t < full.Size(); t += 37)
     {
       auto pre = chan::Series::FromRaw(t + 1, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);

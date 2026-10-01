@@ -142,7 +142,7 @@ TEST(EarlyThirdSignalsDoNotWaitForNextStroke)
     CHECK(old.empty());
     CHECK(e[0].bar == 25 && e[0].signal.index == 24);
     CHECK(e[0].signal.type == (mirror == 1 ? SignalType::Buy3 : SignalType::Sell3));
-    CHECK(e[0].signal.stop == mirror * 9);
+    CHECK(e[0].signal.stop == mirror * 15);
     // 回试端点延伸入中枢，原候选立即失效；随后同一旧点恢复也不重复提示。
     auto original = p;
     p.back().high = p.back().low = mirror * 8;
@@ -150,6 +150,7 @@ TEST(EarlyThirdSignalsDoNotWaitForNextStroke)
     early.Update(p, c, m, 6, 0, 0, 26, true, e);
     REQUIRE(e.size() == 2);
     CHECK(e.back().revoked && e.back().bar == 26);
+    CHECK(e.back().signal.stop == mirror * 15);
     p = original; c = BuildCenters(p); m = BuildMovements(c);
     early.Update(p, c, m, 6, 0, 0, 27, true, e);
     CHECK(e.size() == 2);
