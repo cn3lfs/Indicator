@@ -194,3 +194,63 @@ TEST(SegmentMergedBoundaryExamples)
     CHECK(invalidated.size() < 2 || invalidated[1].index != 7);
   }
 }
+
+TEST(BoundedStrokesUseInclusiveRawEnvelopeAndConfirmedFractals)
+{
+  for (int mirror : {1, -1})
+  {
+    auto frac = [&](Kind kind, int i, float h, float l) {
+      Fractal f; f.kind = mirror == 1 ? kind : Opposite(kind); f.index = f.merged = i;
+      f.high = mirror == 1 ? h : -l; f.low = mirror == 1 ? l : -h; f.confirmedAt = i + 1; return f;
+    };
+    auto raw = [&](int n) { Series s; s.high.assign(n, mirror == 1 ? 10 : -4); s.low.assign(n, mirror == 1 ? 4 : -10); return s; };
+    auto set = [&](Series &s, int i, float h, float l) { s.high[i] = mirror == 1 ? h : -l; s.low[i] = mirror == 1 ? l : -h; };
+    for (int stroke = 0; stroke <= 4; ++stroke)
+    {
+      auto bounded = *Config::Decode(1000000 + stroke);
+      auto allowed = *Config::Decode(stroke);
+      auto s = raw(10); set(s,0,3,1); set(s,8,20,18);
+      std::vector<Fractal> f{frac(Kind::Bottom,0,3,1),frac(Kind::Top,8,20,18)};
+      set(s,4,10,0); // 未形成可用底分型的低影线，不能强造端点。
+      CHECK(BuildStrokeEnds(f,allowed,&s).size() == 2);
+      CHECK(BuildStrokeEnds(f,bounded,&s).size() == 1);
+      set(s,4,21,4); // 未形成可用顶分型的高影线。
+      CHECK(BuildStrokeEnds(f,bounded,&s).size() == 1);
+      set(s,4,20,1); // 等于两端极值允许。
+      CHECK(BuildStrokeEnds(f,bounded,&s).size() == 2);
+      set(s,8,20,0); // 端点K线反方向影线也在闭区间内。
+      CHECK(BuildStrokeEnds(f,bounded,&s).size() == 1);
+    }
+    auto s = raw(16);
+    set(s,0,3,1); set(s,4,15,12); set(s,6,2,0); set(s,10,20,18); set(s,14,0,-1);
+    std::vector<Fractal> f{frac(Kind::Bottom,0,3,1),frac(Kind::Top,4,15,12),frac(Kind::Bottom,6,2,0),
+      frac(Kind::Top,10,20,18),frac(Kind::Bottom,14,0,-1)};
+    // 第6根分型因跨度不足被跳过，后续修正末两个端点，不改变稳定前缀。
+    auto e = BuildStrokeEnds(f,*Config::Decode(1000000),&s);
+    REQUIRE(e.size() == 3);
+    CHECK(e[0].index == 6 && e[1].index == 10 && e[2].index == 14);
+  }
+  CHECK(!Config::Decode(1000010).has_value());
+  CHECK(!Config::Decode(1001114).has_value());
+  CHECK(Config::Decode(1001104)->Encode() == 1001104);
+}
+
+TEST(BoundedStrokesSseAlwaysStayInsideBothEndpoints)
+{
+  auto s = Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW);
+  auto f = DetectFractals(MergeBars(s));
+  for (int stroke = 0; stroke <= 4; ++stroke)
+  {
+    auto c = *Config::Decode(1000000 + stroke);
+    auto ends = BuildStrokeEnds(f,c,&s);
+    CHECK(ends.size() > 2);
+    for (std::size_t k = 1; k < ends.size(); ++k)
+    {
+      CHECK(ends[k].kind != ends[k-1].kind && ends[k].index > ends[k-1].index);
+      float top = ends[k].kind == Kind::Top ? ends[k].high : ends[k-1].high;
+      float bottom = ends[k].kind == Kind::Bottom ? ends[k].low : ends[k-1].low;
+      for (int i = ends[k-1].index; i <= ends[k].index; ++i)
+        CHECK(s.high[i] <= top && s.low[i] >= bottom);
+    }
+  }
+}

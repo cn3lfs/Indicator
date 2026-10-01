@@ -35,7 +35,8 @@ std::vector<Fractal> DetectFractals(const std::vector<MergedBar> &bars);
 class StrokeStream
 {
 public:
-  StrokeStream(const std::vector<Fractal> &fractals, const Config &config) : fractals_(&fractals), config_(config) {}
+  StrokeStream(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr)
+    : source_(source), fractals_(&fractals), config_(config) {}
   // 加入 fractals[k]（须按顺序）；返回首个发生变化的端点下标，无变化返回 -1
   int Add(std::size_t k);
   const std::vector<Fractal> &Ends() const { return ends_; }
@@ -43,14 +44,16 @@ public:
   std::size_t FinalCount() const { return raw_.size() >= 2 ? raw_.size() - 2 : 0; }
 
 private:
+  int AddBounded(std::size_t k);
+  const Series *source_ = nullptr;
   const std::vector<Fractal> *fractals_;
   Config config_;
   std::vector<Fractal> raw_;   // 未细化端点
   std::vector<Fractal> ends_;  // 细化后端点
 };
 
-// 笔端点（批量）：把全部分型依次加入 StrokeStream
-std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const Config &config);
+// 笔端点（批量）：把全部分型依次加入 StrokeStream；百万位1必须传清洗后的原始Series。
+std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr);
 
 // 读取视界：一个增量阶段读到的最远输入下标；判断若依赖“数据到头”则为无界。
 // 续算时只有视界早于输入变化位置（dirty）的检查点可复用。
@@ -99,6 +102,6 @@ std::vector<Pivot> SegmentPivotsHeuristic(const std::vector<Pivot> &strokes);
 std::vector<Pivot> SegmentPivotsFeature(const std::vector<Pivot> &strokes);
 // 仅用于输出投影；不可将此位置作为中枢/背驰/买卖点输入。
 int DisplayPivotIndex(const Pivot &pivot, const Config &config);
-std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &config);
+std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr);
 
 }  // namespace chan

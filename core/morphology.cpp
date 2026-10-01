@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace chan
 {
@@ -74,6 +75,18 @@ bool ValidStroke(const Fractal &a, const Fractal &b, const Config &c)
   if (c.stroke == StrokeRule::Fractal)
     return a.kind == Kind::Bottom ? b.high > a.low : a.high > b.low;
   return SpanEnough(a, b, c) && PriceProgress(a, b) && !Nested(a, b, c);
+}
+
+// 社区原始K线闭区间包络，端点也计入；等于顶/底不算超出。
+bool BoundedStroke(const Fractal &a, const Fractal &b, const Config &c, const Series &source)
+{
+  if (a.kind == b.kind || a.index >= b.index || !ValidStroke(a, b, c)) return false;
+  float top = a.kind == Kind::Top ? a.high : b.high;
+  float bottom = a.kind == Kind::Bottom ? a.low : b.low;
+  if (a.index < 0 || b.index >= source.Size()) return false;
+  for (int i = a.index; i <= b.index; ++i)
+    if (source.high[i] > top || source.low[i] < bottom) return false;
+  return true;
 }
 
 // 收笔点细化：在 (prev, next) 且距 prev 不超过 2×最小跨度的窗口内，取仍能与两侧成笔的最极端同型分型。
@@ -387,6 +400,7 @@ std::vector<Fractal> DetectFractals(const std::vector<MergedBar> &bars)
 
 int StrokeStream::Add(std::size_t k)
 {
+  if (config_.innerBounded) return AddBounded(k);
   const Fractal &f = (*fractals_)[k];
   std::size_t changed;
   if (raw_.empty())
@@ -424,9 +438,66 @@ int StrokeStream::Add(std::size_t k)
   return static_cast<int>(changed);
 }
 
-std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const Config &c)
+int StrokeStream::AddBounded(std::size_t k)
 {
-  StrokeStream s(fractals, c);
+  if (!source_) throw std::invalid_argument("bounded strokes require raw series");
+  const Fractal &f = (*fractals_)[k];
+  if (ends_.empty()) { ends_.push_back(f); raw_ = ends_; return 0; }
+  const Fractal last = ends_.back();
+  std::size_t n = ends_.size();
+  auto leftValid = [&](const Fractal &candidate) {
+    return n < 2 || BoundedStroke(ends_[n - 2], candidate, config_, *source_);
+  };
+  if (f.kind == last.kind)
+  {
+    if (!MoreExtreme(last, f) || !leftValid(f)) return -1;
+    ends_.back() = f; raw_ = ends_;
+    return static_cast<int>(n - 1);
+  }
+  // 优先原端点；失败后只在已知区间内用同型分型修正，且保留前缀和左侧合法笔。
+  std::vector<Fractal> starts{last}, finishes{f};
+  std::size_t from = static_cast<std::size_t>(std::upper_bound(fractals_->begin(), fractals_->begin() + k, last.index,
+    [](int index, const Fractal &candidate) { return index < candidate.index; }) - fractals_->begin());
+  for (std::size_t j = from; j < k; ++j)
+  {
+    const auto &candidate = (*fractals_)[j];
+    if (candidate.index <= last.index || candidate.index >= f.index) continue;
+    if (candidate.kind == last.kind && MoreExtreme(last, candidate)) starts.push_back(candidate);
+    if (candidate.kind == f.kind && MoreExtreme(f, candidate)) finishes.push_back(candidate);
+  }
+  for (const auto &end : finishes)
+    for (const auto &start : starts)
+    {
+      if (!leftValid(start) || !BoundedStroke(start, end, config_, *source_)) continue;
+      ends_.back() = start;
+      ends_.push_back(end);
+      raw_ = ends_;
+      return static_cast<int>(n - 1);
+    }
+  // 末两个端点均未定型：必要时一起修正，但必须连接到不变的已定型前缀。
+  if (n >= 2)
+    for (std::size_t a = static_cast<std::size_t>(std::lower_bound(fractals_->begin(), fractals_->begin() + k, ends_[n - 2].index,
+      [](const Fractal &candidate, int index) { return candidate.index < index; }) - fractals_->begin()); a < k; ++a)
+    {
+      const auto &start = (*fractals_)[a];
+      if (start.kind != ends_[n - 2].kind || start.index < ends_[n - 2].index ||
+          !MoreExtreme(ends_[n - 2], start)) continue;
+      if (n >= 3 && !BoundedStroke(ends_[n - 3], start, config_, *source_)) continue;
+      for (std::size_t b = a + 1; b < k; ++b)
+      {
+        const auto &turn = (*fractals_)[b];
+        if (turn.kind != last.kind || turn.index <= start.index || turn.index >= f.index) continue;
+        if (!BoundedStroke(start, turn, config_, *source_) || !BoundedStroke(turn, f, config_, *source_)) continue;
+        ends_[n - 2] = start; ends_[n - 1] = turn; ends_.push_back(f); raw_ = ends_;
+        return static_cast<int>(n - 2);
+      }
+    }
+  return -1;  // 没有合法分型极值组合，不成笔；禁止将无分型的影线强行造为端点。
+}
+
+std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const Config &c, const Series *source)
+{
+  StrokeStream s(fractals, c, source);
   for (std::size_t k = 0; k < fractals.size(); k++) s.Add(k);
   return s.Ends();
 }
@@ -635,9 +706,9 @@ int DisplayPivotIndex(const Pivot &pivot, const Config &config)
   return pivot.index;
 }
 
-std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &c)
+std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &c, const Series *source)
 {
-  std::vector<Pivot> strokes = StrokePivots(BuildStrokeEnds(fractals, c));
+  std::vector<Pivot> strokes = StrokePivots(BuildStrokeEnds(fractals, c, source));
   if (c.unit == CenterUnit::Stroke) return strokes;
   return c.segment == SegmentMethod::Feature ? SegmentPivotsFeature(strokes) : SegmentPivotsHeuristic(strokes);
 }

@@ -62,7 +62,7 @@ TEST(IncrementalEngineMatchesReference)
 TEST(EngineIsCausalOnEveryPrefix)
 {
   chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
-  for (int code : {0, 2, 1100, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104})
+  for (int code : {0, 2, 1100, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104, 1000000, 1000001, 1000002, 1000003, 1000004, 1001100, 1001101, 1001102, 1001103, 1001104, 1100000, 1101000, 1101100})
   {
     chan::Config c = *chan::Config::Decode(code);
     std::vector<chan::SignalEvent> all = chan::Analyze(full, c).events;
@@ -84,7 +84,7 @@ TEST(FinalizedObjectsNeverChange)
 {
   chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
   int checked = 0;
-  for (int code : {0, 1, 2, 10, 101, 1100, 1101, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104})
+  for (int code : {0, 1, 2, 10, 101, 1100, 1101, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104, 1000000, 1000001, 1000002, 1000003, 1000004, 1001100, 1001101, 1001102, 1001103, 1001104, 1100000, 1101000, 1101100})
   {
     chan::Config c = *chan::Config::Decode(code);
     chan::Analysis all = chan::Analyze(full, c);
@@ -207,4 +207,15 @@ TEST(EarlyEngineMatchesReferenceAndEveryPrefix)
       CHECK(Same(chan::Analyze(pre, c).events, expected));
     }
   }
+}
+
+TEST(BoundedEngineMatchesReferenceOnSse)
+{
+  auto full = chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
+  for (int unit : {0, 100, 1100})
+    for (int stroke = 0; stroke <= 4; ++stroke)
+    {
+      auto c = *chan::Config::Decode(1000000 + unit + stroke);
+      CHECK(Same(chan::Analyze(full,c).events,chan::AnalyzeReference(full,c).events));
+    }
 }

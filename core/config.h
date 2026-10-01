@@ -62,13 +62,15 @@ struct Config
 
   CenterFormation centerFormation = CenterFormation::Entry;
 
+  bool innerBounded = false;  // 百万位：社区原始K线闭区间包络；与十位1组合非法。
+
   // 十进制位编码：个位笔(0/1/2/3/4)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)、万位分界显示(0/1/2，仅特征序列)、十万位中枢构成(0/1)
   int Encode() const;
   static std::optional<Config> Decode(int code);
 
   bool operator==(const Config &o) const
   {
-    return earlySignals == o.earlySignals && stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd && centerFormation == o.centerFormation;
+    return innerBounded == o.innerBounded && earlySignals == o.earlySignals && stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd && centerFormation == o.centerFormation;
   }
 };
 

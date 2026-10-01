@@ -228,3 +228,19 @@ TEST(TdxCacheSeparatesEarlyModeFromEncodedConfig)
     CHECK(Call(tdx::EarlySignals, s, 0) == early);
   }
 }
+
+TEST(TdxMillionDigitDoesNotCollideWithEarlyModeCache)
+{
+  tdx::ResetForTesting(); Sse s;
+  auto early = Call(tdx::EarlySignals,s,0);
+  auto bounded = Call(tdx::Signals,s,1000000);
+  auto c = *chan::Config::Decode(1000000);
+  auto a = chan::Analyze(chan::Series::FromRaw(s.n,s.h.data(),s.l.data()),c);
+  std::vector<float> expected(s.n); std::vector<int> priority(s.n,-1);
+  for (const auto &e : a.events)
+    if (!e.revoked && e.signal.priority >= priority[e.bar])
+    { expected[e.bar] = static_cast<int>(e.signal.type); priority[e.bar] = e.signal.priority; }
+  CHECK(bounded == expected);
+  CHECK(Call(tdx::EarlySignals,s,0) == early);
+  CHECK(Call(tdx::Signals,s,1000000) == bounded);
+}

@@ -78,6 +78,19 @@ TEST(GoldenCommunityStrokesSse)
       }
     }
   }
+  // v10社区原始K线包络追加段，既有段落保持逐字节不变。
+  for (int unit : {0, 100, 1100})
+    for (int stroke = 0; stroke <= 4; ++stroke)
+    {
+      int code = 1000000 + unit + stroke;
+      auto a = chan::Analyze(real, *chan::Config::Decode(code));
+      out << "## 笔内包络配置 " << code << " 端点 " << a.snapshot.pivots.size() << " 中枢 " << a.snapshot.centers.size()
+          << " 信号 " << a.snapshot.signals.size() << " 事件 " << a.events.size() << "\n";
+      for (const auto &p : a.snapshot.pivots)
+        out << "端点 " << p.index << " " << static_cast<int>(p.kind) << " " << p.Price() << "\n";
+      for (const auto &e : a.events)
+        out << "事件 " << e.bar << " " << e.signal.index << " " << static_cast<int>(e.signal.type) << " " << e.revoked << "\n";
+    }
   std::string here = __FILE__;
   std::size_t slash = here.find_last_of("/\\");
   std::string path = (slash == std::string::npos ? "." : here.substr(0, slash)) + "/../fixtures/sse-community.txt";

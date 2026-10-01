@@ -42,8 +42,8 @@ int MinDirty(int a, int b)
 class Incremental
 {
 public:
-  Incremental(const std::vector<Fractal> &fractals, const EnergyTables &tables, const Config &config)
-    : strokes_(fractals, config), segments_(config.segment), tables_(tables), config_(config)
+  Incremental(const std::vector<Fractal> &fractals, const EnergyTables &tables, const Config &config, const Series &source)
+    : strokes_(fractals, config, &source), segments_(config.segment), tables_(tables), config_(config)
   {
     signals_.SetTables(&tables_);
     signals_.SetEarlySignals(config_.earlySignals);
@@ -208,11 +208,11 @@ private:
 }  // namespace
 
 Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, const EnergyTables &tables,
-                       const Config &config)
+                       const Config &config, const Series *source)
 {
   Snapshot s;
   std::vector<Fractal> prefix(fractals.begin(), fractals.begin() + static_cast<std::ptrdiff_t>(count));
-  s.pivots = BuildPivots(prefix, config);
+  s.pivots = BuildPivots(prefix, config, source);
   AssignEnergy(s.pivots, tables);
   if (config.unit == CenterUnit::Stroke && config.centerFormation == CenterFormation::Segment)
   {
@@ -236,7 +236,7 @@ Analysis Analyze(const Series &series, const Config &config, int window)
   EnergyTables tables = BuildEnergyTables(series);
 
   int from = window > 0 ? series.Size() - window : 0;
-  Incremental inc(a.fractals, tables, config);
+  Incremental inc(a.fractals, tables, config, series);
   const std::vector<Fractal> &f = a.fractals;
   a.instantWarning.assign(static_cast<std::size_t>(series.Size()), 0);
   std::size_t k = 0;
@@ -251,7 +251,7 @@ Analysis Analyze(const Series &series, const Config &config, int window)
     if (added) inc.Step(bar, bar >= from, a.events);
     a.instantWarning[static_cast<std::size_t>(bar)] = inc.InstantWarning(bar, series);
   }
-  a.snapshot = BuildSnapshot(f, f.size(), tables, config);
+  a.snapshot = BuildSnapshot(f, f.size(), tables, config, &series);
   auto fit = [](std::vector<int> v, std::size_t n) {
     v.resize(n, -1);
     return v;
@@ -283,7 +283,7 @@ Analysis AnalyzeReference(const Series &series, const Config &config, int window
     if (k + 1 < f.size() && f[k + 1].confirmedAt == bar) continue;
     bool baseline = bar < from;
     if (!config.earlySignals && baseline && k + 1 < f.size() && f[k + 1].confirmedAt < from) continue;
-    Snapshot snapshot = BuildSnapshot(f, k + 1, tables, config);
+    Snapshot snapshot = BuildSnapshot(f, k + 1, tables, config, &series);
     std::map<SignalKey, Signal> now = Confirmed(snapshot, config.earlySignals);
     if (config.earlySignals)
       for (auto it = now.begin(); it != now.end();)
@@ -301,7 +301,7 @@ Analysis AnalyzeReference(const Series &series, const Config &config, int window
     }
     active.swap(now);
   }
-  a.snapshot = BuildSnapshot(f, f.size(), tables, config);
+  a.snapshot = BuildSnapshot(f, f.size(), tables, config, &series);
   return a;
 }
 

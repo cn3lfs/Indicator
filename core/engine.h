@@ -55,6 +55,6 @@ Analysis AnalyzeReference(const Series &series, const Config &config, int window
 
 // 由分型前缀得到结构快照（纯函数；引擎每一步与全量结果共用）
 Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, const EnergyTables &tables,
-                       const Config &config);
+                       const Config &config, const Series *source = nullptr);
 
 }  // namespace chan
