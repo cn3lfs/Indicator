@@ -549,9 +549,35 @@ int StrokeStream::AddBounded(std::size_t k)
       changed = std::min(changed, n-2);
       break;
     }
-    std::size_t from = raw_.size() >= 3 ? raw_.size()-3 : 0;
-    raw_.erase(raw_.begin() + static_cast<std::ptrdiff_t>(from), raw_.end()-1);
-    changed = std::min(changed, from);
+    // 仅撤销失效尾部两端点，保留较早同型锚点。旧实现保留f而删除锚点，
+    // 将中间跳过的极值带入越来越长的伪连接，递归误删整段合法历史。
+    std::size_t anchor = n >= 3 ? n-3 : 0;
+    Fractal base = raw_[anchor];
+    raw_.resize(anchor+1);
+    changed = std::min(changed, anchor);
+    if (base.kind == f.kind && MoreExtreme(base,f))
+    {
+      raw_.back() = f;
+      continue;  // 只继续复核确实被本次延伸改变的入笔。
+    }
+    // 从保留锚点重建：此前跨度不足而跳过的反向分型现在可能可成笔。
+    // 只在当前已确认分型范围选合法最极值，不用未来分型，也不把f强接到前缀。
+    for (int leg=0; leg<2; ++leg)
+    {
+      const Fractal start = raw_.back();
+      bool found=false;
+      Fractal best;
+      for (const auto &candidate : boundedFractals_)
+      {
+        if (candidate.index <= start.index || candidate.index > f.index || candidate.kind == start.kind) continue;
+        if (!BoundedStroke(start,candidate,config_,bounds,&gaps_)) continue;
+        if (!found || MoreExtreme(best,candidate)) { best=candidate;found=true; }
+      }
+      if (!found) break;
+      raw_.push_back(best);
+    }
+    break;
+
   }
   // 百万位1可回退尾部链，不沿用默认的“后两端点出现即定型”承诺（决策表）。
   ends_ = raw_;

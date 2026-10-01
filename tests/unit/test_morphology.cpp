@@ -308,7 +308,22 @@ TEST(AllLegalConfigurationsCannotFreezeEligibleOppositeStroke)
                   int dirty = stream.Add(k);
                   if (!input[k].extensionOnly && dirty>=0) confirmed = stream.Ends();
                   if (mustForm) { ++eligible; CHECK(stream.Ends().size()==before.size()+1); CHECK(stream.Ends().back().index==input[k].index); }
-                  if (mustExtend) { ++extended; CHECK(stream.Ends().back().index==input[k].index); }
+                  if (mustExtend)
+                  {
+                    ++extended;
+                    // 同型延伸先执行；入笔包络被破时仅重建受影响尾部。
+                    bool invalidIncoming=false;
+                    if (million && before.size()>=2)
+                    {
+                      const auto &start=before[before.size()-2], &end=input[k];
+                      float top=start.kind==Kind::Top ? start.high : end.high;
+                      float bottom=start.kind==Kind::Bottom ? start.low : end.low;
+                      for (const auto &bar:bars)
+                        if (bar.last>=start.index && bar.first<=end.index && (bar.high>top || bar.low<bottom)) invalidIncoming=true;
+                    }
+                    if (!invalidIncoming) CHECK(stream.Ends().back().index==input[k].index);
+                    else CHECK(stream.Ends().front().index<=before.front().index);
+                  }
                 }
               }
   CHECK(configurations==240);
@@ -366,5 +381,66 @@ TEST(BoundedPendingExtensionIsSymmetricAndCannotFormStroke)
       }
     }
     CHECK(candidates>100);
+  }
+}
+
+// 负对照：9846686严格笔在第127/175根清空链头，首点变174B。
+TEST(BoundedHistorySurvivesEveryPrefixAndEvery300BarWindow)
+{
+  auto s=Sse();
+  auto f=DetectFractals(MergeBars(s));
+  int combinations=0;
+  for (int gap=0;gap<3;++gap) for (int rule=0;rule<5;++rule)
+  {
+    if (gap && rule==4) continue;
+    ++combinations;
+    LevelConfig config;
+    config.analysis.stroke.rule=static_cast<StrokeRule>(rule);
+    config.analysis.stroke.gap=static_cast<GapRule>(gap);
+    auto baseline=BuildStrokeEnds(f,config,&s);
+    config.analysis.stroke.endpoint=StrokeEnd::Bounded;
+    auto input=StrokeInputs(f,s,config);
+    StrokeStream stream(input,config,&s);
+    int first=-1;
+    std::vector<Fractal> head;
+    for (std::size_t k=0;k<input.size();++k)
+    {
+      stream.Add(k);
+      if (input[k].confirmedAt<100) continue;
+      const auto &ends=stream.Ends();
+      REQUIRE(ends.size()>=4);
+      CHECK(ends.front().index<=30);
+      if (first<0) { first=ends.front().index; head.assign(ends.begin(),ends.begin()+4); }
+      CHECK(ends.front().index==first);
+      for (int i=0;i<4;++i) CHECK(ends[i].index==head[i].index);
+      if (!gap && rule==0 && input[k].confirmedAt==127 && !input[k].extensionOnly)
+      {
+        REQUIRE(ends.size()==10);
+        CHECK(ends[8].index==105 && ends[9].index==119);
+      }
+    }
+    const auto &ends=stream.Ends();
+    for (int start=0;start+300<=s.Size();++start)
+    {
+      bool ordinary=false,bounded=false;
+      for (std::size_t k=1;k<baseline.size();++k)
+        if (baseline[k-1].index>=start && baseline[k].index<start+300) ordinary=true;
+      for (std::size_t k=1;k<ends.size();++k)
+        if (ends[k-1].index>=start && ends[k].index<start+300) bounded=true;
+      if (ordinary) CHECK(bounded);
+    }
+  }
+  CHECK(combinations==13);
+  for (int n:{128,160,176,240})
+  {
+    auto prefix=Series::FromRaw(n,SSE_DAILY_HIGH,SSE_DAILY_LOW);
+    LevelConfig config;config.analysis.stroke.endpoint=StrokeEnd::Bounded;
+    auto input=StrokeInputs(DetectFractals(MergeBars(prefix)),prefix,config);
+    auto ends=BuildStrokeEnds(input,config,&prefix);
+    REQUIRE(ends.size()>=10);
+    CHECK(ends.front().index==10);
+    if (n==128) { CHECK(ends.size()==10); CHECK(ends.back().index==119); }
+    if (n==160) CHECK(ends.size()==13);
+    if (n==176) { CHECK(ends[9].index==119); CHECK(ends[10].index==174); }
   }
 }

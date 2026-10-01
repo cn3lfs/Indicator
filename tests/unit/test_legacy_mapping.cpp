@@ -9,6 +9,8 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <map>
+#include <cstdlib>
 
 namespace
 {
@@ -56,6 +58,14 @@ TEST(LegacyV10CBytesAll240Mappings)
   REQUIRE(file.good());
   std::string line;
   int checked=0;
+  std::map<int,std::uint64_t> corrected;
+  auto correctedPath=Fixture()+".bounded-fixed";
+  std::ifstream fixed(correctedPath);
+  int fixedCode; std::uint64_t fixedHash;
+  while (fixed>>fixedCode>>std::hex>>fixedHash>>std::dec) corrected[fixedCode]=fixedHash;
+  bool update=std::getenv("CHAN_UPDATE_BOUNDED_HASHES")!=nullptr;
+  std::ofstream output;
+  if (update) output.open(correctedPath);
   std::uint64_t nestedHash=0;
   while (std::getline(file,line))
   {
@@ -74,6 +84,12 @@ TEST(LegacyV10CBytesAll240Mappings)
     void *handle=legacy_test::Build(&input);
     REQUIRE(handle!=nullptr);
     auto actual=SnapshotHash(handle);
+    // 保留旧v10冻结文件；仅bounded错误历史使用独立的修复后基线。
+    if (mapped->analysis.stroke.endpoint==chan::StrokeEnd::Bounded)
+    {
+      if (update) { output<<value<<" "<<std::hex<<actual<<std::dec<<"\n"; expected=actual; }
+      else { REQUIRE(corrected.count(value)==1); expected=corrected.at(value); }
+    }
     if (actual!=expected) std::printf("  legacy code %d bytes changed\n",value);
     CHECK(actual==expected);
     legacy_test::Free(handle);
