@@ -342,3 +342,18 @@ SSE日线2038根，以下统计区间按原始下标：开头[0,300)、中段[30
 仅更新社区fixture中的bounded段；其他社区段及原文tests/unit/golden不改。旧240码冻结文件保留，bounded独立使用修复后字节基线；非bounded及默认nested继续核对旧基线。api版本、结构体布局均保持v20不变。
 
 验证：`make test`全部74例及公式检查通过；默认两级、递归、事件和区间套的旧字节回归通过。
+
+### 问题2：DLL体积
+
+发布链接新增`--strip-all`，移除符号及调试段。配置身份改为字符串拼接+C stdio的9位有效数字格式化，小数分隔符规范为ASCII点；数值及分号字段用ASCII解析。INI用Win32定位DLL自身目录，宽字符`_wfopen`+分块`fread`读取，手工逐行解析。保留UTF-8 BOM、CRLF、末行无换行、重复字段、缺失文件与存在但不可读的诊断行为。core/tdx/adapter不再引入fstream/sstream/iostream/locale/iomanip/filesystem。
+
+| 发布产物 | 修复前字节 | 修复后字节 | 上限 |
+|---|---:|---:|---:|
+| CZSC.dll（32位） | 2,933,228 | 458,752 | 1,200,000 |
+| CZSC64.dll（64位） | 3,221,087 | 398,336 | 1,200,000 |
+
+`release-check`新增每个DLL≤1,200,000字节及无`.debug_*`段断言，继续检查PE架构、仅KERNEL32/msvcrt导入及零时间戳。负对照使用旧2,933,228字节DLL时被体积检查拒绝。
+`make test`全部76例及公式检查通过；新增约5000个有效float阈值的9位格式/精确往返、错误数值、BOM/CRLF及无尾换行INI测试。
+两种发布DLL实际LoadLibrary通过（`tests/smoke_api20.cpp`），包含German小数locale下的身份往返、DLL同目录INI、缺口及bounded前160根13端点/全样本136端点/首点10B。两架构的默认两级11表各174492字节，分别与先前核对v9的同架构基线逐字节一致：Win32 SHA256为bc2610e95063df88c99d7200e546593c6c05b996df24daed28e888a42271c656，Win64为1003760a081c3da02965ac46fb3ae44b8d7e2030d1960764e0c31762f2af13f9。默认区间套的旧字节回归也通过，tests/unit/golden未改。
+
+api仍为v20，结构体布局不变。本轮两项均完成；未在通达信GUI导入公式，验证覆盖真实DLL ABI与静态公式检查。

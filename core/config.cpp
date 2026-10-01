@@ -1,9 +1,9 @@
 #include "config.h"
 
 #include <cmath>
-#include <iomanip>
-#include <locale>
-#include <sstream>
+#include <cstdio>
+#include <algorithm>
+#include <cctype>
 #include <set>
 
 namespace chan
@@ -47,16 +47,27 @@ std::string AnalysisId(const AnalysisConfig &config)
   const char *endpoint[] = {"extreme","first","bounded"};
   const char *gap[] = {"none","asbar","large"};
   if (!Validate(c).empty()) return {};
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
-  out << "stroke.rule=" << stroke[static_cast<int>(c.stroke.rule)]
-      << ";stroke.endpoint=" << endpoint[static_cast<int>(c.stroke.endpoint)]
-      << ";stroke.gap=" << gap[static_cast<int>(c.stroke.gap)];
-  if (c.stroke.gap == GapRule::Large) out << ";stroke.gapThreshold=" << std::setprecision(9) << c.stroke.gapThreshold;
-  out << ";segment.method=" << (c.segment.method == SegmentMethod::Feature ? "feature" : "heuristic")
-      << ";center.strokeFormation=" << (c.center.strokeFormation == CenterFormation::Entry ? "entry" : "segment")
-      << ";signals.publication=" << (c.signals.publication == SignalPublication::Standard ? "standard" : "early");
-  return out.str();
+  std::string out="stroke.rule=";
+  out+=stroke[static_cast<int>(c.stroke.rule)];
+  out+=";stroke.endpoint=";out+=endpoint[static_cast<int>(c.stroke.endpoint)];
+  out+=";stroke.gap=";out+=gap[static_cast<int>(c.stroke.gap)];
+  if (c.stroke.gap==GapRule::Large)
+  {
+    // C stdio保留旧9位有效数字身份；把宿主locale小数分隔符规范为ASCII点。
+    char buffer[128];std::snprintf(buffer,sizeof buffer,"%.9g",static_cast<double>(c.stroke.gapThreshold));
+    std::string decimal=buffer;
+    auto point=decimal.find_first_not_of("0123456789eE+-");
+    if(point!=std::string::npos)
+    {
+      auto next=decimal.find_first_of("0123456789eE+-",point);
+      decimal.replace(point,next==std::string::npos ? decimal.size()-point : next-point,".");
+    }
+    out+=";stroke.gapThreshold=";out+=decimal;
+  }
+  out+=";segment.method=";out+=c.segment.method==SegmentMethod::Feature ? "feature" : "heuristic";
+  out+=";center.strokeFormation=";out+=c.center.strokeFormation==CenterFormation::Entry ? "entry" : "segment";
+  out+=";signals.publication=";out+=c.signals.publication==SignalPublication::Standard ? "standard" : "early";
+  return out;
 }
 
 std::string ApplyAnalysisField(AnalysisConfig &c, const std::string &key, const std::string &value)
@@ -80,9 +91,34 @@ std::string ApplyAnalysisField(AnalysisConfig &c, const std::string &key, const 
   else if (key=="signals.publication") { v=choice(publication,2); if(v>=0)c.signals.publication=static_cast<SignalPublication>(v); }
   else if (key=="stroke.gapThreshold")
   {
-    std::istringstream in(value); in.imbue(std::locale::classic()); float f=0;
-    if (!(in>>f) || !in.eof()) return "缺口阈值格式无效";
-    c.stroke.gapThreshold=f; return {};
+    // ASCII十进制解析，接受科学计数，不受进程setlocale影响。
+    std::size_t i=0;
+    while (i<value.size() && std::isspace(static_cast<unsigned char>(value[i]))) ++i;
+    bool negative=false;
+    if (i<value.size() && (value[i]=='+' || value[i]=='-')) negative=value[i++]=='-';
+    double number=0;int fractional=0,count=0;bool dot=false;
+    while (i<value.size())
+    {
+      char ch=value[i];
+      if (ch=='.' && !dot) { dot=true;++i;continue; }
+      if (ch<'0' || ch>'9') break;
+      number=number*10+(ch-'0');if(dot)++fractional;++count;++i;
+    }
+    int exponent=0;bool minus=false;
+    if (i<value.size() && (value[i]=='e' || value[i]=='E'))
+    {
+      ++i;
+      if (i<value.size() && (value[i]=='+' || value[i]=='-')) minus=value[i++]=='-';
+      std::size_t begin=i;
+      while (i<value.size() && value[i]>='0' && value[i]<='9')
+      { exponent=std::min(10000,exponent*10+value[i++]-'0'); }
+      if (i==begin) return "缺口阈值格式无效";
+    }
+    if (!count || i!=value.size()) return "缺口阈值格式无效";
+    double result=number*std::pow(10.0,(minus?-exponent:exponent)-fractional);
+    float f=static_cast<float>(negative?-result:result);
+    if (!std::isfinite(f)) return "缺口阈值格式无效";
+    c.stroke.gapThreshold=f;return {};
   }
   else return "未知分析字段："+key;
   return v>=0 ? std::string{} : "字段取值无效："+key;
@@ -91,9 +127,12 @@ std::string ApplyAnalysisField(AnalysisConfig &c, const std::string &key, const 
 std::string ParseAnalysisId(const std::string &id, AnalysisConfig &config)
 {
   AnalysisConfig c; std::set<std::string> seen;
-  std::istringstream in(id); std::string field;
-  while (std::getline(in,field,';'))
+  std::size_t start=0;
+  while (start<id.size())
   {
+    auto end=id.find(';',start);
+    std::string field=id.substr(start,end==std::string::npos ? end : end-start);
+    start=end==std::string::npos ? id.size() : end+1;
     auto at=field.find('=');
     if (at==std::string::npos || !seen.insert(field.substr(0,at)).second) return "配置身份字段格式错误或重复";
     auto error=ApplyAnalysisField(c,field.substr(0,at),field.substr(at+1));

@@ -38,3 +38,14 @@ TEST(PresetsShareFamilyAcrossLevelAndProjectionAndExplicitPublication)
   CHECK(Zero(Raw(tdx::Signals,5)) && Zero(Raw(tdx::EarlySignals,5)));
   CHECK(Raw(tdx::Signals,0)==standard);CHECK(tdx::AnalysisBuildsForTesting()==2);
 }
+
+TEST(PresetsHandleBomCrLfAndFinalLineWithoutNewline)
+{
+  auto presets=tdx::ParsePresets("\xEF\xBB\xBF; UTF-8\r\n[9999]\r\nstroke.gap=large\r\nstroke.gapThreshold=2e-2\r\noutputs.levels=segment");
+  REQUIRE(presets.count(9999)==1);
+  CHECK(presets.at(9999).error==0);
+  CHECK(presets.at(9999).view.analysis.stroke.gapThreshold==.02f);
+  CHECK(presets.at(9999).view.level==chan::CenterUnit::Segment);
+  CHECK(tdx::ParsePresets("[3]\nstroke.gapThreshold=2e-").at(3).error==4);
+  CHECK(tdx::ParsePresets("[3]\nstroke.gapThreshold=0,02").at(3).error==4);
+}

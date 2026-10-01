@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <vector>
 #include <cstring>
+#include <clocale>
 #include <windows.h>
 #define LOAD(symbol) auto symbol##Fn=reinterpret_cast<decltype(&symbol)>(GetProcAddress(dll,#symbol)); if(!symbol##Fn)return 10
 #define REQUIRE_OK(x) do { if(!(x)){std::fprintf(stderr,"failed %s:%d: %s\n",__FILE__,__LINE__,#x);return 20;} } while(0)
@@ -15,7 +16,7 @@ template<class T> void Dump(FILE *file,const T *(*get)(void*,int32_t,int32_t*),v
 int main(int argc,char **argv)
 {
   if(argc!=3)return 1;HMODULE dll=LoadLibraryA(argv[1]);if(!dll){std::fprintf(stderr,"load error %lu\n",GetLastError());return 2;}
-  LOAD(czsc_api_version);LOAD(czsc_build_commit);LOAD(czsc_config_default);LOAD(czsc_config_validate);LOAD(czsc_build);LOAD(czsc_snapshot_free);
+  LOAD(czsc_config_id);LOAD(czsc_config_parse);LOAD(czsc_api_version);LOAD(czsc_build_commit);LOAD(czsc_config_default);LOAD(czsc_config_validate);LOAD(czsc_build);LOAD(czsc_snapshot_free);
   LOAD(czsc_level_pivots);LOAD(czsc_level_centers);LOAD(czsc_level_movements);LOAD(czsc_level_breakouts);LOAD(czsc_level_signals);LOAD(czsc_level_events);LOAD(czsc_level_bars);
   LOAD(czsc_level_recursive_nodes);LOAD(czsc_level_recursive_children);LOAD(czsc_level_recursive_centers);LOAD(czsc_level_recursive_connections);LOAD(czsc_nested_rows);
   LOAD(czsc_set_projection);LOAD(czsc_config_fields);LOAD(czsc_config_choices);LOAD(czsc_config_rules);
@@ -23,6 +24,14 @@ int main(int argc,char **argv)
   for(const char *old:{"czsc_snapshot_build","czsc_config_valid","czsc_config_options","czsc_nested_build","czsc_pivots"}) REQUIRE_OK(!GetProcAddress(dll,old));
   REQUIRE_OK(czsc_config_fieldsFn(nullptr,0)==13);REQUIRE_OK(czsc_config_choicesFn(nullptr,0)==31);REQUIRE_OK(czsc_config_rulesFn(nullptr,0)==5);
   czsc_config config{};REQUIRE_OK(czsc_config_defaultFn(&config)==0);REQUIRE_OK(czsc_config_validateFn(&config)==0);
+  // msvcrt非点小数locale下，配置身份仍须使用ASCII点并可往返。
+  REQUIRE_OK(std::setlocale(LC_NUMERIC,"German_Germany.1252"));
+  czsc_config decimal{};char identity[512];
+  REQUIRE_OK(czsc_config_parseFn("stroke.gap=large;stroke.gapThreshold=2e-2",&decimal)==0);
+  REQUIRE_OK(czsc_config_idFn(&decimal,identity,sizeof identity)>0);
+  REQUIRE_OK(std::strstr(identity,"stroke.gapThreshold=0.0199999996;")!=nullptr);
+  REQUIRE_OK(czsc_config_parseFn(identity,&decimal)==0 && decimal.gapThreshold==.02f);
+  REQUIRE_OK(std::setlocale(LC_NUMERIC,"C"));
   czsc_input input{sizeof(input),SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME};
   void *h=czsc_buildFn(&input,&config,CZSC_OUTPUT_DEFAULT);REQUIRE_OK(h);
   FILE *file=std::fopen(argv[2],"wb");REQUIRE_OK(file);
@@ -34,6 +43,15 @@ int main(int argc,char **argv)
   }
   std::fclose(file);int count=0;czsc_nested_rowsFn(h,&count);REQUIRE_OK(count>0);
   czsc_projection projection{sizeof(projection),2,0};REQUIRE_OK(czsc_set_projectionFn(h,&projection)==0);czsc_snapshot_freeFn(h);
+  auto bounded=config;bounded.strokeEndpoint=2;
+  for(int n:{160,SSE_DAILY_COUNT})
+  {
+    auto prefix=input;prefix.n=n;
+    h=czsc_buildFn(&prefix,&bounded,CZSC_OUTPUT_DEFAULT);REQUIRE_OK(h);
+    auto p=czsc_level_pivotsFn(h,0,&count);
+    REQUIRE_OK(count==(n==160 ? 13 : 136) && p[0].extremeIndex==10);
+    czsc_snapshot_freeFn(h);
+  }
   config.strokeGap=2;h=czsc_buildFn(&input,&config,CZSC_OUTPUT_DEFAULT);REQUIRE_OK(h);czsc_level_pivotsFn(h,0,&count);REQUIRE_OK(count==166);czsc_snapshot_freeFn(h);
   auto reg=reinterpret_cast<BOOL (*)(PluginTCalcFuncInfo**)>(GetProcAddress(dll,"RegisterTdxFunc"));REQUIRE_OK(reg);
   PluginTCalcFuncInfo *table=nullptr;REQUIRE_OK(reg(&table));

@@ -26,7 +26,7 @@ CXX=$(CROSS_PREFIX)g++
 RM=rm -f
 CXFLAGS=-I. -finput-charset=UTF-8 -std=c++17 -O2 -DCZSC_BUILDING
 LDFLAGS=
-DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp
+DLL_LDFLAGS=-static -static-libgcc -static-libstdc++ -Wl,--no-insert-timestamp -Wl,--strip-all
 # 源码版本写入 adapter（czsc_build_commit）；工作区有未提交改动时加 -dirty。release 流程先 clean，确保重新写入
 BUILD_COMMIT:=$(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)$(shell git diff --quiet HEAD -- 2>/dev/null || echo -dirty)
 

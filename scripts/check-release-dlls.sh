@@ -33,6 +33,16 @@ check_dll()
     exit 1
   fi
 
+  bytes="$(wc -c < "$dll" | tr -d ' ')"
+  if [ "$bytes" -gt 1200000 ]; then
+    echo "$dll exceeds release size limit: $bytes > 1200000 bytes" >&2
+    exit 1
+  fi
+  if "${objdump_prefix}objdump" -h "$dll" | grep '[.]debug_' >/dev/null; then
+    echo "$dll contains unstripped debug sections" >&2
+    exit 1
+  fi
+
   desc="$(file "$dll")"
   case "$desc" in
     *"$file_token"*)
@@ -71,8 +81,11 @@ check_dll()
   echo "     $desc"
   echo "     imports: $(echo "$deps" | tr '\n' ' ')"
   echo "     timestamp: $timestamp"
+  echo "     size: $bytes / 1200000 bytes"
 }
 
+check_command wc
+check_command tr
 check_command file
 check_command sed
 check_command grep

@@ -1,9 +1,8 @@
 // 工程预设：编号只作查表，分析身份由结构化字段确定，INI按UTF-8读取。
 #include "presets.h"
-#include <fstream>
-#include <sstream>
+#include <cstdio>
+#include <cwchar>
 #include <set>
-#include <filesystem>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -69,17 +68,29 @@ void Load()
       reinterpret_cast<LPCWSTR>(&loaded),&module))return;
   wchar_t path[32768];DWORD n=GetModuleFileNameW(module,path,32768);
   if(n==0 || n>=32768)return;
-  auto ini=std::filesystem::path(path).parent_path()/L"czsc-presets.ini";
-  std::ifstream file(ini,std::ios::binary);
-  std::error_code ec;
-  bool exists=std::filesystem::exists(ini,ec);
-  if(ec || (exists && !file))
+  wchar_t *separator=std::wcsrchr(path,L'\\');
+  if(!separator)return;
+  const wchar_t name[]=L"czsc-presets.ini";
+  if(static_cast<std::size_t>(separator-path)+1+sizeof(name)/sizeof(*name)>32768)return;
+  std::wcscpy(separator+1,name);
+  FILE *file=_wfopen(path,L"rb");
+  if(!file)
+  {
+    DWORD attributes=GetFileAttributesW(path),error=GetLastError();
+    if(attributes==INVALID_FILE_ATTRIBUTES && (error==ERROR_FILE_NOT_FOUND || error==ERROR_PATH_NOT_FOUND))return;
+    for(auto &item:presets) { item.second.error=3;item.second.reason="预设文件无法读取"; }
+    return;
+  }
+  std::string text;char buffer[4096];std::size_t bytes;
+  while((bytes=std::fread(buffer,1,sizeof buffer,file))!=0)text.append(buffer,bytes);
+  bool failed=std::ferror(file)!=0;
+  if(std::fclose(file)!=0)failed=true;
+  if(failed)
   {
     for(auto &item:presets) { item.second.error=3;item.second.reason="预设文件无法读取"; }
     return;
   }
-  if(!exists)return; // 没有INI时用内置；存在却不可读时拒绝，不能悄悄回落默认。
-  std::ostringstream text;text<<file.rdbuf();presets=ParsePresets(text.str());
+  presets=ParsePresets(text);
 #endif
 }
 }
@@ -87,18 +98,20 @@ PresetMap ParsePresets(const std::string &input)
 {
   auto result=Builtins();std::string text=input;
   if(text.compare(0,3,"\xEF\xBB\xBF")==0)text.erase(0,3);
-  std::istringstream in(text);std::string line;int current=-1;
+  std::size_t start=0;int current=-1;
   std::map<int,std::set<std::string>> keys;
   std::set<int> sections;
-  while(std::getline(in,line))
+  while(start<text.size())
   {
-    line=Trim(line);if(line.empty() || line[0]=='#' || line[0]==';')continue;
+    auto end=text.find('\n',start);
+    auto line=Trim(text.substr(start,end==std::string::npos ? end : end-start));
+    start=end==std::string::npos ? text.size() : end+1;if(line.empty() || line[0]=='#' || line[0]==';')continue;
     if(line.front()=='[' && line.back()==']')
     {
       auto value=line.substr(1,line.size()-2);
       current=-1;
       if(value.empty() || value.size()>4 || value.find_first_not_of("0123456789")!=std::string::npos)continue;
-      current=std::stoi(value);
+      current=0;for(char digit:value)current=current*10+digit-'0';
       if(!sections.insert(current).second){result[current].error=4;result[current].reason="预设节重复";}
       if(!result.count(current)) { result[current]=Preset{};result[current].view.projection.centerBox=chan::CenterBox::Initial; }
       continue;
