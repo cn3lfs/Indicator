@@ -1,3 +1,5 @@
+#include "legacy_api_bridge.h"
+#include "migration/legacy_config.h"
 // 上证指数日线真实样本 golden：结构与当下事件的可读文本，算法变化会在 diff 中直接可见。
 // 有意变更算法后运行 `make golden`（或 CHAN_UPDATE_GOLDEN=1 ChanTests Golden）重新生成并人工核对。
 #include "check.h"
@@ -29,13 +31,13 @@ const char *Name(chan::SignalType t)
   }
 }
 
-// 结构化接口 v5：中阴、递归节点、递归中枢、同级别连接段（CZSC_FLAG_HIGHER，收盘价/成交量取样本真实值）
+// 结构化接口 v5：中阴、递归节点、递归中枢、同级别连接段（legacy_test::Higher，收盘价/成交量取样本真实值）
 void RenderRecursion(std::ostringstream &o)
 {
   char line[256];
   for (int code : {0, 2})
   {
-    czsc_input in{};
+    legacy_test::Input in{};
     in.size = sizeof in;
     in.n = SSE_DAILY_COUNT;
     in.high = SSE_DAILY_HIGH;
@@ -43,13 +45,13 @@ void RenderRecursion(std::ostringstream &o)
     in.close = SSE_DAILY_CLOSE;
     in.volume = SSE_DAILY_VOLUME;
     in.config = code;
-    in.flags = CZSC_FLAG_HIGHER;
-    void *h = czsc_snapshot_build(&in);
+    in.flags = legacy_test::Higher;
+    void *h = legacy_test::Build(&in);
     int32_t nm = 0, nn = 0, nc = 0, nk = 0;
-    const czsc_movement *m = czsc_movements(h, &nm);
-    const czsc_recursive_node *nodes = czsc_recursive_nodes(h, &nn);
-    const czsc_recursive_center *centers = czsc_recursive_centers(h, &nc);
-    const czsc_recursive_connection *links = czsc_recursive_connections(h, &nk);
+    const czsc_movement *m = legacy_test::Movements(h, &nm);
+    const czsc_recursive_node *nodes = legacy_test::RecursiveNodes(h, &nn);
+    const czsc_recursive_center *centers = legacy_test::RecursiveCenters(h, &nc);
+    const czsc_recursive_connection *links = legacy_test::RecursiveConnections(h, &nk);
     o << "## 递归 配置 " << code << "：节点 " << nn << "，上层中枢 " << nc << "，上层连接段 " << nk << "\n";
     for (int32_t i = 0; i < nm; i++)
     {
@@ -82,7 +84,7 @@ void RenderRecursion(std::ostringstream &o)
       o << line;
     }
     o << "\n";
-    czsc_snapshot_free(h);
+    legacy_test::Free(h);
   }
 }
 
@@ -93,7 +95,7 @@ std::string Render()
   chan::Series s = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
   for (int code : {0, 2, 1100})
   {
-    chan::Analysis a = chan::Analyze(s, *chan::Config::Decode(code));
+    chan::Analysis a = chan::Analyze(s, *migration::MapLegacyConfig(code));
     const chan::Snapshot &n = a.snapshot;
     o << "## 配置 " << code << "：端点 " << n.pivots.size() << "，中枢 " << n.centers.size() << "，走势 "
       << n.movements.size() << "，事后信号 " << n.signals.size() << "，当下事件 " << a.events.size() << "\n";

@@ -1,3 +1,4 @@
+#include "migration/legacy_config.h"
 // 增量引擎 = 参照实现（每步整条重算后差分），逐事件一致；这是增量逻辑的长期规格。
 #include "check.h"
 #include "sse_data.h"
@@ -45,7 +46,7 @@ TEST(IncrementalEngineMatchesReference)
     chan::Series series = chan::Series::FromRaw(n, &s.high[0], &s.low[0]);
     for (int code : {0, 1, 2, 10, 101, 1100, 1101, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104})
     {
-      chan::Config c = *chan::Config::Decode(code);
+      chan::LevelConfig c = *migration::MapLegacyConfig(code);
       chan::Analysis inc = chan::Analyze(series, c);
       chan::Analysis ref = chan::AnalyzeReference(series, c);
       bool same = Same(inc.events, ref.events);
@@ -53,7 +54,7 @@ TEST(IncrementalEngineMatchesReference)
       CHECK(same);
       total += static_cast<int>(inc.events.size());
     }
-    CHECK(Same(chan::Analyze(series, chan::Config{}, 700).events, chan::AnalyzeReference(series, chan::Config{}, 700).events));
+    CHECK(Same(chan::Analyze(series, chan::LevelConfig{}, 700).events, chan::AnalyzeReference(series, chan::LevelConfig{}, 700).events));
   }
   CHECK(total > 100);
 }
@@ -64,7 +65,7 @@ TEST(EngineIsCausalOnEveryPrefix)
   chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
   for (int code : {0, 2, 1100, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104, 1000000, 1000001, 1000002, 1000003, 1000004, 1001100, 1001101, 1001102, 1001103, 1001104, 1100000, 1101000, 1101100})
   {
-    chan::Config c = *chan::Config::Decode(code);
+    chan::LevelConfig c = *migration::MapLegacyConfig(code);
     std::vector<chan::SignalEvent> all = chan::Analyze(full, c).events;
     for (int t = 120; t < full.Size(); t += 37)
     {
@@ -86,7 +87,7 @@ TEST(FinalizedObjectsNeverChange)
   int checked = 0;
   for (int code : {0, 1, 2, 10, 101, 1100, 1101, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104, 1000000, 1000001, 1000002, 1000003, 1000004, 1001100, 1001101, 1001102, 1001103, 1001104, 1100000, 1101000, 1101100})
   {
-    chan::Config c = *chan::Config::Decode(code);
+    chan::LevelConfig c = *migration::MapLegacyConfig(code);
     chan::Analysis all = chan::Analyze(full, c);
     for (int k = 60; k < full.Size(); k += 29)
     {
@@ -143,7 +144,7 @@ TEST(InstantWarningIsCausal)
   chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
   for (int code : {0, 1100})
   {
-    chan::Config c = *chan::Config::Decode(code);
+    chan::LevelConfig c = *migration::MapLegacyConfig(code);
     std::vector<int8_t> all = chan::Analyze(full, c).instantWarning;
     int up = 0, down = 0;
     for (int8_t w : all) { up += w > 0; down += w < 0; }
@@ -167,7 +168,7 @@ TEST(ParentCentersIncrementalReferenceAndCausality)
     for (int stroke = 0; stroke <= 4; ++stroke)
     {
       int code = 100000 + method + stroke;
-      auto config = *chan::Config::Decode(code);
+      auto config = *migration::MapLegacyConfig(code);
       auto all = chan::Analyze(full, config);
       CHECK(Same(all.events, chan::AnalyzeReference(full, config).events));
       for (int n = 100; n < full.Size(); n += 89)
@@ -186,7 +187,7 @@ TEST(EarlyEngineMatchesReferenceAndEveryPrefix)
   auto full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
   for (int code : {0, 2, 1100, 100000, 101000, 1000000, 1000004, 1001100})
   {
-    auto c = *chan::Config::Decode(code);
+    auto c = *migration::MapLegacyConfig(code);
     c.analysis.signals.publication = chan::SignalPublication::Early;
     auto all = chan::Analyze(full, c);
     CHECK(Same(all.events, chan::AnalyzeReference(full, c).events));
@@ -215,7 +216,7 @@ TEST(BoundedEngineMatchesReferenceOnSse)
   for (int unit : {0, 100, 1100})
     for (int stroke = 0; stroke <= 4; ++stroke)
     {
-      auto c = *chan::Config::Decode(1000000 + unit + stroke);
+      auto c = *migration::MapLegacyConfig(1000000 + unit + stroke);
       CHECK(Same(chan::Analyze(full,c).events,chan::AnalyzeReference(full,c).events));
     }
 }
@@ -226,7 +227,7 @@ TEST(FamilySharesInputsAndMatchesIndependentReferenceAtBothLevels)
   auto source = chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
   for (int code : {0,1,2,3,4,10,14,1000,101000,1000000,1000001,1000002,1000004,1101000})
   {
-    auto config = *chan::Config::Decode(code);
+    auto config = *migration::MapLegacyConfig(code);
     auto family = chan::AnalyzeFamily(source,config.analysis);
     CHECK(family.levels[0].inputs.get()==family.levels[1].inputs.get());
     for (int level=0; level<2; ++level)
@@ -264,7 +265,7 @@ TEST(FamilyEventsAreCausalOnBothLevels)
   auto source = chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
   for (int code : {0,101000,1000000,1101000})
   {
-    auto config=*chan::Config::Decode(code);
+    auto config=*migration::MapLegacyConfig(code);
     for (auto publication : {chan::SignalPublication::Standard,chan::SignalPublication::Early})
     {
       config.analysis.signals.publication=publication;

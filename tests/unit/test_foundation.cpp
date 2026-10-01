@@ -1,3 +1,4 @@
+#include "migration/legacy_config.h"
 #include "check.h"
 #include "core/config.h"
 #include "core/series.h"
@@ -10,16 +11,16 @@ TEST(ConfigRoundTrip)
 {
   for (int code : {0, 1, 2, 10, 11, 100, 1100, 1101, 1102, 1111})
   {
-    auto c = Config::Decode(code);
+    auto c = migration::MapLegacyConfig(code);
     REQUIRE(c.has_value());
-    CHECK(c->Encode() == code);
+    CHECK(migration::LegacyCode(*c) == code);
   }
-  CHECK(!Config::Decode(5).has_value());     // 个位笔类型只允许 0/1/2/3/4
-  CHECK(!Config::Decode(20).has_value());
-  CHECK(!Config::Decode(-1).has_value());
-  CHECK(!Config::Decode(10000).has_value());
-  CHECK(Config::Decode(0)->analysis.stroke.rule == StrokeRule::Strict);
-  CHECK(Config::Decode(2)->analysis.stroke.rule == StrokeRule::Czsc);
+  CHECK(!migration::MapLegacyConfig(5).has_value());     // 个位笔类型只允许 0/1/2/3/4
+  CHECK(!migration::MapLegacyConfig(20).has_value());
+  CHECK(!migration::MapLegacyConfig(-1).has_value());
+  CHECK(!migration::MapLegacyConfig(10000).has_value());
+  CHECK(migration::MapLegacyConfig(0)->analysis.stroke.rule == StrokeRule::Strict);
+  CHECK(migration::MapLegacyConfig(2)->analysis.stroke.rule == StrokeRule::Czsc);
 }
 
 TEST(SeriesSanitizesTdxInvalid)
@@ -50,16 +51,16 @@ TEST(SegmentEndConfigRoundTrip)
   int count = 0;
   for (int code = 0; code < 30000; ++code)
   {
-    auto c = Config::Decode(code);
+    auto c = migration::MapLegacyConfig(code);
     if (!c) continue;
-    CHECK(c->Encode() == code);
+    CHECK(migration::LegacyCode(*c) == code);
     CHECK(c->projection.segmentBoundary == SegmentEnd::Extreme || c->analysis.segment.method == SegmentMethod::Feature);
     ++count;
   }
   CHECK(count == 80);
-  CHECK(!Config::Decode(10000) && !Config::Decode(20100) && !Config::Decode(31000));
-  CHECK(Config::Decode(11100) && Config::Decode(21100));
-  CHECK(!(*Config::Decode(1100) == *Config::Decode(11100)));
+  CHECK(!migration::MapLegacyConfig(10000) && !migration::MapLegacyConfig(20100) && !migration::MapLegacyConfig(31000));
+  CHECK(migration::MapLegacyConfig(11100) && migration::MapLegacyConfig(21100));
+  CHECK(!(*migration::MapLegacyConfig(1100) == *migration::MapLegacyConfig(11100)));
 }
 
 TEST(CenterFormationConfigRoundTrip)
@@ -67,11 +68,11 @@ TEST(CenterFormationConfigRoundTrip)
   int count = 0;
   for (int code = 0; code < 130000; ++code)
   {
-    auto c = Config::Decode(code);
+    auto c = migration::MapLegacyConfig(code);
     if (!c) continue;
-    CHECK(c->Encode() == code);
+    CHECK(migration::LegacyCode(*c) == code);
     ++count;
   }
-  CHECK(count == 160 && !Config::Decode(200000));
-  CHECK(Config::Decode(100000)->analysis.center.strokeFormation == CenterFormation::Segment);
+  CHECK(count == 160 && !migration::MapLegacyConfig(200000));
+  CHECK(migration::MapLegacyConfig(100000)->analysis.center.strokeFormation == CenterFormation::Segment);
 }

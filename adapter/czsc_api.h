@@ -5,10 +5,10 @@
  * 约定
  *  - 纯 C ABI（extern "C"、cdecl），只用定长整数、float、POD 结构与指针；不抛异常。
  *  - 无全局可变状态、可重入：每次构建独立，输入相同则结果逐字节相同（结构体无填充字节）。
- *  - 内存由 DLL 分配与释放：czsc_snapshot_build 返回句柄，czsc_snapshot_free 释放；取表函数返回的指针在
- *    句柄释放前一直有效，调用方不得写入或释放。
+ *  - 内存由 DLL 分配与释放：czsc_build 返回句柄，czsc_snapshot_free 释放；取表函数返回的指针在
+ *    句柄释放或下一次czsc_set_projection前有效，调用方不得写入或释放。
  *  - 版本：czsc_api_version() 返回整数，结构体布局或语义一改就递增；每个结构体首字段 size = sizeof(该结构体)，
- *    新版本只在结构体末尾追加字段，调用方可据 size 判断可读字段。
+ *    v20为不兼容主版本；业务行布局保留v10，配置/input接口重建。
  *  - 下标：凡“K线位置/K线”均为 0 基原始K线下标；凡“…表下标”均为 0 基的本快照内表下标；-1 表示无。
  *  - 两种口径：
  *      结构（端点/中枢/走势/突破）是用全部输入数据得出的当前结构，末尾对象会随新数据改变；
@@ -32,13 +32,10 @@
 extern "C" {
 #endif
 
-/* 版本历史：1 = P0 基础结构；2 = 追加 P1 研判语义（czsc_center.lifecycle、czsc_signal.quality 起 7 个字段、
- * czsc_bar.instantDivergence、区间套表 czsc_nested）；3 = 追加走势完成证据（czsc_movement.connectionStart 起 7 个字段）
- * 与区间套的高级别背驰段低级别端点映射（czsc_nested.highPrevStartLow 起 4 个字段）；4 = 实现 CZSC_FLAG_HIGHER：
- * 递归走势节点表 czsc_recursive_node 与子节点表（第17课递归定义）；5 = 中阴（czsc_movement.zhongyinStart）、
- * 递归节点追加 firstCenter 起 5 个字段、递归中枢表 czsc_recursive_center 与同级别连接段表 czsc_recursive_connection；
- * 6 = czsc_center.established、czsc_bar.maShort/maLong、czsc_build_commit()；7 = 配置自描述；8 = czsc_pivot.extremeIndex 与万位显示分界；9 = 十万位中枢构成分析口径，布局不变 */
-#define CZSC_API_VERSION 10
+/* v20不兼容主版本：结构化配置与一次构建两级，删除整数配置/flags/独立区间套。
+ * 所有业务行保持v10布局；packed仅用于schema，其他POD按4字节字段布局。
+ * 默认分析level0/1分别保留旧配置0/1100的业务字节。 */
+#define CZSC_API_VERSION 20
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -49,29 +46,64 @@ extern "C" {
 #define CZSC_CTX_OVERLAP 0x20u        /* 二类与三类重合（同中枢、同向、同一回试端点，第21/61课） */
 #define CZSC_CTX_FIRST_RETEST 0x40u   /* 三类：首次回试（第20课“必须是第一次”） */
 
-/* czsc_input.flags 位定义 */
-#define CZSC_FLAG_EVENTS 0x1u     /* 位0：生成当下事件流（czsc_events） */
-#define CZSC_FLAG_HIGHER 0x2u     /* 位1：生成递归走势节点（czsc_recursive_nodes / czsc_recursive_children，v4） */
-
-/* v7 配置自描述：pack(1)，size=116，32/64位一致；字符串 UTF-8/NUL。
- * original=1 表示原文规则来源，工程边界仍见决策表。 */
-#pragma pack(push, 1)
-typedef struct czsc_config_option
+/* v20断代：分析、输出、显示三层独立。枚举值见schema；字符串UTF-8/NUL。 */
+typedef struct czsc_config
 {
   uint32_t size;
-  int32_t place; /* 1 / 10 / 100 / 1000 / 10000 / 100000 / 1000000 */
-  int32_t value;
-  int32_t isDefault;
-  int32_t original; /* 1 原文；0 社区/非原文 */
-  char key[32];
-  char label[32];
-  char lessons[32]; /* 非原文为空 */
-} czsc_config_option;
+  int32_t strokeRule;       /* 0严格/1新笔/2czsc/3社区4K/4社区分型 */
+  int32_t strokeEndpoint;   /* 0极值/1次高低/2合并K线包络 */
+  int32_t strokeGap;        /* 0不处理/1计作一根/2大缺口成笔 */
+  float gapThreshold;      /* 大缺口相对前根高/低阈值，默认0.02 */
+  int32_t segmentMethod;    /* 0启发式/1特征序列，默认1 */
+  int32_t centerStrokeFormation; /* 0进入段/1所属线段 */
+  int32_t signalsPublication;    /* 0标准/1快速，默认0 */
+} czsc_config; /* size32，align4，两种指针宽度一致 */
+typedef struct czsc_projection
+{
+  uint32_t size;
+  int32_t segmentBoundary; /* 0极值/1合并首笔/2合并末笔，仅特征序列允许非0 */
+  int32_t centerBox;       /* 0前三构件/1含延伸，默认1；只改start/end显示坐标 */
+} czsc_projection; /* size12，align4 */
+#define CZSC_OUTPUT_STROKE 1u
+#define CZSC_OUTPUT_SEGMENT 2u
+#define CZSC_OUTPUT_EVENTS 4u
+#define CZSC_OUTPUT_RECURSION 8u
+#define CZSC_OUTPUT_NESTED 16u
+#define CZSC_OUTPUT_DEFAULT 31u
+#pragma pack(push, 1)
+typedef struct czsc_config_field
+{
+  uint32_t size;
+  char key[32], label[32];
+  int32_t layer, kind, defaultValue; /* layer0分析/1输出/2显示；kind0枚举/1浮点 */
+  float defaultFloat, minFloat, maxFloat;
+} czsc_config_field; /* packed size92 */
+typedef struct czsc_config_choice
+{
+  uint32_t size;
+  char field[32]; int32_t value;
+  char key[32], label[32], lessons[32];
+  int32_t original;
+  char note[256];
+} czsc_config_choice; /* packed size396 */
+typedef struct czsc_config_rule
+{
+  uint32_t size;
+  char whenField[32]; int32_t whenValue;
+  char field[32]; int32_t onlyValue; /* -1不适用；其余为唯一合法值 */
+  char reason[128];
+} czsc_config_rule; /* packed size204 */
 #pragma pack(pop)
-CZSC_API int32_t czsc_config_valid(int32_t config);
-/* NULL/0 查询条数；否则返回实际写入 min(capacity,总数)。负容量或 NULL/正容量返回0。
- * 调用方须提供完整 v7 结构体空间。 */
-CZSC_API int32_t czsc_config_options(czsc_config_option *out, int32_t capacity);
+CZSC_API int32_t czsc_config_default(czsc_config *out);
+CZSC_API int32_t czsc_config_validate(const czsc_config *c); /* 0合法，其他值中文原因 */
+CZSC_API int32_t czsc_config_id(const czsc_config *c, char *out, int32_t cap);
+/* id返回含NUL所需容量；NULL/0查询，容量不足不写入；非法返回-1。 */
+CZSC_API int32_t czsc_config_parse(const char *id, czsc_config *out); /* 缺失字段用默认，未知/重复字段拒绝 */
+CZSC_API int32_t czsc_projection_default(czsc_projection *out);
+/* schema：NULL/0查询条数；否则写min(cap,总数)；非法容量返回0并设置错误。 */
+CZSC_API int32_t czsc_config_fields(czsc_config_field *out, int32_t cap);
+CZSC_API int32_t czsc_config_choices(czsc_config_choice *out, int32_t cap);
+CZSC_API int32_t czsc_config_rules(czsc_config_rule *out, int32_t cap);
 
 typedef struct czsc_input
 {
@@ -81,24 +113,17 @@ typedef struct czsc_input
   const float *low;       /* n 个最低价 */
   const float *close;     /* n 个收盘价（必填，须落在 [low,high]；MACD 用真实收盘价） */
   const float *volume;    /* n 个成交量（必填，须有限且 >= 0；用于放量湿吻判定） */
-  int32_t config;         /* 配置码：个位笔 0严格/1新笔/2czsc笔/3社区4K笔/4社区分型笔；十位 0严格收笔/1允许次高低；
-                             百位 0笔中枢/1线段中枢；千位 0启发式线段/1特征序列线段。常用 0 与 1100；千位2非法；万位0极值/1合并首笔/2合并末笔，仅千位1允许非零万位。
-                             万位仅改变线段端点显示，分析保持极值；十万位0按进入段/1笔中枢服从所属分析线段，线段中枢仍按进入段。
-                             新模式三笔与延伸限于父段，父段未定型则中枢未定型；扩张显示由前端过滤递归表。
-                             v10百万位0允许超出/1合并K线H/L闭区间不得超出顶底（含端点，等价允许），社区规则；百万位1+十位1非法。
-                             仅修正未定型末两个端点为合法同型分型，且左右均成笔，否则不成笔；对五种笔均适用。布局与v9一致 */
-  int32_t flags;          /* CZSC_FLAG_* 组合，未定义的位须为 0 */
 } czsc_input;
 
-/* 端点：笔端点（百位=0）或线段端点（百位=1），顶底交替 */
+/* 端点：level0笔端点或level1线段端点，顶底交替 */
 typedef struct czsc_pivot
 {
   uint32_t size;          /* sizeof(czsc_pivot) */
-  int32_t index;          /* 显示分界K线，万位0为极值；笔级不受万位影响 */
+  int32_t index;          /* 显示分界K线，segmentBoundary=0为极值；笔级不受分界投影影响 */
   int32_t kind;           /* +1 顶 / -1 底 */
   float price;            /* 显示index的原始K线高/低；用于画线，分析价位见extremeIndex */
-  int32_t fractalAt;      /* 真实极值分型成立的K线；百万位1未确认延伸候选为-1；显示分界见extremeIndex */
-  int32_t confirmedAt;    /* 端点定型K线；默认其后第二个端点出现即定型；百万位1允许尾部回退，暂全部为-1 */
+  int32_t fractalAt;      /* 真实极值分型成立的K线；endpoint=bounded未确认延伸候选为-1；显示分界见extremeIndex */
+  int32_t confirmedAt;    /* 端点定型K线；默认其后第二个端点出现即定型；endpoint=bounded允许尾部回退，暂全部为-1 */
   /* ---- v8：社区显示口径只改index/price；下游分析仍按真实极值 ---- */
   int32_t extremeIndex;   /* 真实分析端点K线；默认/笔级等于index。offset24，size28，无填充 */
 } czsc_pivot;
@@ -118,7 +143,7 @@ typedef struct czsc_center
   float zd;               /* 中枢下沿 ZD = 成枢三段低点的最大值 */
   float gg;               /* 波动上沿 GG = 成员段最高点 */
   float dd;               /* 波动下沿 DD = 成员段最低点 */
-  int32_t direction;      /* 默认/线段级：进入段方向；十万位1笔级：父分析线段方向。进入段仍firstPivot-1 */
+  int32_t direction;      /* 默认/线段级：进入段方向；strokeFormation=segment笔级：父分析线段方向。进入段仍firstPivot-1 */
   int32_t confirmedAt;    /* 中枢定型的K线（终点、GG/DD 不再改变）；未定型 -1 */
   int32_t relationToPrev; /* 与前一中枢（第20课中心定理二）：1 上涨 / -1 下跌 / 2 扩展 / 0 首个中枢 */
   /* ---- v2 ---- */
@@ -222,7 +247,7 @@ typedef struct czsc_signal
   int32_t smallTurnRetestPivot; /* 同上：回试终点 */
 } czsc_signal;
 
-/* 当下事件流（flags 位0）：与通达信 5/6 号序列逐根等价 */
+/* 当下事件流（outputs EVENTS）：与通达信 5/6 号序列逐根等价 */
 typedef struct czsc_event
 {
   uint32_t size;          /* sizeof(czsc_event) */
@@ -249,7 +274,7 @@ typedef struct czsc_bar
   float maLong;           /* MA20 */
 } czsc_bar;
 
-/* 区间套（第27/61课；小转大候选见第43/44课）：低级别一类信号 → 高级别结构。由两个同一数据的快照生成。 */
+/* 区间套（第27/61课；小转大候选见第43/44课）：低级别一类信号 → 高级别结构。由同一个快照两级结构生成。 */
 typedef struct czsc_nested
 {
   uint32_t size;               /* sizeof(czsc_nested) */
@@ -274,20 +299,21 @@ CZSC_API int32_t czsc_api_version(void);
  * 返回静态字符串，勿释放 */
 CZSC_API const char *czsc_build_commit(void);
 CZSC_API const char *czsc_last_error(void);
-CZSC_API void *czsc_snapshot_build(const czsc_input *input);
+CZSC_API void *czsc_build(const czsc_input *input, const czsc_config *config, uint32_t outputs);
+CZSC_API int32_t czsc_set_projection(void *snapshot, const czsc_projection *projection);
 CZSC_API void czsc_snapshot_free(void *snapshot);
 
 /* 取表：返回首元素指针（空表返回非 NULL 的有效地址或 NULL，均以 *count 为准），*count 写条数；
  * snapshot 为 NULL 时返回 NULL、*count=0 并设置错误。count 可为 NULL。 */
-CZSC_API const czsc_pivot *czsc_pivots(void *snapshot, int32_t *count);
-CZSC_API const czsc_center *czsc_centers(void *snapshot, int32_t *count);
-CZSC_API const czsc_movement *czsc_movements(void *snapshot, int32_t *count);
-CZSC_API const czsc_breakout *czsc_breakouts(void *snapshot, int32_t *count);
-CZSC_API const czsc_signal *czsc_signals(void *snapshot, int32_t *count);
-CZSC_API const czsc_event *czsc_events(void *snapshot, int32_t *count);   /* 未置 CZSC_FLAG_EVENTS 时为空 */
-CZSC_API const czsc_bar *czsc_bars(void *snapshot, int32_t *count);        /* n 条 */
+CZSC_API const czsc_pivot *czsc_level_pivots(void *snapshot, int32_t level, int32_t *count);
+CZSC_API const czsc_center *czsc_level_centers(void *snapshot, int32_t level, int32_t *count);
+CZSC_API const czsc_movement *czsc_level_movements(void *snapshot, int32_t level, int32_t *count);
+CZSC_API const czsc_breakout *czsc_level_breakouts(void *snapshot, int32_t level, int32_t *count);
+CZSC_API const czsc_signal *czsc_level_signals(void *snapshot, int32_t level, int32_t *count);
+CZSC_API const czsc_event *czsc_level_events(void *snapshot, int32_t level, int32_t *count);   /* 未请求EVENTS 时为空 */
+CZSC_API const czsc_bar *czsc_level_bars(void *snapshot, int32_t level, int32_t *count);        /* n 条 */
 
-/* 递归走势节点（flags 位1，第17课：某级别中枢由至少三个连续次级别走势类型重叠构成）。
+/* 递归走势节点（outputs RECURSION，第17课：某级别中枢由至少三个连续次级别走势类型重叠构成）。
  * level 与配置级别的关系：level 0 = 本配置级别的走势（与 czsc_movements 按 ordinal 一一对应，其中枢即 czsc_centers）；
  * level L+1 以 level L 相邻走势之间的连接点为端点，再构中枢、分走势，逐层向上直到不能成枢。
  * 节点按 (level, ordinal) 升序排列；表内下标随数据长度变化，跨快照比对请用 (level, ordinal)。
@@ -319,7 +345,7 @@ typedef struct czsc_recursive_node
   int32_t zhongyinStart;  /* 中阴开始的K线（口径同 czsc_movement.zhongyinStart；上层为该端点定型）；无后继 -1。中阴结束 = completed */
 } czsc_recursive_node;
 
-/* 递归中枢（flags 位1，v5）：level >= 1 的中枢，按 (level, ordinal) 升序；level 0 的中枢即 czsc_centers，不在此表 */
+/* 递归中枢（outputs RECURSION，v5）：level >= 1 的中枢，按 (level, ordinal) 升序；level 0 的中枢即 czsc_centers，不在此表 */
 typedef struct czsc_recursive_center
 {
   uint32_t size;          /* sizeof(czsc_recursive_center) */
@@ -338,7 +364,7 @@ typedef struct czsc_recursive_center
   int32_t confirmedAt;    /* 定型K线（自身与全部成员均定型）；未定型 -1 */
 } czsc_recursive_center;
 
-/* 同级别连接段（flags 位1，v5，第18课中枢定理一、第17/33课结合律）：level >= 1 相邻两个走势之间的连接段，
+/* 同级别连接段（outputs RECURSION，v5，第18课中枢定理一、第17/33课结合律）：level >= 1 相邻两个走势之间的连接段，
  * 前走势最后中枢末端点 → 后走势首中枢首端点。level 0 的连接段见 czsc_movement.connectionStart/End，不在此表 */
 typedef struct czsc_recursive_connection
 {
@@ -354,13 +380,11 @@ typedef struct czsc_recursive_connection
   int32_t confirmedAt;    /* 定型K线（两侧分组与全部成员均定型）；未定型 -1 */
 } czsc_recursive_connection;
 
-/* 区间套：low、high 须为同一输入数据（n 与 H/L/C/V 逐字节相同）、配置不同的两个快照（通常 0 与 1100）。
- * 返回新句柄（用 czsc_snapshot_free 释放，与 low/high 的生命期独立）；不合法返回 NULL 并设置错误。 */
-CZSC_API void *czsc_nested_build(void *low, void *high);
-CZSC_API const czsc_recursive_node *czsc_recursive_nodes(void *snapshot, int32_t *count);  /* 未置位1时为空 */
-CZSC_API const int32_t *czsc_recursive_children(void *snapshot, int32_t *count);          /* 子节点的节点表下标 */
-CZSC_API const czsc_recursive_center *czsc_recursive_centers(void *snapshot, int32_t *count);          /* v5，未置位1时为空 */
-CZSC_API const czsc_recursive_connection *czsc_recursive_connections(void *snapshot, int32_t *count);  /* v5，未置位1时为空 */
+/* 区间套直接读取family快照；须请求NESTED与两级。递归行level为本级内部递归层，非访问参数level。 */
+CZSC_API const czsc_recursive_node *czsc_level_recursive_nodes(void *snapshot, int32_t level, int32_t *count);  /* 未请求RECURSION时为空 */
+CZSC_API const int32_t *czsc_level_recursive_children(void *snapshot, int32_t level, int32_t *count);          /* 子节点的节点表下标 */
+CZSC_API const czsc_recursive_center *czsc_level_recursive_centers(void *snapshot, int32_t level, int32_t *count);          /* v5，未请求RECURSION时为空 */
+CZSC_API const czsc_recursive_connection *czsc_level_recursive_connections(void *snapshot, int32_t level, int32_t *count);  /* v5，未请求RECURSION时为空 */
 CZSC_API const czsc_nested *czsc_nested_rows(void *nested, int32_t *count);
 
 #ifdef __cplusplus

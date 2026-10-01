@@ -45,7 +45,7 @@ int MinDirty(int a, int b)
 class MorphologyStream
 {
 public:
-  MorphologyStream(const std::vector<Fractal> &fractals, const Config &config, const Series &source,
+  MorphologyStream(const std::vector<Fractal> &fractals, const LevelConfig &config, const Series &source,
                    const SharedAnalysisInputs &inputs, bool needSegments)
     : strokes(fractals,config,&source,&inputs.bars), segments(config.analysis.segment.method),
       tables_(inputs.energy), needSegments_(needSegments) {}
@@ -106,7 +106,7 @@ private:
 class Incremental
 {
 public:
-  Incremental(MorphologyStream &morphology, const EnergyTables &tables, const Config &config)
+  Incremental(MorphologyStream &morphology, const EnergyTables &tables, const LevelConfig &config)
     : morphology_(morphology), tables_(tables), config_(config)
   {
     signals_.SetTables(&tables_);
@@ -214,7 +214,7 @@ private:
   int anchor_ = -1, extremeAt_ = -1, scanned_ = -1;
   float extreme_ = 0;
   const EnergyTables &tables_;
-  Config config_;
+  LevelConfig config_;
   std::vector<Pivot> pivots_;
   std::vector<Movement> moves_;
 };
@@ -222,7 +222,7 @@ private:
 }  // namespace
 
 Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, const EnergyTables &tables,
-                       const Config &config, const Series *source)
+                       const LevelConfig &config, const Series *source)
 {
   Snapshot s;
   std::vector<Fractal> prefix(fractals.begin(), fractals.begin() + static_cast<std::ptrdiff_t>(count));
@@ -253,7 +253,7 @@ std::shared_ptr<SharedAnalysisInputs> SharedInputs(const Series &series)
 }
 
 Snapshot SnapshotFromPivots(const std::vector<Pivot> &pivots, const std::vector<Pivot> &segments,
-                            const EnergyTables &tables, const Config &config)
+                            const EnergyTables &tables, const LevelConfig &config)
 {
   Snapshot s;
   s.pivots = pivots;
@@ -265,7 +265,7 @@ Snapshot SnapshotFromPivots(const std::vector<Pivot> &pivots, const std::vector<
   return s;
 }
 
-FamilyAnalysis AnalyzeLevels(const Series &series, const Config &config, unsigned mask, int window)
+FamilyAnalysis AnalyzeLevels(const Series &series, const LevelConfig &config, unsigned mask, int window)
 {
   auto inputs = SharedInputs(series);
   const auto f = StrokeInputs(inputs->fractals,series,config);
@@ -316,17 +316,17 @@ FamilyAnalysis AnalyzeFamily(const Series &series, const AnalysisConfig &config,
 {
   auto error = Validate(config);
   if (!error.empty()) throw std::invalid_argument(error);
-  Config view; view.analysis = Normalize(config);
+  LevelConfig view; view.analysis = Normalize(config);
   return AnalyzeLevels(series,view,3,window);
 }
 
-Analysis Analyze(const Series &series, const Config &config, int window)
+Analysis Analyze(const Series &series, const LevelConfig &config, int window)
 {
   auto family = AnalyzeLevels(series,config,1u<<static_cast<unsigned>(config.level),window);
   return std::move(family.levels[static_cast<std::size_t>(config.level)]);
 }
 
-Analysis AnalyzeReference(const Series &series, const Config &config, int window)
+Analysis AnalyzeReference(const Series &series, const LevelConfig &config, int window)
 {
   Analysis a;
   a.config = config;

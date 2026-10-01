@@ -1,3 +1,4 @@
+#include "migration/legacy_config.h"
 // 通达信适配层：投影与引擎结果一致、非法输入、旁路 C/V、缓存。
 #include "check.h"
 #include "sse_data.h"
@@ -49,7 +50,7 @@ TEST(TdxProjectionsMatchEngine)
   Sse s;
   for (float code : {0.0f, 2.0f, 1100.0f})
   {
-    chan::Analysis a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), *chan::Config::Decode(static_cast<int>(code)));
+    chan::Analysis a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), *migration::MapLegacyConfig(static_cast<int>(code)));
     std::vector<float> pivots = Call(tdx::Pivots, s, code);
     CHECK(NonZero(pivots) == static_cast<int>(a.snapshot.pivots.size()));
     for (const chan::Pivot &p : a.snapshot.pivots) CHECK(pivots[static_cast<std::size_t>(p.index)] == static_cast<float>(static_cast<int>(p.kind)));
@@ -130,7 +131,7 @@ TEST(TdxSegmentBoundaryProjection)
   auto series = chan::Series::FromRaw(s.n, s.h.data(), s.l.data());
   for (int code : {11100, 21100, 11104, 21104})
   {
-    auto config = *chan::Config::Decode(code);
+    auto config = *migration::MapLegacyConfig(code);
     auto analysis = chan::Analyze(series, config);
     std::vector<float> expected(s.n, 0);
     for (const auto &p : analysis.snapshot.pivots)
@@ -152,7 +153,7 @@ TEST(TdxEarlySignalsUseSeparateCacheAndStops)
   auto revokes = Call(tdx::EarlyRevokes, s, 0);
   CHECK(fast != legacy);
   CHECK(Call(tdx::Signals, s, 0) == legacy);
-  chan::Config c; c.analysis.signals.publication = chan::SignalPublication::Early;
+  chan::LevelConfig c; c.analysis.signals.publication = chan::SignalPublication::Early;
   auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
   std::vector<float> expected(s.n), expectedStops(s.n), expectedRevokes(s.n);
   std::vector<int> ap(s.n, -1), rp(s.n, -1);
@@ -172,7 +173,7 @@ TEST(TdxDirectedCentersExcludeEnteringAndLeavingStrokes)
 {
   tdx::ResetForTesting();
   Sse s;
-  auto c = *chan::Config::Decode(101000);
+  auto c = *migration::MapLegacyConfig(101000);
   auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
   std::vector<float> zg(s.n), zd(s.n);
   for (const auto &center : a.snapshot.centers)
@@ -210,7 +211,7 @@ TEST(RecentLiveSignalsRevokeTheExactOriginalPoint)
 TEST(TdxRecentLiveOutputsMatchSignalIdentityProjection)
 {
   tdx::ResetForTesting(); Sse s;
-  auto c = *chan::Config::Decode(101000); c.analysis.signals.publication = chan::SignalPublication::Early;
+  auto c = *migration::MapLegacyConfig(101000); c.analysis.signals.publication = chan::SignalPublication::Early;
   auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
   CHECK(Call(tdx::RecentLiveBuys, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, true));
   CHECK(Call(tdx::RecentLiveSells, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, false));
@@ -234,7 +235,7 @@ TEST(TdxMillionDigitDoesNotCollideWithEarlyModeCache)
   tdx::ResetForTesting(); Sse s;
   auto early = Call(tdx::EarlySignals,s,0);
   auto bounded = Call(tdx::Signals,s,1000000);
-  auto c = *chan::Config::Decode(1000000);
+  auto c = *migration::MapLegacyConfig(1000000);
   auto a = chan::Analyze(chan::Series::FromRaw(s.n,s.h.data(),s.l.data()),c);
   std::vector<float> expected(s.n); std::vector<int> priority(s.n,-1);
   for (const auto &e : a.events)

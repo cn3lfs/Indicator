@@ -55,15 +55,17 @@ cd D:/github/czsc-tdx
 - `compile_flags.txt` 供 clangd 以 C++17 解析头文件。
 - DLL 内禁止使用带析构的 `thread_local`/会在卸载时析构的线程局部对象：MinGW 静态运行时下宿主进程退出会崩溃
   （曾因 `thread_local std::string` 发生）。改动 `adapter/` 后，用 x64 程序 LoadLibrary 加载 `build/CZSC64.dll`
-  调一次 `czsc_snapshot_build` 并正常退出，作为发布前冒烟检查。
+  调一次 `czsc_build` 并正常退出，作为发布前冒烟检查。
 
-## 结构化接口（adapter/czsc_api.h，api v10）
+## 结构化接口（adapter/czsc_api.h，api v20）
 
-面向 nextjs-quant（koffi FFI）的纯 C 快照接口，契约即头文件；需求见 `docs/nextjs-quant-adapter.md`，P2 结论见
-`docs/nextjs-quant-p2-feasibility.md`。改结构体布局或语义须递增 `CZSC_API_VERSION` 并只在末尾追加字段；
-v10保持v9/v8结构体布局；`czsc_pivot` 在偏移24追加 `extremeIndex`，size28；index/price只供显示，核心/下游仍按真实极值计算。
-`confirmedAt` 是“定型”时刻（`Analysis::*FinalAt`），信号行冻结于确认当时。
-`czsc_build_commit()` 由 Makefile 的 `BUILD_COMMIT`（`git rev-parse` + 未提交改动时 `-dirty`）写入 adapter 目标；本机 clang 直编为 "unknown"。发布前须先提交再 `make release`，否则 DLL 带 -dirty。
+v20按需求断代：czsc_config为32字节分析配置，outputs选择表，czsc_projection为12字节显示投影。
+czsc_build一次构建两级；czsc_level_*显式level=0笔级/1线段级，nested直接从同一快照读取。
+czsc_config_default/validate/id/parse与fields/choices/rules提供规范身份、中文错误和依赖自描述。
+删除旧整数配置与单级C入口；一次映射仅在migration/与测试工具中，不导出DLL。
+业务行布局保留v10，extremeIndex为分析端点，index/price为投影；投影不改事件和递归。
+默认level0/1分别与旧0/1100的真实C/V完整C表一致，tests/unit/golden不得修改。
+czsc_build_commit()由Makefile写入；发布先提交后make release，并用Win64真实加载冒烟。
 
 ## 缠论知识来源
 

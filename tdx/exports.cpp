@@ -1,3 +1,4 @@
+#include "migration/legacy_config.h"
 #include "tdx/exports.h"
 #include "tdx/event_projection.h"
 
@@ -19,7 +20,7 @@ namespace
 {
 
 using chan::Analysis;
-using chan::Config;
+using chan::LevelConfig;
 using chan::Series;
 
 //----------------------------------------------------------------------------
@@ -56,8 +57,7 @@ Series MakeSeries(int count, const float *high, const float *low)
 struct Slot
 {
   int count = -1;
-  int config = -1;
-  bool earlySignals = false;
+  std::string config;
   std::uint32_t hash = 0;
   unsigned tick = 0;
   std::unique_ptr<Analysis> analysis;
@@ -65,18 +65,19 @@ struct Slot
 Slot g_slots[4];
 unsigned g_tick = 0;
 
-const Analysis &Analyzed(int count, const float *high, const float *low, const Config &config)
+const Analysis &Analyzed(int count, const float *high, const float *low, const LevelConfig &config)
 {
   Series s = MakeSeries(count, high, low);
   std::uint32_t h = Fnv(Fnv(2166136261u, high, count), low, count);
   if (s.HasClose()) h = Fnv(h, s.close.data(), count);
   if (!s.volume.empty()) h = Fnv(h, s.volume.data(), count);
-  int code = config.Encode();
+  std::string code = chan::AnalysisId(config.analysis)+";level="+std::to_string(static_cast<int>(config.level))+
+    ";boundary="+std::to_string(static_cast<int>(config.projection.segmentBoundary));
   g_tick++;
   Slot *victim = &g_slots[0];
   for (Slot &slot : g_slots)
   {
-    if (slot.analysis && slot.count == count && slot.config == code && slot.earlySignals == (config.analysis.signals.publication == chan::SignalPublication::Early) && slot.hash == h)
+    if (slot.analysis && slot.count == count && slot.config == code && slot.hash == h)
     {
       slot.tick = g_tick;
       return *slot.analysis;
@@ -86,7 +87,6 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const C
   victim->analysis = std::make_unique<Analysis>(chan::Analyze(s, config));
   victim->count = count;
   victim->config = code;
-  victim->earlySignals = (config.analysis.signals.publication == chan::SignalPublication::Early);
   victim->hash = h;
   victim->tick = g_tick;
   return *victim->analysis;
@@ -110,7 +110,7 @@ void Run(int count, float *out, float *high, float *low, float *config, Project 
   if (high == nullptr || low == nullptr) return;
   float code = config ? config[0] : 0.0f;
   if (!std::isfinite(code) || code != std::floor(code)) return;
-  std::optional<Config> c = Config::Decode(static_cast<int>(code));
+  std::optional<LevelConfig> c = migration::MapLegacyConfig(static_cast<int>(code));
   if (!c) return;
   c->analysis.signals.publication = (early ? chan::SignalPublication::Early : chan::SignalPublication::Standard);
   project(Analyzed(count, high, low, *c));

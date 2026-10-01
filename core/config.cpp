@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <locale>
 #include <sstream>
+#include <set>
 
 namespace chan
 {
@@ -39,6 +40,7 @@ std::string Validate(const AnalysisConfig &c)
 
 std::string AnalysisId(const AnalysisConfig &config)
 {
+  if (!Validate(config).empty()) return {};
   auto c = Normalize(config);
   const char *stroke[] = {"strict","new","czsc","4k","fractal"};
   const char *endpoint[] = {"extreme","first","bounded"};
@@ -56,29 +58,49 @@ std::string AnalysisId(const AnalysisConfig &config)
   return out.str();
 }
 
-int Config::Encode() const
+std::string ApplyAnalysisField(AnalysisConfig &c, const std::string &key, const std::string &value)
 {
-  int endpoint = analysis.stroke.endpoint == StrokeEnd::First ? 1 : 0;
-  return static_cast<int>(analysis.stroke.rule) + endpoint*10 + static_cast<int>(level)*100 +
-    static_cast<int>(analysis.segment.method)*1000 + static_cast<int>(projection.segmentBoundary)*10000 +
-    static_cast<int>(analysis.center.strokeFormation)*100000 + (analysis.stroke.endpoint == StrokeEnd::Bounded ? 1000000 : 0);
+  auto choice = [&](const char *const *names, int count) {
+    for (int i=0; i<count; ++i) if (value==names[i]) return i;
+    return -1;
+  };
+  const char *stroke[]={"strict","new","czsc","4k","fractal"};
+  const char *endpoint[]={"extreme","first","bounded"};
+  const char *gap[]={"none","asbar","large"};
+  const char *method[]={"heuristic","feature"};
+  const char *formation[]={"entry","segment"};
+  const char *publication[]={"standard","early"};
+  int v=-1;
+  if (key=="stroke.rule") { v=choice(stroke,5); if(v>=0)c.stroke.rule=static_cast<StrokeRule>(v); }
+  else if (key=="stroke.endpoint") { v=choice(endpoint,3); if(v>=0)c.stroke.endpoint=static_cast<StrokeEnd>(v); }
+  else if (key=="stroke.gap") { v=choice(gap,3); if(v>=0)c.stroke.gap=static_cast<GapRule>(v); }
+  else if (key=="segment.method") { v=choice(method,2); if(v>=0)c.segment.method=static_cast<SegmentMethod>(v); }
+  else if (key=="center.strokeFormation") { v=choice(formation,2); if(v>=0)c.center.strokeFormation=static_cast<CenterFormation>(v); }
+  else if (key=="signals.publication") { v=choice(publication,2); if(v>=0)c.signals.publication=static_cast<SignalPublication>(v); }
+  else if (key=="stroke.gapThreshold")
+  {
+    std::istringstream in(value); in.imbue(std::locale::classic()); float f=0;
+    if (!(in>>f) || !in.eof()) return "缺口阈值格式无效";
+    c.stroke.gapThreshold=f; return {};
+  }
+  else return "未知分析字段："+key;
+  return v>=0 ? std::string{} : "字段取值无效："+key;
 }
 
-std::optional<Config> Config::Decode(int code)
+std::string ParseAnalysisId(const std::string &id, AnalysisConfig &config)
 {
-  if (code < 0 || code > 1129999) return std::nullopt;
-  int d0=code%10, d1=(code/10)%10, d2=(code/100)%10, d3=(code/1000)%10;
-  int d4=(code/10000)%10, d5=(code/100000)%10, d6=code/1000000;
-  if (d6>1 || (d6==1 && d1==1) || d5>1 || d4>2 || (d3==0 && d4!=0) || d0>4 || d1>1 || d2>1 || d3>1)
-    return std::nullopt;
-  Config c;
-  c.analysis.stroke.rule = static_cast<StrokeRule>(d0);
-  c.analysis.stroke.endpoint = d6 ? StrokeEnd::Bounded : static_cast<StrokeEnd>(d1);
-  c.level = static_cast<CenterUnit>(d2);
-  c.analysis.segment.method = static_cast<SegmentMethod>(d3);
-  c.projection.segmentBoundary = static_cast<SegmentEnd>(d4);
-  c.analysis.center.strokeFormation = static_cast<CenterFormation>(d5);
-  return c;
+  AnalysisConfig c; std::set<std::string> seen;
+  std::istringstream in(id); std::string field;
+  while (std::getline(in,field,';'))
+  {
+    auto at=field.find('=');
+    if (at==std::string::npos || !seen.insert(field.substr(0,at)).second) return "配置身份字段格式错误或重复";
+    auto error=ApplyAnalysisField(c,field.substr(0,at),field.substr(at+1));
+    if (!error.empty()) return error;
+  }
+  auto error=Validate(c);
+  if (error.empty()) config=Normalize(c);
+  return error;
 }
 
 }  // namespace chan

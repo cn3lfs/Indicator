@@ -100,17 +100,17 @@ struct Projection
 std::string Validate(const AnalysisConfig &config);  // 空串合法，否则中文原因。
 AnalysisConfig Normalize(const AnalysisConfig &config);
 std::string AnalysisId(const AnalysisConfig &config);
+std::string ApplyAnalysisField(AnalysisConfig &config, const std::string &key, const std::string &value);
+std::string ParseAnalysisId(const std::string &id, AnalysisConfig &config);
 
 // 单级引擎视图；level不是分析选项。旧整数桥只供迁移期间验证，v20移至测试工具。
-struct Config
+struct LevelConfig
 {
   AnalysisConfig analysis;
   OutputSelection outputs;
   Projection projection;
   CenterUnit level = CenterUnit::Stroke;
-  int Encode() const;
-  static std::optional<Config> Decode(int code);
-  bool operator==(const Config &o) const
+  bool operator==(const LevelConfig &o) const
   {
     return analysis == o.analysis && outputs == o.outputs && projection == o.projection && level == o.level;
   }

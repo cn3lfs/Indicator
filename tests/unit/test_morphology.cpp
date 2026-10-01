@@ -1,3 +1,4 @@
+#include "migration/legacy_config.h"
 // 形态层不变量（第62/65/67/71课）：与实现细节无关的长期规格。
 #include "check.h"
 #include "sse_data.h"
@@ -68,7 +69,7 @@ TEST(PivotsAlternateAndProgress)
   std::vector<Fractal> f = DetectFractals(MergeBars(Sse()));
   for (int code : kConfigs)
   {
-    Config c = *Config::Decode(code);
+    LevelConfig c = *migration::MapLegacyConfig(code);
     std::vector<Pivot> p = BuildPivots(f, c);
     CHECK(p.size() >= 2);
     CHECK(Alternates(p));
@@ -76,7 +77,7 @@ TEST(PivotsAlternateAndProgress)
     if (c.level == CenterUnit::Segment)
     {
       // 线段端点是笔端点的子集（第67课），且级别更高
-      Config sc = c;
+      LevelConfig sc = c;
       sc.level = CenterUnit::Stroke;
       std::vector<Pivot> strokes = BuildPivots(f, sc);
       CHECK(p.size() < strokes.size());
@@ -92,15 +93,15 @@ TEST(StrokeRules)
   auto frac = [](Kind k, int i, float h, float l) { Fractal f; f.kind = k; f.index = i; f.merged = i; f.high = h; f.low = l; return f; };
   std::vector<Fractal> f = {frac(Kind::Top, 0, 100, 96), frac(Kind::Bottom, 4, 99, 97), frac(Kind::Top, 8, 105, 101),
                             frac(Kind::Bottom, 12, 95, 90)};
-  std::vector<Fractal> e = BuildStrokeEnds(f, Config{});
+  std::vector<Fractal> e = BuildStrokeEnds(f, LevelConfig{});
   REQUIRE(e.size() == 2);
   CHECK(e[0].index == 8 && e[1].index == 12);
 
   std::vector<Fractal> g = {frac(Kind::Bottom, 0, 10, 8), frac(Kind::Top, 4, 20, 7), frac(Kind::Bottom, 8, 12, 6),
                             frac(Kind::Top, 12, 18, 14)};
-  Config czsc;
+  LevelConfig czsc;
   czsc.analysis.stroke.rule = StrokeRule::Czsc;
-  CHECK(BuildStrokeEnds(g, Config{}).size() == 4);
+  CHECK(BuildStrokeEnds(g, LevelConfig{}).size() == 4);
   std::vector<Fractal> ce = BuildStrokeEnds(g, czsc);
   REQUIRE(ce.size() == 2);
   CHECK(ce[0].index == 8 && ce[1].index == 12);
@@ -114,11 +115,11 @@ TEST(CommunityStrokeBoundaries)
     b.kind = Kind::Top; b.index = 1 + raw; b.merged = 1 + merged; b.high = topHigh; b.low = topLow;
     return std::vector<Fractal>{a, b};
   };
-  Config four = *Config::Decode(3), fractal = *Config::Decode(4);
+  LevelConfig four = *migration::MapLegacyConfig(3), fractal = *migration::MapLegacyConfig(4);
   // 原始极值含两端4根，合并分型不共用K线；没有独立合并K线仍允许。
   CHECK(BuildStrokeEnds(pair(3, 3), four).size() == 2);
-  CHECK(BuildStrokeEnds(pair(3, 3), Config{}).size() == 1);
-  CHECK(BuildStrokeEnds(pair(3, 3), *Config::Decode(1)).size() == 1);
+  CHECK(BuildStrokeEnds(pair(3, 3), LevelConfig{}).size() == 1);
+  CHECK(BuildStrokeEnds(pair(3, 3), *migration::MapLegacyConfig(1)).size() == 1);
   CHECK(BuildStrokeEnds(pair(2, 9), four).size() == 1);
   CHECK(BuildStrokeEnds(pair(3, 2), four).size() == 1);
   CHECK(BuildStrokeEnds(pair(4, 4), four).size() == 2);
@@ -163,7 +164,7 @@ TEST(SegmentMergedBoundaryExamples)
       CHECK(p.firstFeatureIndex == 3 && p.lastFeatureIndex == 7);
       for (int digit = 0; digit < 3; ++digit)
       {
-        auto config = *Config::Decode(1100 + digit * 10000);
+        auto config = *migration::MapLegacyConfig(1100 + digit * 10000);
         CHECK(DisplayPivotIndex(p, config) == (digit == 0 ? p.index : digit == 1 ? 3 : 7));
       }
       // 从非极值首笔开始重算会被组内更高/低点破坏；投影仍保留3，不偷偷回退到极值。
@@ -207,8 +208,8 @@ TEST(BoundedStrokesUseMergedEnvelopeAndAlwaysExtendTail)
     auto set = [&](Series &s, int i, float h, float l) { s.high[i] = mirror == 1 ? h : -l; s.low[i] = mirror == 1 ? l : -h; };
     for (int stroke = 0; stroke <= 4; ++stroke)
     {
-      auto bounded = *Config::Decode(1000000 + stroke);
-      auto allowed = *Config::Decode(stroke);
+      auto bounded = *migration::MapLegacyConfig(1000000 + stroke);
+      auto allowed = *migration::MapLegacyConfig(stroke);
       auto s = raw(10); set(s,0,3,1); set(s,8,20,18);
       std::vector<Fractal> f{frac(Kind::Bottom,0,3,1),frac(Kind::Top,8,20,18)};
       set(s,4,10,0); // 向上包含丢弃低影线，不能强造已确认分型。
@@ -229,13 +230,13 @@ TEST(BoundedStrokesUseMergedEnvelopeAndAlwaysExtendTail)
     std::vector<Fractal> f{frac(Kind::Bottom,0,3,1),frac(Kind::Top,4,15,12),frac(Kind::Bottom,6,2,0),
       frac(Kind::Top,10,20,18),frac(Kind::Bottom,14,0,-1)};
     // 第6根分型跨度不足被跳过；第10根同型延伸不能冻结，旧尾部包络被破则退回。
-    auto e = BuildStrokeEnds(f,*Config::Decode(1000000),&s);
+    auto e = BuildStrokeEnds(f,*migration::MapLegacyConfig(1000000),&s);
     REQUIRE(e.size() == 3);
     CHECK(e[0].index == 6 && e[1].index == 10 && e[2].index == 14);
   }
-  CHECK(!Config::Decode(1000010).has_value());
-  CHECK(!Config::Decode(1001114).has_value());
-  CHECK(Config::Decode(1001104)->Encode() == 1001104);
+  CHECK(!migration::MapLegacyConfig(1000010).has_value());
+  CHECK(!migration::MapLegacyConfig(1001114).has_value());
+  CHECK(migration::LegacyCode(*migration::MapLegacyConfig(1001104)) == 1001104);
 }
 
 TEST(BoundedStrokesSseAlwaysStayInsideBothEndpoints)
@@ -245,7 +246,7 @@ TEST(BoundedStrokesSseAlwaysStayInsideBothEndpoints)
   auto f = DetectFractals(bars);
   for (int stroke = 0; stroke <= 4; ++stroke)
   {
-    auto c = *Config::Decode(1000000 + stroke);
+    auto c = *migration::MapLegacyConfig(1000000 + stroke);
     auto ends = BuildStrokeEnds(StrokeInputs(f,s,c),c,&s);
     CHECK(ends.size() > 2);
     for (std::size_t k = 1; k < ends.size(); ++k)
@@ -277,7 +278,7 @@ TEST(AllLegalConfigurationsCannotFreezeEligibleOppositeStroke)
             for (int end=0; end<=1; ++end)
               for (int stroke=0; stroke<=4; ++stroke)
               {
-                auto c = Config::Decode(million*1000000+scope*100000+boundary*10000+method*1000+unit*100+end*10+stroke);
+                auto c = migration::MapLegacyConfig(million*1000000+scope*100000+boundary*10000+method*1000+unit*100+end*10+stroke);
                 if (!c) continue;
                 ++configurations;
                 auto input = StrokeInputs(f,s,*c);
@@ -319,7 +320,7 @@ TEST(BoundedSsePrefixesShowPendingExtensionThenConfirmedFractal)
   for (int n : {160,166,170,175,200,240,SSE_DAILY_COUNT})
   {
     auto s = Series::FromRaw(n,SSE_DAILY_HIGH,SSE_DAILY_LOW);
-    auto c = *Config::Decode(1000000);
+    auto c = *migration::MapLegacyConfig(1000000);
     auto f = DetectFractals(MergeBars(s));
     auto e = BuildStrokeEnds(StrokeInputs(f,s,c),c,&s);
     REQUIRE(!e.empty());
@@ -328,7 +329,7 @@ TEST(BoundedSsePrefixesShowPendingExtensionThenConfirmedFractal)
     if (n==175) { CHECK(e.back().index==174); CHECK(e.back().extensionOnly); }
     if (n==SSE_DAILY_COUNT)
     {
-      auto base = BuildStrokeEnds(f,Config{},&s);
+      auto base = BuildStrokeEnds(f,LevelConfig{},&s);
       CHECK(e.size()*2>=base.size());
       CHECK(e.back().index==base.back().index);
     }
@@ -343,7 +344,7 @@ TEST(BoundedPendingExtensionIsSymmetricAndCannotFormStroke)
     auto s = Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW);
     if (mirror<0)
       for (int i=0; i<s.Size(); ++i) { float h=s.high[i]; s.high[i]=-s.low[i]; s.low[i]=-h; }
-    auto c = *Config::Decode(1000000);
+    auto c = *migration::MapLegacyConfig(1000000);
     auto input = StrokeInputs(DetectFractals(MergeBars(s)),s,c);
     StrokeStream stream(input,c,&s);
     int candidates = 0;

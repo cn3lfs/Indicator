@@ -81,7 +81,12 @@ make test      # 原生 g++ 运行单元测试与公式校验
 
 市场有风险，使用者自行承担任何由本软件而导致的买卖交易后果，作者本人不承担因为使用本软件而导致的任何直接或间接后果。
 
-结构化接口 api v10 提供 `czsc_config_valid(code)` 与 `czsc_config_options(out, capacity)`，前端以选项表为唯一配置来源。NULL/0 查询条数，容量不足返回实际写入条数。`original=0` 标记社区/非原文口径；默认仍为 0，线段级常用 1100；v8仅在 `czsc_pivot` 末尾追加 `extremeIndex`（偏移24，size28），其他快照结构体布局不变。
+结构化接口已升 **api v20（不兼容主版本）**。分析配置 `czsc_config`（32字节）与输出位集合、显示投影 `czsc_projection`（12字节）独立。
+`czsc_config_default/validate/id/parse` 提供默认、中文原因、规范文本身份与解析；`czsc_config_fields/choices/rules` 提供字段、带说明选项与禁用依赖，key全局唯一，`original=0`为社区或工程口径。
+`czsc_build(input, config, outputs)` 一次构建两级，`czsc_level_*` 访问时传 `level=0` 笔级或 `1` 线段级，区间套直接 `czsc_nested_rows`。
+`czsc_set_projection` 仅改显示分界和中枢框，不改分析、事件、递归或身份。默认分析为严格笔/极值端点/不处理缺口/特征序列/进入段/标准发布；默认中枢框含延伸。
+旧 `czsc_snapshot_build`、整数配置接口、`CZSC_FLAG_*`、单级取表与 `czsc_nested_build` 已删除。
+一次性旧码映射见 [legacy-config-map.csv](docs/legacy-config-map.csv)，完整240行；业务行布局保持v10，默认两级分别保留旧0/1100字节。
 
 个位新增 `3` 社区4K笔：原始极值K线含两端≥4根（下标差≥3），两分型不能共用K线（合并极值下标差≥3），无需独立合并K线；价位推进沿用原有规则。
 `4` 社区分型笔：相邻顶底直接连接、无最小跨度，仅须顶高于底，不作跨分型端点细化。同型仍由十位选择极值延伸或保留首点。

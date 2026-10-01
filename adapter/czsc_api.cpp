@@ -10,6 +10,8 @@
 #include <cmath>
 #include <cstring>
 #include <map>
+#include <array>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string>
@@ -33,14 +35,10 @@ void SetError(const std::string &message)
 }
 
 const uint32_t kMagic = 0x43535A43u;        // "CZSC"
-const uint32_t kNestedMagic = 0x4E535A43u;  // "CZSN"
 const int32_t kMaxBars = 16777216;
 
-struct Snapshot
+struct LevelTables
 {
-  uint32_t magic = kMagic;
-  int32_t n = 0;
-  uint64_t fingerprint = 0;  // 输入 H/L/C/V 指纹，区间套据此确认两快照同一数据
   std::vector<czsc_pivot> pivots;
   std::vector<czsc_center> centers;
   std::vector<czsc_movement> movements;
@@ -54,32 +52,18 @@ struct Snapshot
   std::vector<czsc_recursive_connection> connections;
 };
 
-struct Nested
+struct Snapshot
 {
-  uint32_t magic = kNestedMagic;
-  std::vector<czsc_nested> rows;
+  uint32_t magic = kMagic;
+  chan::AnalysisConfig config;
+  uint32_t outputs = 0;
+  std::array<LevelTables,2> tables;
+  std::array<std::vector<czsc_pivot>,2> projectedPivots;
+  std::array<std::vector<czsc_center>,2> projectedCenters;
+  std::array<std::vector<chan::Pivot>,2> sourcePivots;
+  std::vector<float> high, low;
+  std::vector<czsc_nested> nested;
 };
-
-uint64_t Fingerprint(const czsc_input *in)
-{
-  uint64_t h = 1469598103934665603ULL;
-  auto mix = [&](const float *p) {
-    const unsigned char *b = reinterpret_cast<const unsigned char *>(p);
-    for (std::size_t i = 0; i < static_cast<std::size_t>(in->n) * sizeof(float); i++)
-    {
-      h ^= b[i];
-      h *= 1099511628211ULL;
-    }
-  };
-  if (in->n > 0)
-  {
-    mix(in->high);
-    mix(in->low);
-    mix(in->close);
-    mix(in->volume);
-  }
-  return h;
-}
 
 void *Fail(const std::string &message)
 {
@@ -197,7 +181,7 @@ Key KeyOf(const chan::Signal &s) { return {s.index, static_cast<int>(s.type)}; }
 
 // 信号表：事后全量行在前；当下事件还原的每段生命冻结确认时内容，
 // 末尾仍有效的生命并入同键的事后胜出行，其余生命追加在后
-void BuildSignals(const chan::Analysis &a, const Resolver &r, bool withEvents, Snapshot &out)
+void BuildSignals(const chan::Analysis &a, const Resolver &r, bool withEvents, LevelTables &out)
 {
   const std::vector<chan::Signal> &hs = a.snapshot.signals;
   std::map<Key, std::size_t> winnerRow;  // 同键首个事后行即当下的胜出者（同键同类，按来源序）
@@ -297,7 +281,7 @@ void BuildSignals(const chan::Analysis &a, const Resolver &r, bool withEvents, S
 }
 
 // 走势完成证据（第17/29课）：连接段、后继、后继成立时刻；趋势以最后中枢上的反向一类点为末端背驰证据
-void CompleteMovements(const chan::Analysis &a, Snapshot &out)
+void CompleteMovements(const chan::Analysis &a, LevelTables &out)
 {
   const std::vector<chan::Movement> &m = a.snapshot.movements;
   const std::vector<chan::Center> &c = a.snapshot.centers;
@@ -337,7 +321,7 @@ int Later(int a, int b) { return (a < 0 || b < 0) ? -1 : std::max(a, b); }
 
 // 递归走势节点（第17课）：逐层给出走势的起止连接点、中枢范围、成立/完成时刻、后继与子节点
 // 下一层节点 [lo, hi) 中起止落在 [start, end] 内的连续一段；定型取成员中最晚者（任一未定型则 -1）
-void Members(const Snapshot &out, std::size_t lo, std::size_t hi, int start, int end, int32_t &first, int32_t &count,
+void Members(const LevelTables &out, std::size_t lo, std::size_t hi, int start, int end, int32_t &first, int32_t &count,
              int &finalAt)
 {
   first = -1;
@@ -352,7 +336,7 @@ void Members(const Snapshot &out, std::size_t lo, std::size_t hi, int start, int
   }
 }
 
-void BuildRecursiveNodes(const chan::Analysis &a, const chan::Series &s, Snapshot &out)
+void BuildRecursiveNodes(const chan::Analysis &a, const chan::Series &s, LevelTables &out)
 {
   std::vector<chan::RecursiveLevel> levels = chan::BuildRecursion(a);
   std::vector<std::size_t> levelBase;
@@ -461,15 +445,11 @@ void BuildRecursiveNodes(const chan::Analysis &a, const chan::Series &s, Snapsho
   }
 }
 
-std::string CheckInput(const czsc_input *in, chan::Config &config)
+std::string CheckInput(const czsc_input *in)
 {
   if (in == nullptr) return "input 为 NULL";
   if (in->size < sizeof(czsc_input)) return "input->size 小于 sizeof(czsc_input)，请按当前头文件构造";
   if (in->n < 0 || in->n > kMaxBars) return "n 须在 0..16777216";
-  std::optional<chan::Config> c = chan::Config::Decode(in->config);
-  if (!c) return "非法配置码 " + std::to_string(in->config) + "：个位 0..2，其余位 0..1，最大 1112";
-  config = *c;
-  if (in->flags & ~static_cast<int32_t>(CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER)) return "flags 含未定义的位";
   if (in->n == 0) return "";
   if (!in->high || !in->low || !in->close || !in->volume) return "high/low/close/volume 均须非空";
   for (int32_t i = 0; i < in->n; i++)
@@ -484,30 +464,14 @@ std::string CheckInput(const czsc_input *in, chan::Config &config)
   return "";
 }
 
-Snapshot *Build(const czsc_input *in)
+LevelTables ProjectLevel(const czsc_input *in, const chan::Series &s, const chan::Analysis &a,
+                         uint32_t outputs, const std::vector<int8_t> &gaps, const std::vector<int8_t> &strengths)
 {
-  chan::Config config;
-  std::string error = CheckInput(in, config);
-  if (!error.empty())
-  {
-    Fail(error);
-    return nullptr;
-  }
-  chan::Series s;
+  const auto &config = a.config;
   std::size_t n = static_cast<std::size_t>(in->n);
-  if (n > 0)
-  {
-    s.high.assign(in->high, in->high + n);
-    s.low.assign(in->low, in->low + n);
-    s.close.assign(in->close, in->close + n);
-    s.volume.assign(in->volume, in->volume + n);
-  }
-  chan::Analysis a = chan::Analyze(s, config);
   Resolver r(a);
-  Snapshot *out = new Snapshot();
-  out->n = in->n;
-  out->fingerprint = Fingerprint(in);
-
+  LevelTables table;
+  LevelTables *out = &table;
   for (std::size_t i = 0; i < a.snapshot.pivots.size(); i++)
   {
     const chan::Pivot &p = a.snapshot.pivots[i];
@@ -572,12 +536,10 @@ Snapshot *Build(const czsc_input *in)
     row.divergence = r.Divergence(b.divergence, 2);
     out->breakouts.push_back(row);
   }
-  BuildSignals(a, r, (in->flags & CZSC_FLAG_EVENTS) != 0, *out);
+  BuildSignals(a, r, (outputs & CZSC_OUTPUT_EVENTS) != 0, *out);
   CompleteMovements(a, *out);
-  if (in->flags & CZSC_FLAG_HIGHER) BuildRecursiveNodes(a, s, *out);
+  if (outputs & CZSC_OUTPUT_RECURSION) BuildRecursiveNodes(a, s, *out);
 
-  std::vector<int8_t> gaps = chan::Gaps(s);
-  std::vector<int8_t> strengths = chan::FractalStrengths(s, a.inputs->bars, a.inputs->fractals);
   for (std::size_t i = 0; i < n; i++)
   {
     czsc_bar row = Row<czsc_bar>();
@@ -592,25 +554,21 @@ Snapshot *Build(const czsc_input *in)
     row.instantDivergence = a.instantWarning[i];
     out->bars.push_back(row);
   }
-  return out;
+  return table;
 }
 
 Snapshot *Handle(void *h)
 {
-  Snapshot *s = static_cast<Snapshot *>(h);
-  if (s == nullptr || s->magic != kMagic)
-  {
-    SetError("snapshot 句柄无效");
-    return nullptr;
-  }
+  auto *s = static_cast<Snapshot *>(h);
+  if (!s || s->magic != kMagic) { SetError("snapshot句柄无效"); return nullptr; }
   return s;
 }
 
 // 区间套（第27/61课）：每个低级别一类信号，在高级别快照中找同向且背驰段 c 包含其K线的一类信号；
 // 同时给出包含它的高级别段；段方向一致而无高级别背驰时标小转大候选（第43课）
-Nested *BuildNested(const Snapshot &low, const Snapshot &high)
+std::vector<czsc_nested> BuildNested(const LevelTables &low, const LevelTables &high)
 {
-  Nested *out = new Nested();
+  std::vector<czsc_nested> out;
   const std::vector<czsc_pivot> &hp = high.pivots;
   for (std::size_t i = 0; i < low.signals.size(); i++)
   {
@@ -655,147 +613,189 @@ Nested *BuildNested(const Snapshot &low, const Snapshot &high)
       row.highCurStartLow = lowPivot(h->divergence.curStart);
       row.highCurEndLow = lowPivot(h->divergence.curEnd);
     }
-    out->rows.push_back(row);
+    out.push_back(row);
   }
   return out;
 }
 
-template <class T>
-const T *Table(void *h, int32_t *count, std::vector<T> Snapshot::*member)
+std::string ReadConfig(const czsc_config *c, chan::AnalysisConfig &out)
 {
-  if (count) *count = 0;
-  Snapshot *s = Handle(h);
-  if (!s) return nullptr;
-  const std::vector<T> &v = s->*member;
-  if (count) *count = static_cast<int32_t>(v.size());
+  if (!c || c->size < sizeof(*c)) return "config为空或size不足";
+  out.stroke.rule=static_cast<chan::StrokeRule>(c->strokeRule);
+  out.stroke.endpoint=static_cast<chan::StrokeEnd>(c->strokeEndpoint);
+  out.stroke.gap=static_cast<chan::GapRule>(c->strokeGap);
+  out.stroke.gapThreshold=c->gapThreshold;
+  out.segment.method=static_cast<chan::SegmentMethod>(c->segmentMethod);
+  out.center.strokeFormation=static_cast<chan::CenterFormation>(c->centerStrokeFormation);
+  out.signals.publication=static_cast<chan::SignalPublication>(c->signalsPublication);
+  return chan::Validate(out);
+}
+
+czsc_config ExportConfig(const chan::AnalysisConfig &a)
+{
+  return {sizeof(czsc_config),static_cast<int>(a.stroke.rule),static_cast<int>(a.stroke.endpoint),
+    static_cast<int>(a.stroke.gap),a.stroke.gapThreshold,static_cast<int>(a.segment.method),
+    static_cast<int>(a.center.strokeFormation),static_cast<int>(a.signals.publication)};
+}
+
+std::string Project(Snapshot &s, const czsc_projection *p)
+{
+  if (!p || p->size < sizeof(*p)) return "projection为空或size不足";
+  if (p->segmentBoundary < 0 || p->segmentBoundary > 2 || p->centerBox < 0 || p->centerBox > 1)
+    return "显示投影枚举无效";
+  if (s.config.segment.method==chan::SegmentMethod::Heuristic && p->segmentBoundary!=0)
+    return "启发式线段仅支持极值分界";
+  // 先构造临时表再交换，分配失败时保持旧投影完整。
+  std::array<std::vector<czsc_pivot>,2> pivots;
+  std::array<std::vector<czsc_center>,2> centers;
+  for (int level=0; level<2; ++level)
+  {
+    pivots[level]=s.tables[level].pivots; centers[level]=s.tables[level].centers;
+    chan::LevelConfig view; view.analysis=s.config; view.level=static_cast<chan::CenterUnit>(level);
+    view.projection.segmentBoundary=static_cast<chan::SegmentEnd>(p->segmentBoundary);
+    for (std::size_t i=0; i<pivots[level].size(); ++i)
+    {
+      auto &row=pivots[level][i]; row.index=chan::DisplayPivotIndex(s.sourcePivots[level][i],view);
+      if (row.index!=row.extremeIndex) row.price=row.kind==1?s.high[row.index]:s.low[row.index];
+    }
+    for (auto &row:centers[level])
+    {
+      row.start=s.tables[level].pivots[row.firstPivot].extremeIndex;
+      row.end=s.tables[level].pivots[p->centerBox==0?row.firstPivot+3:row.lastPivot].extremeIndex;
+    }
+  }
+  s.projectedPivots.swap(pivots); s.projectedCenters.swap(centers);
+  return {};
+}
+
+Snapshot *Build(const czsc_input *in, const czsc_config *c, uint32_t outputs)
+{
+  chan::AnalysisConfig config;
+  auto error=CheckInput(in); if(error.empty()) error=ReadConfig(c,config);
+  if (error.empty() && ((outputs & ~CZSC_OUTPUT_DEFAULT) || !(outputs & 3))) error="outputs需选择合法级别且无未知位";
+  if (error.empty() && (outputs & CZSC_OUTPUT_NESTED) && (outputs & 3)!=3) error="区间套必须同时选择笔级与线段级";
+  if (!error.empty()) { Fail(error); return nullptr; }
+  chan::Series source;
+  if (in->n>0)
+  {
+    source.high.assign(in->high,in->high+in->n); source.low.assign(in->low,in->low+in->n);
+    source.close.assign(in->close,in->close+in->n); source.volume.assign(in->volume,in->volume+in->n);
+  }
+  auto family=chan::AnalyzeFamily(source,config);
+  auto out=std::make_unique<Snapshot>(); out->config=chan::Normalize(config); out->outputs=outputs;
+  out->high=source.high; out->low=source.low;
+  auto gaps=chan::Gaps(source);
+  auto strengths=chan::FractalStrengths(source,family.levels[0].inputs->bars,family.levels[0].inputs->fractals);
+  for (int level=0; level<2; ++level) if(outputs & (1u<<level))
+  {
+    out->tables[level]=ProjectLevel(in,source,family.levels[level],outputs,gaps,strengths);
+    out->sourcePivots[level]=family.levels[level].snapshot.pivots;
+  }
+  if(outputs & CZSC_OUTPUT_NESTED) out->nested=BuildNested(out->tables[0],out->tables[1]);
+  czsc_projection p{sizeof(p),0,1}; Project(*out,&p);
+  return out.release();
+}
+
+template<class T>
+const T *Table(void *h, int32_t level, int32_t *count, std::vector<T> LevelTables::*member)
+{
+  if(count)*count=0;
+  auto *s=Handle(h); if(!s)return nullptr;
+  if(level<0 || level>1 || !(s->outputs & (1u<<level))) { SetError("level无效或未请求此级别"); return nullptr; }
+  const auto &v=s->tables[level].*member;
+  if(count)*count=static_cast<int32_t>(v.size());
   return v.data();
 }
 
-}  // namespace
+} // namespace
 
 extern "C" {
-
 int32_t czsc_api_version(void) { return CZSC_API_VERSION; }
-
-int32_t czsc_config_valid(int32_t config)
-{
-  return chan::Config::Decode(config).has_value() ? 1 : 0;
-}
-
-int32_t czsc_config_options(czsc_config_option *out, int32_t capacity)
-{
-  static const czsc_config_option options[] = {
-    {sizeof(czsc_config_option), 1, 0, 1, 1, "stroke.strict", "老笔（严格）", "62/65"},
-    {sizeof(czsc_config_option), 1, 1, 0, 0, "stroke.new", "新笔", ""},
-    {sizeof(czsc_config_option), 1, 2, 0, 0, "stroke.czsc", "czsc笔", ""},
-    {sizeof(czsc_config_option), 1, 3, 0, 0, "stroke.4k", "4K笔", ""},
-    {sizeof(czsc_config_option), 1, 4, 0, 0, "stroke.fractal", "分型笔", ""},
-    {sizeof(czsc_config_option), 10, 0, 1, 1, "endpoint.extreme", "极值点", "65"},
-    {sizeof(czsc_config_option), 10, 1, 0, 0, "endpoint.first", "允许次高次低", ""},
-    {sizeof(czsc_config_option), 100, 0, 1, 0, "center.stroke", "笔中枢", ""},
-    {sizeof(czsc_config_option), 100, 1, 0, 1, "center.segment", "线段中枢", "63"},
-    {sizeof(czsc_config_option), 1000, 0, 1, 0, "segment.heuristic", "启发式", ""},
-    {sizeof(czsc_config_option), 1000, 1, 0, 1, "segment.feature", "特征序列", "67/71"},
-    {sizeof(czsc_config_option), 10000, 0, 1, 1, "segmentEnd.extreme", "极值笔", "67"},
-    {sizeof(czsc_config_option), 10000, 1, 0, 0, "segmentEnd.first", "合并起始笔", ""},
-    {sizeof(czsc_config_option), 10000, 2, 0, 0, "segmentEnd.last", "合并最后笔", ""},
-    {sizeof(czsc_config_option), 100000, 0, 1, 0, "center.entry", "按进入段", ""},
-    {sizeof(czsc_config_option), 100000, 1, 0, 0, "center.segment", "服从所在线段", ""},
-    {sizeof(czsc_config_option), 1000000, 0, 1, 0, "stroke.innerAllowed", "允许超出", ""},
-    {sizeof(czsc_config_option), 1000000, 1, 0, 0, "stroke.innerBounded", "不得超出", ""},
-  };
-  const int32_t count = static_cast<int32_t>(sizeof options / sizeof options[0]);
-  if (capacity < 0 || (!out && capacity > 0)) return 0;
-  if (!out) return count;
-  const int32_t written = std::min(capacity, count);
-  for (int32_t i = 0; i < written; ++i) out[i] = options[i];
-  return written;
-}
-
 #ifndef CZSC_BUILD_COMMIT
 #define CZSC_BUILD_COMMIT "unknown"
 #endif
 const char *czsc_build_commit(void) { return CZSC_BUILD_COMMIT; }
-
 const char *czsc_last_error(void) { return g_error; }
-
-void *czsc_snapshot_build(const czsc_input *input)
+int32_t czsc_config_default(czsc_config *out)
 {
-  g_error[0] = '\0';
+  if(!out) { SetError("config输出为空"); return -1; }
+  *out=ExportConfig(chan::AnalysisConfig{}); return 0;
+}
+int32_t czsc_projection_default(czsc_projection *out)
+{
+  if(!out) { SetError("projection输出为空"); return -1; }
+  *out={sizeof(*out),0,1}; return 0;
+}
+int32_t czsc_config_validate(const czsc_config *c)
+{
+  chan::AnalysisConfig a; auto error=ReadConfig(c,a); SetError(error); return error.empty()?0:-1;
+}
+int32_t czsc_config_id(const czsc_config *c, char *out, int32_t cap)
+{
   try
   {
-    return Build(input);
-  }
-  catch (const std::bad_alloc &)
-  {
-    return Fail("内存不足");
-  }
-  catch (...)
-  {
-    return Fail("内部错误");
-  }
+    chan::AnalysisConfig a; auto error=ReadConfig(c,a);
+    if(cap<0 || (!out && cap!=0)) error="身份输出容量无效";
+    if(!error.empty()) { SetError(error); return -1; }
+    auto id=chan::AnalysisId(a); int32_t size=static_cast<int32_t>(id.size()+1);
+    if(out && cap>=size) std::memcpy(out,id.c_str(),size);
+    return size;
+  } catch(...) { SetError("配置身份生成失败"); return -1; }
 }
-
-void czsc_snapshot_free(void *snapshot)
+int32_t czsc_config_parse(const char *id, czsc_config *out)
 {
-  if (snapshot == nullptr) return;
-  uint32_t magic = *static_cast<uint32_t *>(snapshot);
-  if (magic == kMagic)
-  {
-    Snapshot *s = static_cast<Snapshot *>(snapshot);
-    s->magic = 0;
-    delete s;
-  }
-  else if (magic == kNestedMagic)
-  {
-    Nested *s = static_cast<Nested *>(snapshot);
-    s->magic = 0;
-    delete s;
-  }
-}
-
-void *czsc_nested_build(void *low, void *high)
-{
-  g_error[0] = '\0';
-  Snapshot *l = Handle(low), *h = Handle(high);
-  if (!l || !h) return Fail("low/high 须为 czsc_snapshot_build 返回的有效句柄");
-  if (l->n != h->n || l->fingerprint != h->fingerprint) return Fail("low 与 high 不是同一输入数据构建的快照");
   try
   {
-    return BuildNested(*l, *h);
-  }
-  catch (...)
-  {
-    return Fail("内存不足或内部错误");
-  }
+    if(!id || !out) { SetError("身份或config输出为空"); return -1; }
+    chan::AnalysisConfig a; auto error=chan::ParseAnalysisId(id,a);
+    if(!error.empty()) { SetError(error); return -1; }
+    *out=ExportConfig(a); return 0;
+  } catch(...) { SetError("配置身份解析失败"); return -1; }
 }
-
-const czsc_nested *czsc_nested_rows(void *nested, int32_t *count)
+void *czsc_build(const czsc_input *in, const czsc_config *c, uint32_t outputs)
 {
-  if (count) *count = 0;
-  Nested *s = static_cast<Nested *>(nested);
-  if (s == nullptr || s->magic != kNestedMagic)
-  {
-    SetError("nested 句柄无效");
-    return nullptr;
-  }
-  if (count) *count = static_cast<int32_t>(s->rows.size());
-  return s->rows.data();
+  g_error[0]='\0';
+  try { return Build(in,c,outputs); }
+  catch(const std::bad_alloc &) { return Fail("内存不足"); }
+  catch(...) { return Fail("内部错误"); }
 }
-
-const czsc_pivot *czsc_pivots(void *h, int32_t *count) { return Table(h, count, &Snapshot::pivots); }
-const czsc_center *czsc_centers(void *h, int32_t *count) { return Table(h, count, &Snapshot::centers); }
-const czsc_movement *czsc_movements(void *h, int32_t *count) { return Table(h, count, &Snapshot::movements); }
-const czsc_breakout *czsc_breakouts(void *h, int32_t *count) { return Table(h, count, &Snapshot::breakouts); }
-const czsc_signal *czsc_signals(void *h, int32_t *count) { return Table(h, count, &Snapshot::signals); }
-const czsc_event *czsc_events(void *h, int32_t *count) { return Table(h, count, &Snapshot::events); }
-const czsc_bar *czsc_bars(void *h, int32_t *count) { return Table(h, count, &Snapshot::bars); }
-const czsc_recursive_node *czsc_recursive_nodes(void *h, int32_t *count) { return Table(h, count, &Snapshot::nodes); }
-const int32_t *czsc_recursive_children(void *h, int32_t *count) { return Table(h, count, &Snapshot::children); }
-const czsc_recursive_center *czsc_recursive_centers(void *h, int32_t *count) { return Table(h, count, &Snapshot::rcenters); }
-const czsc_recursive_connection *czsc_recursive_connections(void *h, int32_t *count)
+void czsc_snapshot_free(void *h)
 {
-  return Table(h, count, &Snapshot::connections);
+  if(!h)return; auto *s=Handle(h); if(s) { s->magic=0; delete s; }
 }
-
-}  // extern "C"
+int32_t czsc_set_projection(void *h, const czsc_projection *p)
+{
+  try
+  {
+    auto *s=Handle(h); if(!s)return -1;
+    auto error=Project(*s,p); SetError(error); return error.empty()?0:-1;
+  } catch(...) { SetError("显示投影生成失败"); return -1; }
+}
+const czsc_nested *czsc_nested_rows(void *h, int32_t *count)
+{
+  if(count)*count=0; auto *s=Handle(h); if(!s)return nullptr;
+  if(!(s->outputs & CZSC_OUTPUT_NESTED)) { SetError("未请求区间套"); return nullptr; }
+  if(count)*count=static_cast<int32_t>(s->nested.size()); return s->nested.data();
+}
+const czsc_pivot *czsc_level_pivots(void *h, int32_t level, int32_t *count)
+{
+  Table(h,level,count,&LevelTables::pivots);
+  auto *s=Handle(h); if(!s || level<0 || level>1 || !(s->outputs & (1u<<level)))return nullptr;
+  return s->projectedPivots[level].data();
+}
+const czsc_center *czsc_level_centers(void *h, int32_t level, int32_t *count)
+{
+  Table(h,level,count,&LevelTables::centers);
+  auto *s=Handle(h); if(!s || level<0 || level>1 || !(s->outputs & (1u<<level)))return nullptr;
+  return s->projectedCenters[level].data();
+}
+const czsc_movement *czsc_level_movements(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::movements); }
+const czsc_breakout *czsc_level_breakouts(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::breakouts); }
+const czsc_signal *czsc_level_signals(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::signals); }
+const czsc_event *czsc_level_events(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::events); }
+const czsc_bar *czsc_level_bars(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::bars); }
+const czsc_recursive_node *czsc_level_recursive_nodes(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::nodes); }
+const int32_t *czsc_level_recursive_children(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::children); }
+const czsc_recursive_center *czsc_level_recursive_centers(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::rcenters); }
+const czsc_recursive_connection *czsc_level_recursive_connections(void *h, int32_t level, int32_t *count) { return Table(h,level,count,&LevelTables::connections); }
+} // extern C

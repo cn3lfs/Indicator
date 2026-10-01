@@ -1,3 +1,5 @@
+#include "legacy_api_bridge.h"
+#include "migration/legacy_config.h"
 #include "check.h"
 #include "adapter/czsc_api.h"
 #include "core/config.h"
@@ -26,16 +28,16 @@ void HashTable(std::uint64_t &hash, const T *(*get)(void *,int32_t *), void *han
 std::uint64_t SnapshotHash(void *handle)
 {
   std::uint64_t hash=14695981039346656037ULL;
-  HashTable(hash,czsc_pivots,handle); HashTable(hash,czsc_centers,handle);
-  HashTable(hash,czsc_movements,handle); HashTable(hash,czsc_breakouts,handle);
-  HashTable(hash,czsc_signals,handle); HashTable(hash,czsc_events,handle); HashTable(hash,czsc_bars,handle);
-  HashTable(hash,czsc_recursive_nodes,handle); HashTable(hash,czsc_recursive_children,handle);
-  HashTable(hash,czsc_recursive_centers,handle); HashTable(hash,czsc_recursive_connections,handle);
+  HashTable(hash,legacy_test::Pivots,handle); HashTable(hash,legacy_test::Centers,handle);
+  HashTable(hash,legacy_test::Movements,handle); HashTable(hash,legacy_test::Breakouts,handle);
+  HashTable(hash,legacy_test::Signals,handle); HashTable(hash,legacy_test::EventsTable,handle); HashTable(hash,legacy_test::Bars,handle);
+  HashTable(hash,legacy_test::RecursiveNodes,handle); HashTable(hash,legacy_test::RecursiveChildren,handle);
+  HashTable(hash,legacy_test::RecursiveCenters,handle); HashTable(hash,legacy_test::RecursiveConnections,handle);
   return hash;
 }
-czsc_input SseInput(int code)
+legacy_test::Input SseInput(int code)
 {
-  czsc_input in{};
+  legacy_test::Input in{};
   in.size=sizeof in; in.n=SSE_DAILY_COUNT;
   in.high=SSE_DAILY_HIGH; in.low=SSE_DAILY_LOW; in.close=SSE_DAILY_CLOSE; in.volume=SSE_DAILY_VOLUME;
   in.config=code; in.flags=3;
@@ -63,30 +65,30 @@ TEST(LegacyV10CBytesAll240Mappings)
     in>>code>>std::hex>>expected;
     if (code=="nested") { nestedHash=expected; continue; }
     int value=std::stoi(code);
-    auto mapped=chan::Config::Decode(value);
+    auto mapped=migration::MapLegacyConfig(value);
     REQUIRE(mapped.has_value());
-    CHECK(mapped->Encode()==value);
+    CHECK(migration::LegacyCode(*mapped)==value);
     CHECK(mapped->analysis.stroke.gap==chan::GapRule::None);
     CHECK(chan::Validate(mapped->analysis).empty());
     auto input=SseInput(value);
-    void *handle=czsc_snapshot_build(&input);
+    void *handle=legacy_test::Build(&input);
     REQUIRE(handle!=nullptr);
     auto actual=SnapshotHash(handle);
     if (actual!=expected) std::printf("  legacy code %d bytes changed\n",value);
     CHECK(actual==expected);
-    czsc_snapshot_free(handle);
+    legacy_test::Free(handle);
     ++checked;
   }
   CHECK(checked==240);
   auto lo=SseInput(0),hi=SseInput(1100);
-  void *low=czsc_snapshot_build(&lo),*high=czsc_snapshot_build(&hi);
+  void *low=legacy_test::Build(&lo),*high=legacy_test::Build(&hi);
   REQUIRE(low && high);
-  void *nested=czsc_nested_build(low,high);
+  void *nested=legacy_test::Nested(low,high);
   REQUIRE(nested!=nullptr);
   std::uint64_t actual=14695981039346656037ULL;
-  HashTable(actual,czsc_nested_rows,nested);
+  HashTable(actual,legacy_test::NestedRows,nested);
   CHECK(actual==nestedHash);
-  czsc_snapshot_free(nested); czsc_snapshot_free(low); czsc_snapshot_free(high);
+  legacy_test::Free(nested); legacy_test::Free(low); legacy_test::Free(high);
   // 负对照：已知一个业务字节改变，表示级回归必须能发现。
   czsc_pivot original{}; original.index=10;
   auto mutated=original; mutated.index=11;
@@ -97,7 +99,7 @@ TEST(LegacyV10CBytesAll240Mappings)
 
 TEST(LayeredConfigIdentityIgnoresOutputsAndProjection)
 {
-  chan::Config a,b;
+  chan::LevelConfig a,b;
   b.outputs.events=false; b.outputs.levels=1; b.outputs.nested=false;
   b.projection.segmentBoundary=chan::SegmentEnd::Last;
   b.projection.centerBox=chan::CenterBox::Initial;

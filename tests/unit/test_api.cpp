@@ -1,3 +1,5 @@
+#include "legacy_api_bridge.h"
+#include "migration/legacy_config.h"
 // 结构化接口（adapter/czsc_api.h）验收：docs/nextjs-quant-adapter.md §7。
 #include "check.h"
 #include "sse_data.h"
@@ -34,9 +36,9 @@ Data Sse(int count = SSE_DAILY_COUNT)
   return d;
 }
 
-czsc_input Input(const Data &d, int config, int flags = CZSC_FLAG_EVENTS)
+legacy_test::Input Input(const Data &d, int config, int flags = legacy_test::Events)
 {
-  czsc_input in;
+  legacy_test::Input in;
   std::memset(&in, 0, sizeof in);
   in.size = sizeof in;
   in.n = d.n();
@@ -76,8 +78,8 @@ struct Tables
 
 Tables Read(void *h)
 {
-  return {Get(czsc_pivots, h),    Get(czsc_centers, h), Get(czsc_movements, h), Get(czsc_breakouts, h),
-          Get(czsc_signals, h),   Get(czsc_events, h),  Get(czsc_bars, h)};
+  return {Get(legacy_test::Pivots, h),    Get(legacy_test::Centers, h), Get(legacy_test::Movements, h), Get(legacy_test::Breakouts, h),
+          Get(legacy_test::Signals, h),   Get(legacy_test::EventsTable, h),  Get(legacy_test::Bars, h)};
 }
 
 bool Same(const Tables &a, const Tables &b)
@@ -88,11 +90,11 @@ bool Same(const Tables &a, const Tables &b)
 
 Tables Build(const Data &d, int config)
 {
-  czsc_input in = Input(d, config);
-  void *h = czsc_snapshot_build(&in);
+  legacy_test::Input in = Input(d, config);
+  void *h = legacy_test::Build(&in);
   if (!h) return Tables();
   Tables t = Read(h);
-  czsc_snapshot_free(h);
+  legacy_test::Free(h);
   return t;
 }
 
@@ -102,7 +104,7 @@ float TdxCode(int32_t type) { return static_cast<float>(type > 0 ? type : 10 - t
 
 TEST(ApiVersionAndStructSizes)
 {
-  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 10);
+  CHECK(czsc_api_version() == CZSC_API_VERSION && CZSC_API_VERSION == 20);
   CHECK(czsc_build_commit() != nullptr && czsc_build_commit()[0] != 0);
   // 全部为 4 字节字段、无填充：逐字节确定
   CHECK(sizeof(czsc_pivot) == 7 * 4 && sizeof(czsc_center) == 14 * 4 && sizeof(czsc_movement) == 15 * 4);
@@ -121,7 +123,7 @@ TEST(ApiMatchesEngine)
   s.high = d.h; s.low = d.l; s.close = d.c; s.volume = d.v;
   for (int code : {0, 1100})
   {
-    chan::Analysis a = chan::Analyze(s, *chan::Config::Decode(code));
+    chan::Analysis a = chan::Analyze(s, *migration::MapLegacyConfig(code));
     Tables t = Build(d, code);
     REQUIRE(t.p.size() == a.snapshot.pivots.size() && t.c.size() == a.snapshot.centers.size() &&
             t.m.size() == a.snapshot.movements.size() && t.b.size() == a.snapshot.breakouts.size());
@@ -250,61 +252,61 @@ TEST(ApiCausalConsistency)
 TEST(ApiReentrant)
 {
   Data a = Sse(), b = Sse(900);
-  czsc_input ia = Input(a, 0), ib = Input(b, 1100), ic = Input(a, 2);
-  void *h1 = czsc_snapshot_build(&ia);
+  legacy_test::Input ia = Input(a, 0), ib = Input(b, 1100), ic = Input(a, 2);
+  void *h1 = legacy_test::Build(&ia);
   Tables t1 = Read(h1);
-  void *h2 = czsc_snapshot_build(&ib);
-  void *h3 = czsc_snapshot_build(&ic);
+  void *h2 = legacy_test::Build(&ib);
+  void *h3 = legacy_test::Build(&ic);
   Tables t2 = Read(h2);
-  czsc_snapshot_free(h2);
-  void *h4 = czsc_snapshot_build(&ia);
+  legacy_test::Free(h2);
+  void *h4 = legacy_test::Build(&ia);
   CHECK(Same(Read(h1), t1) && Same(Read(h4), t1));
-  czsc_snapshot_free(h1);
+  legacy_test::Free(h1);
   CHECK(Same(Read(h4), t1));
-  void *h5 = czsc_snapshot_build(&ib);
+  void *h5 = legacy_test::Build(&ib);
   CHECK(Same(Read(h5), t2));
-  czsc_snapshot_free(h3);
-  czsc_snapshot_free(h4);
-  czsc_snapshot_free(h5);
-  czsc_snapshot_free(nullptr);  // 允许
+  legacy_test::Free(h3);
+  legacy_test::Free(h4);
+  legacy_test::Free(h5);
+  legacy_test::Free(nullptr);  // 允许
 }
 
 // §7.4：边界
 TEST(ApiEdgeCases)
 {
-  CHECK(czsc_snapshot_build(nullptr) == nullptr && std::strlen(czsc_last_error()) > 0);
+  CHECK(legacy_test::Build(nullptr) == nullptr && std::strlen(czsc_last_error()) > 0);
   for (int n : {0, 1, 2})
   {
     Data d = Sse(n);
-    czsc_input in = Input(d, 0);
-    void *h = czsc_snapshot_build(&in);
+    legacy_test::Input in = Input(d, 0);
+    void *h = legacy_test::Build(&in);
     REQUIRE(h != nullptr);
     Tables t = Read(h);
     CHECK(t.p.empty() && t.c.empty() && t.s.empty() && t.e.empty() && static_cast<int>(t.r.size()) == n);
-    czsc_snapshot_free(h);
+    legacy_test::Free(h);
   }
   Data flat;
   flat.h.assign(50, 10.0f); flat.l.assign(50, 10.0f); flat.c.assign(50, 10.0f); flat.v.assign(50, 1.0f);
-  czsc_input fin = Input(flat, 1100);
-  void *hf = czsc_snapshot_build(&fin);
+  legacy_test::Input fin = Input(flat, 1100);
+  void *hf = legacy_test::Build(&fin);
   REQUIRE(hf != nullptr);
   CHECK(Read(hf).p.empty() && Read(hf).r.size() == 50);
-  czsc_snapshot_free(hf);
+  legacy_test::Free(hf);
 
-  auto rejects = [](czsc_input in) {
-    void *h = czsc_snapshot_build(&in);
+  auto rejects = [](legacy_test::Input in) {
+    void *h = legacy_test::Build(&in);
     bool ok = h == nullptr && std::strlen(czsc_last_error()) > 0;
-    czsc_snapshot_free(h);
+    legacy_test::Free(h);
     return ok;
   };
   Data d = Sse(100);
-  czsc_input in = Input(d, 0);
-  for (int bad : {5, 20, 200, 2000, 9999, -1}) { czsc_input x = in; x.config = bad; CHECK(rejects(x)); }
-  { czsc_input x = in; x.size = 8; CHECK(rejects(x)); }
-  { czsc_input x = in; x.n = -1; CHECK(rejects(x)); }
-  { czsc_input x = in; x.n = 16777217; CHECK(rejects(x)); }
-  { czsc_input x = in; x.close = nullptr; CHECK(rejects(x)); }
-  { czsc_input x = in; x.flags = 0x10; CHECK(rejects(x)); }
+  legacy_test::Input in = Input(d, 0);
+  for (int bad : {5, 20, 200, 2000, 9999, -1}) { legacy_test::Input x = in; x.config = bad; CHECK(rejects(x)); }
+  { legacy_test::Input x = in; x.size = 8; CHECK(rejects(x)); }
+  { legacy_test::Input x = in; x.n = -1; CHECK(rejects(x)); }
+  { legacy_test::Input x = in; x.n = 16777217; CHECK(rejects(x)); }
+  { legacy_test::Input x = in; x.close = nullptr; CHECK(rejects(x)); }
+  { legacy_test::Input x = in; x.flags = 0x10; CHECK(rejects(x)); }
   Data nan = d; nan.h[40] = std::numeric_limits<float>::quiet_NaN();
   CHECK(rejects(Input(nan, 0)));
   Data inv = d; inv.l[10] = inv.h[10] + 1;
@@ -312,8 +314,8 @@ TEST(ApiEdgeCases)
   Data outc = d; outc.c[10] = outc.h[10] + 5;
   CHECK(rejects(Input(outc, 0)));
   int32_t count = 7;
-  CHECK(czsc_pivots(nullptr, &count) == nullptr && count == 0);
-  CHECK(czsc_bars(nullptr, nullptr) == nullptr);
+  CHECK(legacy_test::Pivots(nullptr, &count) == nullptr && count == 0);
+  CHECK(legacy_test::Bars(nullptr, nullptr) == nullptr);
 }
 
 // §2.8：SSE 两套配置一次完整构建（含事件）< 50ms
@@ -323,8 +325,8 @@ TEST(ApiPerformance)
   auto t0 = std::chrono::steady_clock::now();
   for (int code : {0, 1100})
   {
-    czsc_input in = Input(d, code);
-    czsc_snapshot_free(czsc_snapshot_build(&in));
+    legacy_test::Input in = Input(d, code);
+    legacy_test::Free(legacy_test::Build(&in));
   }
   double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   std::printf("  SSE 2038 bars x 2 configs: %.2f ms\n", ms);
@@ -355,7 +357,7 @@ TEST(ApiResearchFields)
   Data d = X12(24000);
   chan::Series s;
   s.high = d.h; s.low = d.l; s.close = d.c; s.volume = d.v;
-  chan::Analysis a = chan::Analyze(s, chan::Config{});
+  chan::Analysis a = chan::Analyze(s, chan::LevelConfig{});
   Tables t = Build(d, 0);
   int seconds = 0, strong = 0;
   for (const czsc_signal &x : t.s)
@@ -414,18 +416,18 @@ Data Rising()
 TEST(ApiNested)
 {
   Data d = Rising();
-  czsc_input lo = Input(d, 0), hi = Input(d, 1100);
-  void *hl = czsc_snapshot_build(&lo), *hh = czsc_snapshot_build(&hi);
+  legacy_test::Input lo = Input(d, 0), hi = Input(d, 1100);
+  void *hl = legacy_test::Build(&lo), *hh = legacy_test::Build(&hi);
   REQUIRE(hl && hh);
   Data other = Sse();
-  czsc_input oi = Input(other, 1100);
-  void *ho = czsc_snapshot_build(&oi);
-  CHECK(czsc_nested_build(hl, ho) == nullptr && std::strlen(czsc_last_error()) > 0);  // 不同数据
-  CHECK(czsc_nested_build(hl, nullptr) == nullptr);
-  void *hn = czsc_nested_build(hl, hh);
+  legacy_test::Input oi = Input(other, 1100);
+  void *ho = legacy_test::Build(&oi);
+  CHECK(legacy_test::Nested(hl, ho) == nullptr && std::strlen(czsc_last_error()) > 0);  // 不同数据
+  CHECK(legacy_test::Nested(hl, nullptr) == nullptr);
+  void *hn = legacy_test::Nested(hl, hh);
   REQUIRE(hn != nullptr);
   Tables L = Read(hl), H = Read(hh);
-  std::vector<czsc_nested> rows = Get(czsc_nested_rows, hn);
+  std::vector<czsc_nested> rows = Get(legacy_test::NestedRows, hn);
   int lowFirst = 0, inside = 0, turn = 0;
   for (const czsc_signal &x : L.s) lowFirst += std::abs(x.type) == 1;
   CHECK(static_cast<int>(rows.size()) == lowFirst);
@@ -447,11 +449,11 @@ TEST(ApiNested)
   }
   std::printf("  nested: %zu low first-class, %d inside high divergence, %d small-turn candidates\n", rows.size(), inside, turn);
   CHECK(inside > 0 && turn > 0);
-  czsc_snapshot_free(hn);
-  czsc_snapshot_free(hl);
-  czsc_snapshot_free(hh);
-  czsc_snapshot_free(ho);
-  CHECK(czsc_nested_rows(nullptr, nullptr) == nullptr);
+  legacy_test::Free(hn);
+  legacy_test::Free(hl);
+  legacy_test::Free(hh);
+  legacy_test::Free(ho);
+  CHECK(legacy_test::NestedRows(nullptr, nullptr) == nullptr);
 }
 
 // v3：走势完成证据与区间套低级别映射
@@ -487,12 +489,12 @@ TEST(ApiMovementCompletion)
     }
     if (code == 0) CHECK(trends > 0 && ended > 0);
   }
-  czsc_input lo = Input(d, 0), hi = Input(d, 1100);
-  void *hl = czsc_snapshot_build(&lo), *hh = czsc_snapshot_build(&hi), *hn = czsc_nested_build(hl, hh);
+  legacy_test::Input lo = Input(d, 0), hi = Input(d, 1100);
+  void *hl = legacy_test::Build(&lo), *hh = legacy_test::Build(&hi), *hn = legacy_test::Nested(hl, hh);
   REQUIRE(hn != nullptr);
   Tables L = Read(hl), H = Read(hh);
   int mapped = 0;
-  for (const czsc_nested &r : Get(czsc_nested_rows, hn))
+  for (const czsc_nested &r : Get(legacy_test::NestedRows, hn))
   {
     if (r.highSignal < 0) { CHECK(r.highCurStartLow == -1 && r.highPrevStartLow == -1); continue; }
     const czsc_signal &h = H.s[static_cast<std::size_t>(r.highSignal)];
@@ -501,9 +503,9 @@ TEST(ApiMovementCompletion)
     mapped += r.highCurStartLow >= 0 && r.highCurEndLow >= 0;
   }
   CHECK(mapped > 0);
-  czsc_snapshot_free(hn);
-  czsc_snapshot_free(hl);
-  czsc_snapshot_free(hh);
+  legacy_test::Free(hn);
+  legacy_test::Free(hl);
+  legacy_test::Free(hh);
 }
 
 // v4：递归走势节点
@@ -518,18 +520,18 @@ struct Rec
   std::vector<czsc_recursive_connection> connections;
 };
 
-Rec BuildRec(const Data &d, int config, int flags = CZSC_FLAG_HIGHER)
+Rec BuildRec(const Data &d, int config, int flags = legacy_test::Higher)
 {
-  czsc_input in = Input(d, config, flags);
-  void *h = czsc_snapshot_build(&in);
+  legacy_test::Input in = Input(d, config, flags);
+  void *h = legacy_test::Build(&in);
   Rec r;
   if (!h) return r;
-  r.nodes = Get(czsc_recursive_nodes, h);
-  r.children = Get(czsc_recursive_children, h);
-  r.movements = Get(czsc_movements, h);
-  r.centers = Get(czsc_recursive_centers, h);
-  r.connections = Get(czsc_recursive_connections, h);
-  czsc_snapshot_free(h);
+  r.nodes = Get(legacy_test::RecursiveNodes, h);
+  r.children = Get(legacy_test::RecursiveChildren, h);
+  r.movements = Get(legacy_test::Movements, h);
+  r.centers = Get(legacy_test::RecursiveCenters, h);
+  r.connections = Get(legacy_test::RecursiveConnections, h);
+  legacy_test::Free(h);
   return r;
 }
 
@@ -761,85 +763,6 @@ TEST(ApiCenterEstablishedAndMovingAverages)
   }
 }
 
-TEST(ApiConfigOptionsAndAllLegalSse)
-{
-  CHECK(sizeof(czsc_config_option) == 116 && alignof(czsc_config_option) == 1);
-  CHECK(offsetof(czsc_config_option, key) == 20 && offsetof(czsc_config_option, label) == 52 && offsetof(czsc_config_option, lessons) == 84);
-  int count = czsc_config_options(nullptr, 0);
-  REQUIRE(count == 18);
-  std::vector<czsc_config_option> options(static_cast<std::size_t>(count) + 1);
-  options.back().size = 123;
-  CHECK(czsc_config_options(options.data(), count) == count && options.back().size == 123);
-  CHECK(czsc_config_options(options.data(), 1) == 1);
-  CHECK(czsc_config_options(nullptr, 1) == 0 && czsc_config_options(options.data(), -1) == 0);
-  for (int i = 11; i < 14; ++i)
-  {
-    const auto &o = options[static_cast<std::size_t>(i)];
-    const char *keys[] = {"segmentEnd.extreme", "segmentEnd.first", "segmentEnd.last"};
-    CHECK(o.place == 10000 && o.value == i - 11 && o.isDefault == (i == 11) &&
-          o.original == (i == 11) && std::strcmp(o.key, keys[i - 11]) == 0);
-    CHECK(std::strcmp(o.lessons, i == 11 ? "67" : "") == 0);
-  }
-  for (int i = 14; i < 16; ++i)
-  {
-    const auto &o = options[static_cast<std::size_t>(i)];
-    CHECK(o.place == 100000 && o.value == i - 14 && o.isDefault == (i == 14) && o.original == 0 &&
-          std::strcmp(o.key, i == 14 ? "center.entry" : "center.segment") == 0 && o.lessons[0] == 0);
-  }
-  for (int i = 16; i < 18; ++i)
-  {
-    const auto &o = options[i];
-    CHECK(o.place == 1000000 && o.value == i - 16 && o.isDefault == (i == 16) && o.original == 0);
-    CHECK(std::strcmp(o.key, i == 16 ? "stroke.innerAllowed" : "stroke.innerBounded") == 0 && o.lessons[0] == 0);
-  }
-  CHECK(czsc_config_valid(1000010) == 0 && czsc_config_valid(1001104) == 1);
-  std::vector<int> codes{0};
-  for (int place : {1, 10, 100, 1000, 10000, 100000, 1000000})
-  {
-    std::vector<int> next;
-    int defaults = 0;
-    for (int i = 0; i < count; ++i)
-    {
-      const auto &o = options[static_cast<std::size_t>(i)];
-      CHECK(o.size == sizeof o && o.key[31] == 0 && o.label[31] == 0 && o.lessons[31] == 0);
-      if (!o.original) CHECK(o.lessons[0] == 0);
-      if (o.place != place) continue;
-      defaults += o.isDefault;
-      for (int code : codes) next.push_back(code + place * o.value);
-    }
-    CHECK(defaults == 1);
-    codes = next;
-  }
-  std::sort(codes.begin(), codes.end());
-  Data d = Sse();
-  for (int code = -1; code <= 1130000; ++code)
-  {
-    bool listed = std::binary_search(codes.begin(), codes.end(), code) &&
-        ((code / 10000) % 10 == 0 || (code / 1000) % 10 == 1) &&
-        (code / 1000000 == 0 || (code / 10) % 10 == 0);
-    CHECK(czsc_config_valid(code) == static_cast<int>(listed));
-    CHECK(czsc_config_valid(code) == static_cast<int>(chan::Config::Decode(code).has_value()));
-    if (!listed) continue;
-    czsc_input in = Input(d, code, CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER);
-    void *h = czsc_snapshot_build(&in);
-    REQUIRE(h != nullptr);
-    Tables t = Read(h);
-    CHECK(t.r.size() == d.h.size());
-    for (std::size_t i = 1; i < t.p.size(); ++i)
-      CHECK(t.p[i].kind == -t.p[i-1].kind && t.p[i].index > t.p[i-1].index);
-    for (const auto &c : t.c)
-    {
-      REQUIRE(c.firstPivot >= 0 && static_cast<std::size_t>(c.firstPivot) + 3 < t.p.size());
-      CHECK(c.zd < c.zg && c.established == t.p[static_cast<std::size_t>(c.firstPivot) + 3].fractalAt);
-    }
-    CHECK(Get(czsc_recursive_nodes, h).size() >= t.m.size());
-    for (const auto &c : Get(czsc_recursive_centers, h)) CHECK(c.zd < c.zg);
-    Get(czsc_recursive_children, h);
-    Get(czsc_recursive_connections, h);
-    czsc_snapshot_free(h);
-  }
-}
-
 TEST(ApiSegmentBoundaryProjection)
 {
   CHECK(offsetof(czsc_pivot, extremeIndex) == 24 && sizeof(czsc_pivot) == 28);
@@ -848,23 +771,23 @@ TEST(ApiSegmentBoundaryProjection)
   for (int stroke = 0; stroke <= 4; ++stroke)
   {
     int baseCode = 1100 + stroke;
-    czsc_input baseIn = Input(d, baseCode, CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER);
-    void *base = czsc_snapshot_build(&baseIn);
+    legacy_test::Input baseIn = Input(d, baseCode, legacy_test::Events | legacy_test::Higher);
+    void *base = legacy_test::Build(&baseIn);
     REQUIRE(base != nullptr);
     Tables expected = Read(base);
     for (int place : {10000, 20000})
     {
-      czsc_input in = Input(d, baseCode + place, CZSC_FLAG_EVENTS | CZSC_FLAG_HIGHER);
-      void *h = czsc_snapshot_build(&in);
+      legacy_test::Input in = Input(d, baseCode + place, legacy_test::Events | legacy_test::Higher);
+      void *h = legacy_test::Build(&in);
       REQUIRE(h != nullptr);
       Tables t = Read(h);
       REQUIRE(t.p.size() == expected.p.size());
       CHECK(Bytes(t.c, expected.c) && Bytes(t.m, expected.m) && Bytes(t.b, expected.b) &&
             Bytes(t.s, expected.s) && Bytes(t.e, expected.e) && Bytes(t.r, expected.r));
-      CHECK(Bytes(Get(czsc_recursive_nodes, h), Get(czsc_recursive_nodes, base)) &&
-            Bytes(Get(czsc_recursive_children, h), Get(czsc_recursive_children, base)) &&
-            Bytes(Get(czsc_recursive_centers, h), Get(czsc_recursive_centers, base)) &&
-            Bytes(Get(czsc_recursive_connections, h), Get(czsc_recursive_connections, base)));
+      CHECK(Bytes(Get(legacy_test::RecursiveNodes, h), Get(legacy_test::RecursiveNodes, base)) &&
+            Bytes(Get(legacy_test::RecursiveChildren, h), Get(legacy_test::RecursiveChildren, base)) &&
+            Bytes(Get(legacy_test::RecursiveCenters, h), Get(legacy_test::RecursiveCenters, base)) &&
+            Bytes(Get(legacy_test::RecursiveConnections, h), Get(legacy_test::RecursiveConnections, base)));
       for (std::size_t i = 0; i < t.p.size(); ++i)
       {
         const auto &p = t.p[i];
@@ -878,29 +801,29 @@ TEST(ApiSegmentBoundaryProjection)
       // 因果前缀中已经定型的显示映射，逐字节不回改。
       for (int n = 100; n < d.n(); n += 83)
       {
-        czsc_input pre = in; pre.n = n;
-        void *ph = czsc_snapshot_build(&pre);
+        legacy_test::Input pre = in; pre.n = n;
+        void *ph = legacy_test::Build(&pre);
         REQUIRE(ph != nullptr);
-        for (const auto &p : Get(czsc_pivots, ph))
+        for (const auto &p : Get(legacy_test::Pivots, ph))
         {
           if (p.confirmedAt < 0) continue;
           auto it = std::find_if(t.p.begin(), t.p.end(), [&](const auto &q) { return q.extremeIndex == p.extremeIndex; });
           REQUIRE(it != t.p.end());
           CHECK(std::memcmp(&p, &*it, sizeof p) == 0);
         }
-        czsc_snapshot_free(ph);
+        legacy_test::Free(ph);
       }
       // 区间套高级别到低级别的端点映射必须按真实极值，而非显示下标。
-      czsc_input lowIn = Input(d, stroke);
-      void *low = czsc_snapshot_build(&lowIn);
+      legacy_test::Input lowIn = Input(d, stroke);
+      void *low = legacy_test::Build(&lowIn);
       REQUIRE(low != nullptr);
-      void *nb = czsc_nested_build(low, base), *nd = czsc_nested_build(low, h);
+      void *nb = legacy_test::Nested(low, base), *nd = legacy_test::Nested(low, h);
       REQUIRE(nb != nullptr && nd != nullptr);
-      CHECK(Bytes(Get(czsc_nested_rows, nb), Get(czsc_nested_rows, nd)));
-      czsc_snapshot_free(nb); czsc_snapshot_free(nd); czsc_snapshot_free(low);
-      czsc_snapshot_free(h);
+      CHECK(Bytes(Get(legacy_test::NestedRows, nb), Get(legacy_test::NestedRows, nd)));
+      legacy_test::Free(nb); legacy_test::Free(nd); legacy_test::Free(low);
+      legacy_test::Free(h);
     }
-    czsc_snapshot_free(base);
+    legacy_test::Free(base);
   }
   CHECK(shiftedFirst > 0 && shiftedLast > 0);
 }
@@ -915,7 +838,7 @@ TEST(ApiParentSegmentCenters)
       int code = 100000 + algorithm + stroke;
       Tables all = Build(d, code);
       chan::Series series; series.high = d.h; series.low = d.l; series.close = d.c; series.volume = d.v;
-      auto config = *chan::Config::Decode(code);
+      auto config = *migration::MapLegacyConfig(code);
       auto a = chan::Analyze(series, config);
       auto segments = algorithm ? chan::SegmentPivotsFeature(a.snapshot.pivots) : chan::SegmentPivotsHeuristic(a.snapshot.pivots);
       auto scopes = chan::CenterScopes(a.snapshot.pivots, segments);
@@ -965,17 +888,17 @@ TEST(ApiBoundedPrefixesAdvanceAndExposePendingExtension)
   for (int n : {160,166,170,175,200,240,SSE_DAILY_COUNT})
   {
     auto data = Sse(n);
-    auto in = Input(data,1000000,CZSC_FLAG_EVENTS|CZSC_FLAG_HIGHER);
-    void *handle = czsc_snapshot_build(&in);
+    auto in = Input(data,1000000,legacy_test::Events|legacy_test::Higher);
+    void *handle = legacy_test::Build(&in);
     REQUIRE(handle != nullptr);
     int32_t count = 0;
-    auto pivots = czsc_pivots(handle,&count);
+    auto pivots = legacy_test::Pivots(handle,&count);
     REQUIRE(count>0);
     if (n>=170) CHECK(pivots[count-1].index>157);
     if (n==170) { CHECK(pivots[count-1].index==169); CHECK(pivots[count-1].fractalAt==-1); }
     if (n==175) { CHECK(pivots[count-1].index==174); CHECK(pivots[count-1].fractalAt==-1); }
     for (int32_t i=0; i<count; ++i) CHECK(pivots[i].confirmedAt==-1);
     if (n==SSE_DAILY_COUNT) CHECK(count>=79);
-    czsc_snapshot_free(handle);
+    legacy_test::Free(handle);
   }
 }

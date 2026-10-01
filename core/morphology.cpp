@@ -42,7 +42,7 @@ bool MoreExtreme(const Fractal &base, const Fractal &f)
 }
 
 // 跨度：严格笔合并K线差 ≥4；新笔 ≥3 且原始K线差 ≥4；czsc 笔 ≥3（fx_a 首根到 fx_b 末根 ≥6 根）
-bool SpanEnough(const Fractal &a, const Fractal &b, const Config &c)
+bool SpanEnough(const Fractal &a, const Fractal &b, const LevelConfig &c)
 {
   int merged = b.merged - a.merged;
   switch (c.analysis.stroke.rule)
@@ -63,13 +63,13 @@ bool PriceProgress(const Fractal &start, const Fractal &end)
 }
 
 // czsc ab_include：两端分型K线区间一方包含另一方则不成笔（仅 czsc 笔）
-bool Nested(const Fractal &a, const Fractal &b, const Config &c)
+bool Nested(const Fractal &a, const Fractal &b, const LevelConfig &c)
 {
   if (c.analysis.stroke.rule != StrokeRule::Czsc) return false;
   return (a.high > b.high && a.low < b.low) || (a.high < b.high && a.low > b.low);
 }
 
-bool ValidStroke(const Fractal &a, const Fractal &b, const Config &c)
+bool ValidStroke(const Fractal &a, const Fractal &b, const LevelConfig &c)
 {
   // 分型笔只检查顶高于底，不采用第62课上升/下降K线价位推进要求。
   if (c.analysis.stroke.rule == StrokeRule::Fractal)
@@ -78,7 +78,7 @@ bool ValidStroke(const Fractal &a, const Fractal &b, const Config &c)
 }
 
 // 社区合并K线包络：包含处理丢弃的影线不阻止笔形成；只查询已确认端点所在的稳定合并K线。
-bool BoundedStroke(const Fractal &a, const Fractal &b, const Config &c, const std::vector<MergedBar> &bars)
+bool BoundedStroke(const Fractal &a, const Fractal &b, const LevelConfig &c, const std::vector<MergedBar> &bars)
 {
   if (a.kind == b.kind || a.index >= b.index || !ValidStroke(a, b, c)) return false;
   if (bars.empty() || a.index < 0 || b.index > bars.back().last) return false;
@@ -96,7 +96,7 @@ bool BoundedStroke(const Fractal &a, const Fractal &b, const Config &c, const st
 // 收笔点细化：在 (prev, next) 且距 prev 不超过 2×最小跨度的窗口内，取仍能与两侧成笔的最极端同型分型。
 // 只读取下标早于 next 的分型，故对分型前缀是因果的。
 Fractal RefineOne(const Fractal &prev, const Fractal &cur, const Fractal &next, const std::vector<Fractal> &fractals,
-                  const Config &c)
+                  const LevelConfig &c)
 {
   int minSpan = c.analysis.stroke.rule == StrokeRule::Strict ? 4 : 3;
   Fractal best = cur;
@@ -403,7 +403,7 @@ std::vector<Fractal> DetectFractals(const std::vector<MergedBar> &bars)
   return out;
 }
 
-std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Series &source, const Config &config)
+std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Series &source, const LevelConfig &config)
 {
   if (!(config.analysis.stroke.endpoint == chan::StrokeEnd::Bounded)) return fractals;
   std::vector<Fractal> out;
@@ -526,7 +526,7 @@ int StrokeStream::AddBounded(std::size_t k)
   return static_cast<int>(changed);
 }
 
-std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const Config &c, const Series *source)
+std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const LevelConfig &c, const Series *source)
 {
   StrokeStream s(fractals, c, source);
   for (std::size_t k = 0; k < fractals.size(); k++) s.Add(k);
@@ -727,7 +727,7 @@ std::vector<Pivot> SegmentPivotsFeature(const std::vector<Pivot> &s)
   return st.Pivots();
 }
 
-int DisplayPivotIndex(const Pivot &pivot, const Config &config)
+int DisplayPivotIndex(const Pivot &pivot, const LevelConfig &config)
 {
   if (config.level == CenterUnit::Segment && config.analysis.segment.method == SegmentMethod::Feature)
   {
@@ -737,7 +737,7 @@ int DisplayPivotIndex(const Pivot &pivot, const Config &config)
   return pivot.index;
 }
 
-std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &c, const Series *source)
+std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const LevelConfig &c, const Series *source)
 {
   std::vector<Pivot> strokes = StrokePivots(BuildStrokeEnds(fractals, c, source));
   if (c.level == CenterUnit::Stroke) return strokes;

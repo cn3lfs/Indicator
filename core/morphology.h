@@ -31,14 +31,14 @@ std::vector<MergedBar> MergeBars(const Series &s);
 std::vector<Fractal> DetectFractals(const std::vector<MergedBar> &bars);
 
 // 社区百万位1插入当根可见的延伸候选；真实分型表不变，候选不能用于反向成笔。
-std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Series &source, const Config &config);
+std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Series &source, const LevelConfig &config);
 
 // 笔端点流：按顺序逐个加入分型（同型更极端者延伸、异型须跨度与价位达标），并即时细化倒数第二个端点。
 // 细化只读取早于下一端点的分型，故 Add 到第 k 个分型时的 Ends() 恰等于对前 k+1 个分型的批量结果。
 class StrokeStream
 {
 public:
-  StrokeStream(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr, const std::vector<MergedBar> *bars = nullptr)
+  StrokeStream(const std::vector<Fractal> &fractals, const LevelConfig &config, const Series *source = nullptr, const std::vector<MergedBar> *bars = nullptr)
     : boundSource_(bars), source_(source), fractals_(&fractals), config_(config) {}
   // 加入 fractals[k]（须按顺序）；返回首个发生变化的端点下标，无变化返回 -1
   int Add(std::size_t k);
@@ -53,13 +53,13 @@ private:
   std::vector<Fractal> boundedFractals_;  // 已确认分型；不含影线候选，端点修正只查询当下已知数据。
   const Series *source_ = nullptr;
   const std::vector<Fractal> *fractals_;
-  Config config_;
+  LevelConfig config_;
   std::vector<Fractal> raw_;   // 未细化端点
   std::vector<Fractal> ends_;  // 细化后端点
 };
 
 // 笔端点（批量）：把全部分型依次加入 StrokeStream；百万位1必须传清洗后的原始Series。
-std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr);
+std::vector<Fractal> BuildStrokeEnds(const std::vector<Fractal> &fractals, const LevelConfig &config, const Series *source = nullptr);
 
 // 读取视界：一个增量阶段读到的最远输入下标；判断若依赖“数据到头”则为无界。
 // 续算时只有视界早于输入变化位置（dirty）的检查点可复用。
@@ -107,7 +107,7 @@ std::vector<Pivot> StrokePivots(const std::vector<Fractal> &ends);
 std::vector<Pivot> SegmentPivotsHeuristic(const std::vector<Pivot> &strokes);
 std::vector<Pivot> SegmentPivotsFeature(const std::vector<Pivot> &strokes);
 // 仅用于输出投影；不可将此位置作为中枢/背驰/买卖点输入。
-int DisplayPivotIndex(const Pivot &pivot, const Config &config);
-std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr);
+int DisplayPivotIndex(const Pivot &pivot, const LevelConfig &config);
+std::vector<Pivot> BuildPivots(const std::vector<Fractal> &fractals, const LevelConfig &config, const Series *source = nullptr);
 
 }  // namespace chan

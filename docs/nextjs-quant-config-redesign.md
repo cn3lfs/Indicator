@@ -173,3 +173,9 @@ float 传参的上限问题改用**预设号**解决：
    两级独立维护中枢/走势/信号与定型边界，最终快照复用共享端点，不再重跑形态链。
    两级均与独立参照重算及前缀事件一致，全部旧码C表字节基线不变。
    make test：66 cases，0 failed checks；原golden不变。
+
+3. api v20：czsc_build单次family，level取表；czsc_config/default/validate/id/parse、projection与fields/choices/rules落地。
+   删除旧C导出，整数迁移移至migration/测试桥；TDX暂用迁移工具，下一步替换为预设。
+   显示分界只改pivot.index/price，中枢框坐标仍按真实极值以保留旧映射字节；centerBox独立选择前三或延伸。
+   schema布局packed size92/396/204；config size32、projection size12。
+   make test：67 cases，0 failed checks；全部240旧码11表及区间套基线一致，原golden未改。

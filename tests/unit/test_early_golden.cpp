@@ -1,3 +1,4 @@
+#include "migration/legacy_config.h"
 // 社区快速事件独立回归，不改既有golden。
 #include "check.h"
 #include "sse_data.h"
@@ -8,7 +9,7 @@
 TEST(GoldenEarlySignalsSse)
 {
   auto s = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
-  chan::Config c; c.analysis.signals.publication = chan::SignalPublication::Early;
+  chan::LevelConfig c; c.analysis.signals.publication = chan::SignalPublication::Early;
   auto a = chan::Analyze(s, c);
   std::ostringstream out;
   int count = 0, revoked = 0, sum = 0;
@@ -30,7 +31,7 @@ TEST(GoldenEarlySignalsSse)
 TEST(GoldenDirectedEarlySignalsSse)
 {
   auto s = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
-  auto c = *chan::Config::Decode(101000); c.analysis.signals.publication = chan::SignalPublication::Early;
+  auto c = *migration::MapLegacyConfig(101000); c.analysis.signals.publication = chan::SignalPublication::Early;
   auto a = chan::Analyze(s, c);
   std::ostringstream out;
   for (const auto &center : a.snapshot.centers)

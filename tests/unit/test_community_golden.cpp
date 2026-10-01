@@ -1,3 +1,4 @@
+#include "migration/legacy_config.h"
 // 社区/非原文笔口径的独立SSE回归；不改既有 tests/unit/golden。
 #include "check.h"
 #include "sse_data.h"
@@ -15,7 +16,7 @@ TEST(GoldenCommunityStrokesSse)
   char line[256];
   for (int code : {0, 1, 2, 3, 4})
   {
-    auto a = chan::Analyze(s, *chan::Config::Decode(code));
+    auto a = chan::Analyze(s, *migration::MapLegacyConfig(code));
     const auto &n = a.snapshot;
     out << "## 配置 " << code << " 端点 " << n.pivots.size() << " 中枢 " << n.centers.size()
         << " 走势 " << n.movements.size() << " 信号 " << n.signals.size() << " 事件 " << a.events.size() << "\n";
@@ -40,7 +41,7 @@ TEST(GoldenCommunityStrokesSse)
     for (int stroke = 0; stroke <= 4; ++stroke)
     {
       int code = place + 1100 + stroke;
-      auto config = *chan::Config::Decode(code);
+      auto config = *migration::MapLegacyConfig(code);
       auto a = chan::Analyze(s, config);
       out << "## 线段分界配置 " << code << " 端点 " << a.snapshot.pivots.size() << "\n";
       for (std::size_t i = 0; i < a.snapshot.pivots.size(); ++i)
@@ -62,7 +63,7 @@ TEST(GoldenCommunityStrokesSse)
       for (int stroke = 0; stroke <= 4; ++stroke)
       {
         int code = 100000 + method + unit + stroke;
-        auto a = chan::Analyze(real, *chan::Config::Decode(code));
+        auto a = chan::Analyze(real, *migration::MapLegacyConfig(code));
         out << "## 中枢构成配置 " << code << " 中枢 " << a.snapshot.centers.size() << " 信号 " << a.snapshot.signals.size() << " 事件 " << a.events.size() << "\n";
         for (std::size_t i = 0; i < a.snapshot.centers.size(); ++i)
         {
@@ -83,7 +84,7 @@ TEST(GoldenCommunityStrokesSse)
     for (int stroke = 0; stroke <= 4; ++stroke)
     {
       int code = 1000000 + unit + stroke;
-      auto a = chan::Analyze(real, *chan::Config::Decode(code));
+      auto a = chan::Analyze(real, *migration::MapLegacyConfig(code));
       out << "## 笔内包络配置 " << code << " 端点 " << a.snapshot.pivots.size() << " 中枢 " << a.snapshot.centers.size()
           << " 信号 " << a.snapshot.signals.size() << " 事件 " << a.events.size() << "\n";
       for (const auto &p : a.snapshot.pivots)
