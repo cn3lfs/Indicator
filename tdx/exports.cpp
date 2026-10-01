@@ -76,7 +76,7 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const C
   Slot *victim = &g_slots[0];
   for (Slot &slot : g_slots)
   {
-    if (slot.analysis && slot.count == count && slot.config == code && slot.earlySignals == config.earlySignals && slot.hash == h)
+    if (slot.analysis && slot.count == count && slot.config == code && slot.earlySignals == (config.analysis.signals.publication == chan::SignalPublication::Early) && slot.hash == h)
     {
       slot.tick = g_tick;
       return *slot.analysis;
@@ -86,7 +86,7 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const C
   victim->analysis = std::make_unique<Analysis>(chan::Analyze(s, config));
   victim->count = count;
   victim->config = code;
-  victim->earlySignals = config.earlySignals;
+  victim->earlySignals = (config.analysis.signals.publication == chan::SignalPublication::Early);
   victim->hash = h;
   victim->tick = g_tick;
   return *victim->analysis;
@@ -112,7 +112,7 @@ void Run(int count, float *out, float *high, float *low, float *config, Project 
   if (!std::isfinite(code) || code != std::floor(code)) return;
   std::optional<Config> c = Config::Decode(static_cast<int>(code));
   if (!c) return;
-  c->earlySignals = early;
+  c->analysis.signals.publication = (early ? chan::SignalPublication::Early : chan::SignalPublication::Standard);
   project(Analyzed(count, high, low, *c));
 }
 

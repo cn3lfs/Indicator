@@ -73,11 +73,11 @@ TEST(PivotsAlternateAndProgress)
     CHECK(p.size() >= 2);
     CHECK(Alternates(p));
     CHECK(PriceProgresses(p));
-    if (c.unit == CenterUnit::Segment)
+    if (c.level == CenterUnit::Segment)
     {
       // 线段端点是笔端点的子集（第67课），且级别更高
       Config sc = c;
-      sc.unit = CenterUnit::Stroke;
+      sc.level = CenterUnit::Stroke;
       std::vector<Pivot> strokes = BuildPivots(f, sc);
       CHECK(p.size() < strokes.size());
       for (const Pivot &x : p)
@@ -99,7 +99,7 @@ TEST(StrokeRules)
   std::vector<Fractal> g = {frac(Kind::Bottom, 0, 10, 8), frac(Kind::Top, 4, 20, 7), frac(Kind::Bottom, 8, 12, 6),
                             frac(Kind::Top, 12, 18, 14)};
   Config czsc;
-  czsc.stroke = StrokeRule::Czsc;
+  czsc.analysis.stroke.rule = StrokeRule::Czsc;
   CHECK(BuildStrokeEnds(g, Config{}).size() == 4);
   std::vector<Fractal> ce = BuildStrokeEnds(g, czsc);
   REQUIRE(ce.size() == 2);

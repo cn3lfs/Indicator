@@ -187,7 +187,7 @@ TEST(EarlyEngineMatchesReferenceAndEveryPrefix)
   for (int code : {0, 2, 1100, 100000, 101000, 1000000, 1000004, 1001100})
   {
     auto c = *chan::Config::Decode(code);
-    c.earlySignals = true;
+    c.analysis.signals.publication = chan::SignalPublication::Early;
     auto all = chan::Analyze(full, c);
     CHECK(Same(all.events, chan::AnalyzeReference(full, c).events));
     CHECK(Same(chan::Analyze(full, c, 700).events, chan::AnalyzeReference(full, c, 700).events));

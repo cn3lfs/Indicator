@@ -152,7 +152,7 @@ TEST(TdxEarlySignalsUseSeparateCacheAndStops)
   auto revokes = Call(tdx::EarlyRevokes, s, 0);
   CHECK(fast != legacy);
   CHECK(Call(tdx::Signals, s, 0) == legacy);
-  chan::Config c; c.earlySignals = true;
+  chan::Config c; c.analysis.signals.publication = chan::SignalPublication::Early;
   auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
   std::vector<float> expected(s.n), expectedStops(s.n), expectedRevokes(s.n);
   std::vector<int> ap(s.n, -1), rp(s.n, -1);
@@ -210,7 +210,7 @@ TEST(RecentLiveSignalsRevokeTheExactOriginalPoint)
 TEST(TdxRecentLiveOutputsMatchSignalIdentityProjection)
 {
   tdx::ResetForTesting(); Sse s;
-  auto c = *chan::Config::Decode(101000); c.earlySignals = true;
+  auto c = *chan::Config::Decode(101000); c.analysis.signals.publication = chan::SignalPublication::Early;
   auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
   CHECK(Call(tdx::RecentLiveBuys, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, true));
   CHECK(Call(tdx::RecentLiveSells, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, false));

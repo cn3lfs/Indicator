@@ -18,8 +18,8 @@ TEST(ConfigRoundTrip)
   CHECK(!Config::Decode(20).has_value());
   CHECK(!Config::Decode(-1).has_value());
   CHECK(!Config::Decode(10000).has_value());
-  CHECK(Config::Decode(0)->stroke == StrokeRule::Strict);
-  CHECK(Config::Decode(2)->stroke == StrokeRule::Czsc);
+  CHECK(Config::Decode(0)->analysis.stroke.rule == StrokeRule::Strict);
+  CHECK(Config::Decode(2)->analysis.stroke.rule == StrokeRule::Czsc);
 }
 
 TEST(SeriesSanitizesTdxInvalid)
@@ -53,7 +53,7 @@ TEST(SegmentEndConfigRoundTrip)
     auto c = Config::Decode(code);
     if (!c) continue;
     CHECK(c->Encode() == code);
-    CHECK(c->segmentEnd == SegmentEnd::Extreme || c->segment == SegmentMethod::Feature);
+    CHECK(c->projection.segmentBoundary == SegmentEnd::Extreme || c->analysis.segment.method == SegmentMethod::Feature);
     ++count;
   }
   CHECK(count == 80);
@@ -73,5 +73,5 @@ TEST(CenterFormationConfigRoundTrip)
     ++count;
   }
   CHECK(count == 160 && !Config::Decode(200000));
-  CHECK(Config::Decode(100000)->centerFormation == CenterFormation::Segment);
+  CHECK(Config::Decode(100000)->analysis.center.strokeFormation == CenterFormation::Segment);
 }

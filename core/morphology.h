@@ -44,7 +44,7 @@ public:
   int Add(std::size_t k);
   const std::vector<Fractal> &Ends() const { return ends_; }
   // 默认第i个端点在第i+2个未细化端点出现后定型；百万位1可回退尾部链，暂不承诺定型前缀。
-  std::size_t FinalCount() const { return config_.innerBounded ? 0 : (raw_.size() >= 2 ? raw_.size() - 2 : 0); }
+  std::size_t FinalCount() const { return (config_.analysis.stroke.endpoint == chan::StrokeEnd::Bounded) ? 0 : (raw_.size() >= 2 ? raw_.size() - 2 : 0); }
 
 private:
   int AddBounded(std::size_t k);

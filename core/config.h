@@ -2,6 +2,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 
 namespace chan
 {
@@ -19,6 +20,7 @@ enum class StrokeEnd : int
 {
   Extreme = 0,  // 同型分型取更极端者延伸端点
   First = 1,    // 保留首个同型分型（允许次高/次低收笔）
+  Bounded = 2,  // 社区合并K线包络与未确认末端延伸（v6修复口径）
 };
 
 enum class CenterUnit : int
@@ -48,29 +50,69 @@ enum class CenterFormation : int
   Segment = 1,
 };
 
+// 结构化配置：分析身份不包含输出选择或显示投影，缺口由v7实现。
+enum class GapRule : int { None = 0, AsBar = 1, Large = 2 };
+enum class SignalPublication : int { Standard = 0, Early = 1 };
+enum class CenterBox : int { Initial = 0, Extended = 1 };
+
+struct StrokeConfig
+{
+  StrokeRule rule = StrokeRule::Strict;
+  StrokeEnd endpoint = StrokeEnd::Extreme;
+  GapRule gap = GapRule::None;
+  float gapThreshold = 0.02f;
+};
+struct SegmentConfig { SegmentMethod method = SegmentMethod::Feature; };
+struct CenterConfig { CenterFormation strokeFormation = CenterFormation::Entry; };
+struct SignalConfig { SignalPublication publication = SignalPublication::Standard; };
+
+struct AnalysisConfig
+{
+  StrokeConfig stroke;
+  SegmentConfig segment;
+  CenterConfig center;
+  SignalConfig signals;
+  bool operator==(const AnalysisConfig &o) const;
+};
+
+struct OutputSelection
+{
+  unsigned levels = 3;  // bit0笔级，bit1线段级；与分析身份独立。
+  bool events = true;
+  bool recursion = true;
+  bool nested = true;
+  bool operator==(const OutputSelection &o) const
+  {
+    return levels == o.levels && events == o.events && recursion == o.recursion && nested == o.nested;
+  }
+};
+
+struct Projection
+{
+  SegmentEnd segmentBoundary = SegmentEnd::Extreme;
+  CenterBox centerBox = CenterBox::Extended;  // 默认保留旧C表end，前三构件仅改变显示。
+  bool operator==(const Projection &o) const
+  {
+    return segmentBoundary == o.segmentBoundary && centerBox == o.centerBox;
+  }
+};
+
+std::string Validate(const AnalysisConfig &config);  // 空串合法，否则中文原因。
+AnalysisConfig Normalize(const AnalysisConfig &config);
+std::string AnalysisId(const AnalysisConfig &config);
+
+// 单级引擎视图；level不是分析选项。旧整数桥只供迁移期间验证，v20移至测试工具。
 struct Config
 {
-  // TDX快速事件专用：分型确认即提示，可失效；不参与公开配置码。社区/非原文口径。
-  bool earlySignals = false;
-
-  StrokeRule stroke = StrokeRule::Strict;
-  StrokeEnd strokeEnd = StrokeEnd::Extreme;
-  CenterUnit unit = CenterUnit::Stroke;
-  SegmentMethod segment = SegmentMethod::Heuristic;
-
-  SegmentEnd segmentEnd = SegmentEnd::Extreme;
-
-  CenterFormation centerFormation = CenterFormation::Entry;
-
-  bool innerBounded = false;  // 百万位：社区合并K线闭区间包络；与十位1组合非法。
-
-  // 十进制位编码：个位笔(0/1/2/3/4)、十位笔结束(0/1)、百位中枢构件(0/1)、千位线段法(0/1)、万位分界显示(0/1/2，仅特征序列)、十万位中枢构成(0/1)、百万位合并包络(0/1，与十位1组合非法)
+  AnalysisConfig analysis;
+  OutputSelection outputs;
+  Projection projection;
+  CenterUnit level = CenterUnit::Stroke;
   int Encode() const;
   static std::optional<Config> Decode(int code);
-
   bool operator==(const Config &o) const
   {
-    return innerBounded == o.innerBounded && earlySignals == o.earlySignals && stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd && centerFormation == o.centerFormation;
+    return analysis == o.analysis && outputs == o.outputs && projection == o.projection && level == o.level;
   }
 };
 

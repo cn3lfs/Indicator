@@ -44,10 +44,10 @@ class Incremental
 {
 public:
   Incremental(const std::vector<Fractal> &fractals, const EnergyTables &tables, const Config &config, const Series &source)
-    : strokes_(fractals, config, &source), segments_(config.segment), tables_(tables), config_(config)
+    : strokes_(fractals, config, &source), segments_(config.analysis.segment.method), tables_(tables), config_(config)
   {
     signals_.SetTables(&tables_);
-    signals_.SetEarlySignals(config_.earlySignals);
+    signals_.SetEarlySignals((config_.analysis.signals.publication == chan::SignalPublication::Early));
   }
 
   // 加入第 k 个分型；只登记变化，不重算下游
@@ -85,7 +85,7 @@ public:
     int dirty = strokeDirty_;
     strokeDirty_ = -1;
     bool changed = true;
-    if (config_.unit == CenterUnit::Segment)
+    if (config_.level == CenterUnit::Segment)
     {
       dirty = segments_.Update(strokePivots_, static_cast<std::size_t>(dirty));
       changed = dirty >= 0;
@@ -93,14 +93,14 @@ public:
     }
     else
     {
-      if (config_.centerFormation == CenterFormation::Segment)
+      if (config_.analysis.center.strokeFormation == CenterFormation::Segment)
         segments_.Update(strokePivots_, static_cast<std::size_t>(dirty));
       Energize(strokePivots_, static_cast<std::size_t>(dirty));
     }
     if (changed)
     {
       int dc;
-      if (config_.unit == CenterUnit::Stroke && config_.centerFormation == CenterFormation::Segment)
+      if (config_.level == CenterUnit::Stroke && config_.analysis.center.strokeFormation == CenterFormation::Segment)
       {
         std::size_t stable = segments_.FinalCount(strokes_.FinalCount());
         int finalBar = stable >= 2 ? segments_.Pivots()[stable - 1].index : -1;
@@ -118,7 +118,7 @@ public:
   void AdvanceFinality(int bar)
   {
     std::size_t strokeFinal = strokes_.FinalCount();
-    std::size_t pivotFinal = config_.unit == CenterUnit::Segment ? segments_.FinalCount(strokeFinal) : strokeFinal;
+    std::size_t pivotFinal = config_.level == CenterUnit::Segment ? segments_.FinalCount(strokeFinal) : strokeFinal;
     pivotFinal = std::min(pivotFinal, pivots_.size());
     std::size_t centerFinal = std::min(centers_.FinalCount(pivotFinal), centers_.Centers().size());
     // 走势 [a,b] 由关系 (b,b+1) 截止：其后一个中枢也已定型才定型
@@ -216,9 +216,9 @@ Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, 
   std::vector<Fractal> prefix(fractals.begin(), fractals.begin() + static_cast<std::ptrdiff_t>(count));
   s.pivots = BuildPivots(prefix, config, source);
   AssignEnergy(s.pivots, tables);
-  if (config.unit == CenterUnit::Stroke && config.centerFormation == CenterFormation::Segment)
+  if (config.level == CenterUnit::Stroke && config.analysis.center.strokeFormation == CenterFormation::Segment)
   {
-    auto segments = config.segment == SegmentMethod::Feature ? SegmentPivotsFeature(s.pivots) : SegmentPivotsHeuristic(s.pivots);
+    auto segments = config.analysis.segment.method == SegmentMethod::Feature ? SegmentPivotsFeature(s.pivots) : SegmentPivotsHeuristic(s.pivots);
     s.centers = BuildCentersInSegments(s.pivots, segments);
   }
   else s.centers = BuildCenters(s.pivots);
@@ -284,10 +284,10 @@ Analysis AnalyzeReference(const Series &series, const Config &config, int window
     int bar = f[k].confirmedAt;
     if (k + 1 < f.size() && f[k + 1].confirmedAt == bar) continue;
     bool baseline = bar < from;
-    if (!config.earlySignals && baseline && k + 1 < f.size() && f[k + 1].confirmedAt < from) continue;
+    if (!(config.analysis.signals.publication == chan::SignalPublication::Early) && baseline && k + 1 < f.size() && f[k + 1].confirmedAt < from) continue;
     Snapshot snapshot = BuildSnapshot(f, k + 1, tables, config, &series);
-    std::map<SignalKey, Signal> now = Confirmed(snapshot, config.earlySignals);
-    if (config.earlySignals)
+    std::map<SignalKey, Signal> now = Confirmed(snapshot, (config.analysis.signals.publication == chan::SignalPublication::Early));
+    if ((config.analysis.signals.publication == chan::SignalPublication::Early))
       for (auto it = now.begin(); it != now.end();)
       {
         if (!active.count(it->first) && (seen.count(it->first) ||
