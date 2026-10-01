@@ -957,3 +957,25 @@ TEST(ApiParentSegmentCenters)
     }
   }
 }
+
+
+// 需求方通过C接口复现的157B死锁：未确认影线可前进，不能伪造分型成立或定型时刻。
+TEST(ApiBoundedPrefixesAdvanceAndExposePendingExtension)
+{
+  for (int n : {160,166,170,175,200,240,SSE_DAILY_COUNT})
+  {
+    auto data = Sse(n);
+    auto in = Input(data,1000000,CZSC_FLAG_EVENTS|CZSC_FLAG_HIGHER);
+    void *handle = czsc_snapshot_build(&in);
+    REQUIRE(handle != nullptr);
+    int32_t count = 0;
+    auto pivots = czsc_pivots(handle,&count);
+    REQUIRE(count>0);
+    if (n>=170) CHECK(pivots[count-1].index>157);
+    if (n==170) { CHECK(pivots[count-1].index==169); CHECK(pivots[count-1].fractalAt==-1); }
+    if (n==175) { CHECK(pivots[count-1].index==174); CHECK(pivots[count-1].fractalAt==-1); }
+    for (int32_t i=0; i<count; ++i) CHECK(pivots[i].confirmedAt==-1);
+    if (n==SSE_DAILY_COUNT) CHECK(count>=79);
+    czsc_snapshot_free(handle);
+  }
+}

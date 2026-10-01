@@ -195,7 +195,7 @@ TEST(SegmentMergedBoundaryExamples)
   }
 }
 
-TEST(BoundedStrokesUseInclusiveRawEnvelopeAndConfirmedFractals)
+TEST(BoundedStrokesUseMergedEnvelopeAndAlwaysExtendTail)
 {
   for (int mirror : {1, -1})
   {
@@ -203,7 +203,7 @@ TEST(BoundedStrokesUseInclusiveRawEnvelopeAndConfirmedFractals)
       Fractal f; f.kind = mirror == 1 ? kind : Opposite(kind); f.index = f.merged = i;
       f.high = mirror == 1 ? h : -l; f.low = mirror == 1 ? l : -h; f.confirmedAt = i + 1; return f;
     };
-    auto raw = [&](int n) { Series s; s.high.assign(n, mirror == 1 ? 10 : -4); s.low.assign(n, mirror == 1 ? 4 : -10); return s; };
+    auto raw = [&](int n) { Series s; for (int i=0; i<n; ++i) { s.high.push_back(mirror == 1 ? 3+2*i : -(1+2*i)); s.low.push_back(mirror == 1 ? 1+2*i : -(3+2*i)); } return s; };
     auto set = [&](Series &s, int i, float h, float l) { s.high[i] = mirror == 1 ? h : -l; s.low[i] = mirror == 1 ? l : -h; };
     for (int stroke = 0; stroke <= 4; ++stroke)
     {
@@ -211,21 +211,24 @@ TEST(BoundedStrokesUseInclusiveRawEnvelopeAndConfirmedFractals)
       auto allowed = *Config::Decode(stroke);
       auto s = raw(10); set(s,0,3,1); set(s,8,20,18);
       std::vector<Fractal> f{frac(Kind::Bottom,0,3,1),frac(Kind::Top,8,20,18)};
-      set(s,4,10,0); // 未形成可用底分型的低影线，不能强造端点。
+      set(s,4,10,0); // 向上包含丢弃低影线，不能强造已确认分型。
       CHECK(BuildStrokeEnds(f,allowed,&s).size() == 2);
+      CHECK(BuildStrokeEnds(f,bounded,&s).size() == 2);
+      set(s,4,8,0); // 非包含合并K线低于起点，阻止反向成笔。
       CHECK(BuildStrokeEnds(f,bounded,&s).size() == 1);
-      set(s,4,21,4); // 未形成可用顶分型的高影线。
+      set(s,4,21,9); // 未形成可用顶分型的高影线。
       CHECK(BuildStrokeEnds(f,bounded,&s).size() == 1);
       set(s,4,20,1); // 等于两端极值允许。
       CHECK(BuildStrokeEnds(f,bounded,&s).size() == 2);
-      set(s,8,20,0); // 端点K线反方向影线也在闭区间内。
-      CHECK(BuildStrokeEnds(f,bounded,&s).size() == 1);
+      set(s,8,20,0); // 端点原始影线被向上包含处理舍弃。
+      CHECK(BuildStrokeEnds(f,bounded,&s).size() == 2);
     }
     auto s = raw(16);
+    s.high.assign(16,mirror == 1 ? 10 : -4); s.low.assign(16,mirror == 1 ? 4 : -10);
     set(s,0,3,1); set(s,4,15,12); set(s,6,2,0); set(s,10,20,18); set(s,14,0,-1);
     std::vector<Fractal> f{frac(Kind::Bottom,0,3,1),frac(Kind::Top,4,15,12),frac(Kind::Bottom,6,2,0),
       frac(Kind::Top,10,20,18),frac(Kind::Bottom,14,0,-1)};
-    // 第6根分型因跨度不足被跳过，后续修正末两个端点，不改变稳定前缀。
+    // 第6根分型跨度不足被跳过；第10根同型延伸不能冻结，旧尾部包络被破则退回。
     auto e = BuildStrokeEnds(f,*Config::Decode(1000000),&s);
     REQUIRE(e.size() == 3);
     CHECK(e[0].index == 6 && e[1].index == 10 && e[2].index == 14);
@@ -238,19 +241,129 @@ TEST(BoundedStrokesUseInclusiveRawEnvelopeAndConfirmedFractals)
 TEST(BoundedStrokesSseAlwaysStayInsideBothEndpoints)
 {
   auto s = Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW);
-  auto f = DetectFractals(MergeBars(s));
+  auto bars = MergeBars(s);
+  auto f = DetectFractals(bars);
   for (int stroke = 0; stroke <= 4; ++stroke)
   {
     auto c = *Config::Decode(1000000 + stroke);
-    auto ends = BuildStrokeEnds(f,c,&s);
+    auto ends = BuildStrokeEnds(StrokeInputs(f,s,c),c,&s);
     CHECK(ends.size() > 2);
     for (std::size_t k = 1; k < ends.size(); ++k)
     {
       CHECK(ends[k].kind != ends[k-1].kind && ends[k].index > ends[k-1].index);
       float top = ends[k].kind == Kind::Top ? ends[k].high : ends[k-1].high;
       float bottom = ends[k].kind == Kind::Bottom ? ends[k].low : ends[k-1].low;
-      for (int i = ends[k-1].index; i <= ends[k].index; ++i)
-        CHECK(s.high[i] <= top && s.low[i] >= bottom);
+      if (ends[k].extensionOnly) { CHECK(k+1 == ends.size()); continue; }
+      for (const auto &bar : bars)
+        if (bar.last >= ends[k-1].index && bar.first <= ends[k].index)
+          CHECK(bar.high <= top && bar.low >= bottom);
     }
+  }
+}
+
+
+// 独立按文档检查成笔规则，不调用实现中的ValidStroke；候选与已确认端点分开验收。
+TEST(AllLegalConfigurationsCannotFreezeEligibleOppositeStroke)
+{
+  auto s = Sse();
+  auto bars = MergeBars(s);
+  auto f = DetectFractals(bars);
+  int configurations = 0, eligible = 0, extended = 0;
+  for (int million=0; million<=1; ++million)
+    for (int scope=0; scope<=1; ++scope)
+      for (int boundary=0; boundary<=2; ++boundary)
+        for (int method=0; method<=1; ++method)
+          for (int unit=0; unit<=1; ++unit)
+            for (int end=0; end<=1; ++end)
+              for (int stroke=0; stroke<=4; ++stroke)
+              {
+                auto c = Config::Decode(million*1000000+scope*100000+boundary*10000+method*1000+unit*100+end*10+stroke);
+                if (!c) continue;
+                ++configurations;
+                auto input = StrokeInputs(f,s,*c);
+                StrokeStream stream(input,*c,&s);
+                std::vector<Fractal> confirmed;
+                for (std::size_t k=0; k<input.size(); ++k)
+                {
+                  auto before = confirmed;
+                  bool mustForm = false, mustExtend = false;
+                  if (!before.empty() && !input[k].extensionOnly)
+                  {
+                    const auto &a = before.back(), &b = input[k];
+                    int merged = b.merged-a.merged, raw = b.index-a.index;
+                    bool span = stroke==4 || (stroke==0 ? merged>=4 : merged>=3 && (stroke==1 ? raw>=4 : stroke==3 ? raw>=3 : true));
+                    bool progress = stroke==4 ? (a.kind==Kind::Bottom ? b.high>a.low : a.high>b.low) :
+                      (a.kind==Kind::Bottom ? b.high>a.high : b.low<a.low);
+                    bool nested = stroke==2 && ((a.high>b.high && a.low<b.low) || (a.high<b.high && a.low>b.low));
+                    bool envelope = true;
+                    float top = a.kind==Kind::Top ? a.high : b.high;
+                    float bottom = a.kind==Kind::Bottom ? a.low : b.low;
+                    if (million)
+                      for (const auto &bar : bars)
+                        if (bar.last>=a.index && bar.first<=b.index && (bar.high>top || bar.low<bottom)) envelope=false;
+                    mustForm = a.kind!=b.kind && span && progress && !nested && envelope;
+                    mustExtend = end==0 && a.kind==b.kind && (a.kind==Kind::Top ? b.high>=a.high : b.low<=a.low);
+                  }
+                  int dirty = stream.Add(k);
+                  if (!input[k].extensionOnly && dirty>=0) confirmed = stream.Ends();
+                  if (mustForm) { ++eligible; CHECK(stream.Ends().size()==before.size()+1); CHECK(stream.Ends().back().index==input[k].index); }
+                  if (mustExtend) { ++extended; CHECK(stream.Ends().back().index==input[k].index); }
+                }
+              }
+  CHECK(configurations==240);
+  CHECK(eligible>10000 && extended>1000);
+}
+
+TEST(BoundedSsePrefixesShowPendingExtensionThenConfirmedFractal)
+{
+  for (int n : {160,166,170,175,200,240,SSE_DAILY_COUNT})
+  {
+    auto s = Series::FromRaw(n,SSE_DAILY_HIGH,SSE_DAILY_LOW);
+    auto c = *Config::Decode(1000000);
+    auto f = DetectFractals(MergeBars(s));
+    auto e = BuildStrokeEnds(StrokeInputs(f,s,c),c,&s);
+    REQUIRE(!e.empty());
+    if (n>=170) CHECK(e.back().index>157);
+    if (n==170) { CHECK(e.back().index==169); CHECK(e.back().extensionOnly); }
+    if (n==175) { CHECK(e.back().index==174); CHECK(e.back().extensionOnly); }
+    if (n==SSE_DAILY_COUNT)
+    {
+      auto base = BuildStrokeEnds(f,Config{},&s);
+      CHECK(e.size()*2>=base.size());
+      CHECK(e.back().index==base.back().index);
+    }
+  }
+}
+
+
+TEST(BoundedPendingExtensionIsSymmetricAndCannotFormStroke)
+{
+  for (int mirror : {1,-1})
+  {
+    auto s = Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW);
+    if (mirror<0)
+      for (int i=0; i<s.Size(); ++i) { float h=s.high[i]; s.high[i]=-s.low[i]; s.low[i]=-h; }
+    auto c = *Config::Decode(1000000);
+    auto input = StrokeInputs(DetectFractals(MergeBars(s)),s,c);
+    StrokeStream stream(input,c,&s);
+    int candidates = 0;
+    for (std::size_t k=0; k<input.size(); ++k)
+    {
+      auto before=stream.Ends();
+      int dirty=stream.Add(k);
+      if (!input[k].extensionOnly) continue;
+      CHECK(stream.Ends().size()==before.size());
+      if (dirty>=0)
+      {
+        ++candidates;
+        REQUIRE(!before.empty());
+        CHECK(stream.Ends().back().kind==before.back().kind);
+        CHECK(stream.Ends().back().extensionOnly);
+        auto pivots = StrokePivots(stream.Ends());
+        if (stream.Ends().size()<2) CHECK(pivots.empty());
+        else CHECK(pivots.back().fractalAt==-1 && pivots.back().extensionOnly);
+      }
+    }
+    CHECK(candidates>100);
   }
 }

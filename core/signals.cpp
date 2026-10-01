@@ -681,6 +681,7 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
     {
       const Signal &w = it->second.begin()->second;  // 同键必同类（同优先级），取来源序最先者
       if (w.pivot >= 0 && (earlySignals_ || w.pivot + 1 < P)) winner = &w;
+      if (earlySignals_ && w.pivot >= 0 && p[static_cast<std::size_t>(w.pivot)].extensionOnly) winner = nullptr;
       if (earlySignals_ && !active_.count(key) && (seen_.count(key) || w.pivot != P - 1)) winner = nullptr;
       // 快速提示只首次发布当前末端点，不将后来确立结构中的旧拐点补发为新机会。
     }

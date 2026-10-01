@@ -19,7 +19,8 @@ std::map<SignalKey, Signal> Confirmed(const Snapshot &s, bool early)
   std::map<SignalKey, Signal> out;
   for (const Signal &sig : s.signals)
   {
-    if (sig.pivot < 0 || (!early && static_cast<std::size_t>(sig.pivot) + 1 >= s.pivots.size())) continue;
+    if (sig.pivot < 0 || (early && s.pivots[static_cast<std::size_t>(sig.pivot)].extensionOnly) ||
+        (!early && static_cast<std::size_t>(sig.pivot) + 1 >= s.pivots.size())) continue;
     SignalKey key{sig.index, static_cast<int>(sig.type)};
     auto it = out.find(key);
     if (it == out.end() || it->second.priority < sig.priority)
@@ -70,7 +71,8 @@ public:
       p.index = ends[i].index;
       p.high = ends[i].high;
       p.low = ends[i].low;
-      p.fractalAt = ends[i].confirmedAt;
+      p.fractalAt = ends[i].extensionOnly ? -1 : ends[i].confirmedAt;
+      p.extensionOnly = ends[i].extensionOnly;
       strokePivots_[i] = p;
     }
     strokeDirty_ = MinDirty(strokeDirty_, static_cast<int>(from));
@@ -236,8 +238,8 @@ Analysis Analyze(const Series &series, const Config &config, int window)
   EnergyTables tables = BuildEnergyTables(series);
 
   int from = window > 0 ? series.Size() - window : 0;
-  Incremental inc(a.fractals, tables, config, series);
-  const std::vector<Fractal> &f = a.fractals;
+  const std::vector<Fractal> f = StrokeInputs(a.fractals, series, config);
+  Incremental inc(f, tables, config, series);
   a.instantWarning.assign(static_cast<std::size_t>(series.Size()), 0);
   std::size_t k = 0;
   for (int bar = 0; bar < series.Size(); bar++)
@@ -276,7 +278,7 @@ Analysis AnalyzeReference(const Series &series, const Config &config, int window
   int from = window > 0 ? series.Size() - window : 0;
   std::map<SignalKey, Signal> active;
   std::set<SignalKey> seen;
-  const std::vector<Fractal> &f = a.fractals;
+  const std::vector<Fractal> f = StrokeInputs(a.fractals, series, config);
   for (std::size_t k = 0; k < f.size(); k++)
   {
     int bar = f[k].confirmedAt;

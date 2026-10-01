@@ -38,6 +38,7 @@ struct Fractal
   float high = 0;   // 中间合并K线的高
   float low = 0;    // 中间合并K线的低
   int confirmedAt = -1;  // 右侧首根非包含K线出现即成立
+  bool extensionOnly = false;  // 社区百万位1：原始影线只作未确认末端延伸，不是可成笔的分型。
 };
 
 // 端点：笔或线段的转折点，附该点累积 MACD 数据（动力学）。
@@ -48,6 +49,7 @@ struct Pivot
   float high = 0;
   float low = 0;
   int fractalAt = -1;  // 端点所在分型成立的K线（端点此后仍可能被延伸替换，定型时刻见 Analysis::pivotFinalAt）
+  bool extensionOnly = false;  // 百万位1未确认延伸候选，不能确认买卖点。
   // 社区显示位置：分析index始终是真实极值（第67/71课）；-1表示无合并分型映射。
   int firstFeatureIndex = -1;
   int lastFeatureIndex = -1;

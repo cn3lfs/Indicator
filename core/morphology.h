@@ -30,6 +30,9 @@ std::vector<MergedBar> MergeBars(const Series &s);
 // 分型：合并K线无包含 → 顶底严格交替，且分型在右侧首根非包含K线出现时即定型（confirmedAt）。
 std::vector<Fractal> DetectFractals(const std::vector<MergedBar> &bars);
 
+// 社区百万位1插入当根可见的延伸候选；真实分型表不变，候选不能用于反向成笔。
+std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Series &source, const Config &config);
+
 // 笔端点流：按顺序逐个加入分型（同型更极端者延伸、异型须跨度与价位达标），并即时细化倒数第二个端点。
 // 细化只读取早于下一端点的分型，故 Add 到第 k 个分型时的 Ends() 恰等于对前 k+1 个分型的批量结果。
 class StrokeStream
@@ -40,11 +43,13 @@ public:
   // 加入 fractals[k]（须按顺序）；返回首个发生变化的端点下标，无变化返回 -1
   int Add(std::size_t k);
   const std::vector<Fractal> &Ends() const { return ends_; }
-  // 已定型端点数：第 i 个端点在第 i+2 个未细化端点出现后不再改变（末两个端点仍可能延伸或重新细化）
-  std::size_t FinalCount() const { return raw_.size() >= 2 ? raw_.size() - 2 : 0; }
+  // 默认第i个端点在第i+2个未细化端点出现后定型；百万位1可回退尾部链，暂不承诺定型前缀。
+  std::size_t FinalCount() const { return config_.innerBounded ? 0 : (raw_.size() >= 2 ? raw_.size() - 2 : 0); }
 
 private:
   int AddBounded(std::size_t k);
+  std::vector<MergedBar> boundedBars_;
+  std::vector<Fractal> boundedFractals_;  // 已确认分型；不含影线候选，端点修正只查询当下已知数据。
   const Series *source_ = nullptr;
   const std::vector<Fractal> *fractals_;
   Config config_;
