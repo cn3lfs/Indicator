@@ -50,6 +50,9 @@ enum class CenterFormation : int
 
 struct Config
 {
+  // TDX快速事件专用：分型确认即提示，可失效；不参与公开配置码。社区/非原文口径。
+  bool earlySignals = false;
+
   StrokeRule stroke = StrokeRule::Strict;
   StrokeEnd strokeEnd = StrokeEnd::Extreme;
   CenterUnit unit = CenterUnit::Stroke;
@@ -65,7 +68,7 @@ struct Config
 
   bool operator==(const Config &o) const
   {
-    return stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd && centerFormation == o.centerFormation;
+    return earlySignals == o.earlySignals && stroke == o.stroke && strokeEnd == o.strokeEnd && unit == o.unit && segment == o.segment && segmentEnd == o.segmentEnd && centerFormation == o.centerFormation;
   }
 };
 

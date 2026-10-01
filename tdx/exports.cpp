@@ -69,7 +69,7 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const C
   std::uint32_t h = Fnv(Fnv(2166136261u, high, count), low, count);
   if (s.HasClose()) h = Fnv(h, s.close.data(), count);
   if (!s.volume.empty()) h = Fnv(h, s.volume.data(), count);
-  int code = config.Encode();
+  int code = config.Encode() + (config.earlySignals ? 1000000 : 0);
   g_tick++;
   Slot *victim = &g_slots[0];
   for (Slot &slot : g_slots)
@@ -100,7 +100,7 @@ void Clear(int count, float *out)
 
 // 通用入口：校验输入与配置码，非法则输出全 0
 template <class Project>
-void Run(int count, float *out, float *high, float *low, float *config, Project project)
+void Run(int count, float *out, float *high, float *low, float *config, Project project, bool early = false)
 {
   if (count <= 0 || out == nullptr) return;
   Clear(count, out);
@@ -109,6 +109,7 @@ void Run(int count, float *out, float *high, float *low, float *config, Project 
   if (!std::isfinite(code) || code != std::floor(code)) return;
   std::optional<Config> c = Config::Decode(static_cast<int>(code));
   if (!c) return;
+  c->earlySignals = early;
   project(Analyzed(count, high, low, *c));
 }
 
@@ -176,6 +177,25 @@ void CenterRelation(int count, float *out, float *high, float *low, float *confi
     for (std::size_t i = 1; i < c.size(); i++)
       if (InRange(c[i].start, count)) out[c[i].start] = static_cast<float>(static_cast<int>(chan::Relate(c[i - 1], c[i])));
   });
+}
+
+
+// 社区快速提示：端点分型确认即输出，后续延伸或结构变化可失效；不回填历史K线。
+void EarlySignals(int count, float *out, float *high, float *low, float *config)
+{
+  Run(count, out, high, low, config, [&](const Analysis &a) { WriteEvents(count, out, a.events, false, Code); }, true);
+}
+
+void EarlyRevokes(int count, float *out, float *high, float *low, float *config)
+{
+  Run(count, out, high, low, config, [&](const Analysis &a) { WriteEvents(count, out, a.events, true, Code); }, true);
+}
+
+void EarlyStops(int count, float *out, float *high, float *low, float *config)
+{
+  Run(count, out, high, low, config, [&](const Analysis &a) {
+    WriteEvents(count, out, a.events, false, [](const chan::Signal &s) { return s.stop; });
+  }, true);
 }
 
 void Signals(int count, float *out, float *high, float *low, float *config)

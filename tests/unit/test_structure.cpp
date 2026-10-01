@@ -122,3 +122,36 @@ TEST(ParentSegmentCenterDirectionAndBounds)
     CHECK(stream.FinalCount(p.size()) >= 1); // 父段两端稳定后才允许定型
   }
 }
+
+TEST(EarlyThirdSignalsDoNotWaitForNextStroke)
+{
+  for (int mirror : {1, -1})
+  {
+    const float px[] = {1,10,4,9,5,20,15};
+    std::vector<Pivot> p;
+    for (int i = 0; i < 7; ++i)
+      p.push_back(P(((i % 2 == 0) == (mirror == 1)) ? Kind::Bottom : Kind::Top, i * 4, mirror * px[i]));
+    auto c = BuildCenters(p);
+    auto m = BuildMovements(c);
+    SignalStream early, legacy;
+    early.SetEarlySignals(true);
+    std::vector<SignalEvent> e, old;
+    early.Update(p, c, m, 0, 0, 0, 25, true, e);
+    legacy.Update(p, c, m, 0, 0, 0, 25, true, old);
+    REQUIRE(e.size() == 1);
+    CHECK(old.empty());
+    CHECK(e[0].bar == 25 && e[0].signal.index == 24);
+    CHECK(e[0].signal.type == (mirror == 1 ? SignalType::Buy3 : SignalType::Sell3));
+    CHECK(e[0].signal.stop == mirror * 9);
+    // 回试端点延伸入中枢，原候选立即失效；随后同一旧点恢复也不重复提示。
+    auto original = p;
+    p.back().high = p.back().low = mirror * 8;
+    c = BuildCenters(p); m = BuildMovements(c);
+    early.Update(p, c, m, 6, 0, 0, 26, true, e);
+    REQUIRE(e.size() == 2);
+    CHECK(e.back().revoked && e.back().bar == 26);
+    p = original; c = BuildCenters(p); m = BuildMovements(c);
+    early.Update(p, c, m, 6, 0, 0, 27, true, e);
+    CHECK(e.size() == 2);
+  }
+}

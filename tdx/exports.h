@@ -21,6 +21,11 @@ void FractalStrength(int count, float *out, float *high, float *low, float *conf
 void HindsightSignals(int count, float *out, float *high, float *low, float *config);// 13 事后买卖点（复盘用）
 void RegisterCloseVolume(int count, float *out, float *close, float *volume, float *unused);  // 40
 
+// 41/42/43 社区快速提示、失效、失效价；分型确认即提示，不等下一笔。
+void EarlySignals(int count, float *out, float *high, float *low, float *config);
+void EarlyRevokes(int count, float *out, float *high, float *low, float *config);
+void EarlyStops(int count, float *out, float *high, float *low, float *config);
+
 // 测试用：清空旁路注册与缓存
 void ResetForTesting();
 

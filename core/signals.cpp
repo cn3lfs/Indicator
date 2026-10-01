@@ -680,13 +680,15 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
     if (it != byKey_.end() && !it->second.empty())
     {
       const Signal &w = it->second.begin()->second;  // 同键必同类（同优先级），取来源序最先者
-      if (w.pivot >= 0 && w.pivot + 1 < P) winner = &w;
+      if (w.pivot >= 0 && (earlySignals_ || w.pivot + 1 < P)) winner = &w;
+      if (earlySignals_ && seen_.count(key) && !active_.count(key)) winner = nullptr;
     }
     auto aIt = active_.find(key);
     if (winner && aIt == active_.end())
     {
       if (emit) appear.push_back({bar, *winner, false});
       active_[key] = *winner;
+      if (earlySignals_) seen_.insert(key);
     }
     else if (!winner && aIt != active_.end())
     {

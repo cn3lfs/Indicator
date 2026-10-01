@@ -37,6 +37,9 @@ static PluginTCalcFuncInfo Info[] =
   {12, &tdx::FractalStrength},  // 分型强弱 ±1/±2
   {13, &tdx::HindsightSignals}, // 事后买卖点（含未来函数，仅复盘）
   {40, &tdx::RegisterCloseVolume},  // 注册真实 C/V
+  {41, &tdx::EarlySignals},
+  {42, &tdx::EarlyRevokes},
+  {43, &tdx::EarlyStops},
   {0, NULL},
 };
 

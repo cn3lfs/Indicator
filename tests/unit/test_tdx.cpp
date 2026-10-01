@@ -140,3 +140,29 @@ TEST(TdxSegmentBoundaryProjection)
       CHECK(Call(f, s, static_cast<float>(code)) == Call(f, s, static_cast<float>(code % 10000)));
   }
 }
+
+TEST(TdxEarlySignalsUseSeparateCacheAndStops)
+{
+  tdx::ResetForTesting();
+  Sse s;
+  auto legacy = Call(tdx::Signals, s, 0);
+  auto fast = Call(tdx::EarlySignals, s, 0);
+  auto stops = Call(tdx::EarlyStops, s, 0);
+  auto revokes = Call(tdx::EarlyRevokes, s, 0);
+  CHECK(fast != legacy);
+  CHECK(Call(tdx::Signals, s, 0) == legacy);
+  chan::Config c; c.earlySignals = true;
+  auto a = chan::Analyze(chan::Series::FromRaw(s.n, s.h.data(), s.l.data()), c);
+  std::vector<float> expected(s.n), expectedStops(s.n), expectedRevokes(s.n);
+  std::vector<int> ap(s.n, -1), rp(s.n, -1);
+  for (const auto &e : a.events)
+  {
+    auto &priority = e.revoked ? rp : ap;
+    if (e.signal.priority < priority[e.bar]) continue;
+    priority[e.bar] = e.signal.priority;
+    if (e.revoked) expectedRevokes[e.bar] = static_cast<int>(e.signal.type);
+    else { expected[e.bar] = static_cast<int>(e.signal.type); expectedStops[e.bar] = e.signal.stop; }
+  }
+  CHECK(fast == expected && stops == expectedStops && revokes == expectedRevokes);
+  CHECK(NonZero(Call(tdx::EarlySignals, s, -1)) == 0);
+}

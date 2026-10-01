@@ -14,12 +14,12 @@ namespace
 using SignalKey = std::pair<int, int>;  // (信号K线, 信号码)
 
 // 当下可确认的信号：其端点之后已有下一端点（末端点仍可能延伸，不输出）；同键取优先级最高者
-std::map<SignalKey, Signal> Confirmed(const Snapshot &s)
+std::map<SignalKey, Signal> Confirmed(const Snapshot &s, bool early)
 {
   std::map<SignalKey, Signal> out;
   for (const Signal &sig : s.signals)
   {
-    if (sig.pivot < 0 || static_cast<std::size_t>(sig.pivot) + 1 >= s.pivots.size()) continue;
+    if (sig.pivot < 0 || (!early && static_cast<std::size_t>(sig.pivot) + 1 >= s.pivots.size())) continue;
     SignalKey key{sig.index, static_cast<int>(sig.type)};
     auto it = out.find(key);
     if (it == out.end() || it->second.priority < sig.priority) out[key] = sig;
@@ -42,6 +42,7 @@ public:
     : strokes_(fractals, config), segments_(config.segment), tables_(tables), config_(config)
   {
     signals_.SetTables(&tables_);
+    signals_.SetEarlySignals(config_.earlySignals);
   }
 
   // 加入第 k 个分型；只登记变化，不重算下游
@@ -270,14 +271,21 @@ Analysis AnalyzeReference(const Series &series, const Config &config, int window
 
   int from = window > 0 ? series.Size() - window : 0;
   std::map<SignalKey, Signal> active;
+  std::set<SignalKey> seen;
   const std::vector<Fractal> &f = a.fractals;
   for (std::size_t k = 0; k < f.size(); k++)
   {
     int bar = f[k].confirmedAt;
     if (k + 1 < f.size() && f[k + 1].confirmedAt == bar) continue;
     bool baseline = bar < from;
-    if (baseline && k + 1 < f.size() && f[k + 1].confirmedAt < from) continue;
-    std::map<SignalKey, Signal> now = Confirmed(BuildSnapshot(f, k + 1, tables, config));
+    if (!config.earlySignals && baseline && k + 1 < f.size() && f[k + 1].confirmedAt < from) continue;
+    std::map<SignalKey, Signal> now = Confirmed(BuildSnapshot(f, k + 1, tables, config), config.earlySignals);
+    if (config.earlySignals)
+      for (auto it = now.begin(); it != now.end();)
+      {
+        if (seen.count(it->first) && !active.count(it->first)) it = now.erase(it);
+        else { seen.insert(it->first); ++it; }
+      }
     if (!baseline)
     {
       for (const auto &kv : now)

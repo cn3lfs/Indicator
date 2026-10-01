@@ -180,3 +180,26 @@ TEST(ParentCentersIncrementalReferenceAndCausality)
     }
   }
 }
+
+TEST(EarlyEngineMatchesReferenceAndEveryPrefix)
+{
+  auto full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
+  for (int code : {0, 2, 1100, 100000})
+  {
+    auto c = *chan::Config::Decode(code);
+    c.earlySignals = true;
+    auto all = chan::Analyze(full, c);
+    CHECK(Same(all.events, chan::AnalyzeReference(full, c).events));
+    CHECK(Same(chan::Analyze(full, c, 700).events, chan::AnalyzeReference(full, c, 700).events));
+    std::set<std::pair<int, int>> appeared;
+    for (const auto &e : all.events)
+      if (!e.revoked) CHECK(appeared.insert({e.signal.index, static_cast<int>(e.signal.type)}).second);
+    for (int t = 120; t < full.Size(); t += 37)
+    {
+      auto pre = chan::Series::FromRaw(t + 1, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
+      std::vector<chan::SignalEvent> expected;
+      for (const auto &e : all.events) if (e.bar <= t) expected.push_back(e);
+      CHECK(Same(chan::Analyze(pre, c).events, expected));
+    }
+  }
+}

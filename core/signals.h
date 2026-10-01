@@ -46,6 +46,7 @@ public:
   void Update(const std::vector<Pivot> &pivots, const std::vector<Center> &centers,
               const std::vector<Movement> &movements, int dirtyPivot, int dirtyCenter, int dirtyMove, int bar,
               bool emit, std::vector<SignalEvent> &events);
+  void SetEarlySignals(bool early) { earlySignals_ = early; }
   void SetTables(const EnergyTables *tables) { tables_ = tables; }
 
   // 中枢 ci 的首次离开+回试已找到且扫描视界落在前 pivotFinal 个已定型端点内
@@ -77,6 +78,8 @@ private:
   std::set<SignalKey> touched_;
   std::size_t pivotCount_ = 0;
   std::vector<int> centerStarts_, moveStarts_;
+  bool earlySignals_ = false;
+  std::set<SignalKey> seen_;  // 快速提示同一历史点只发一次，失效后不重新激活
   const EnergyTables *tables_ = nullptr;
 };
 
