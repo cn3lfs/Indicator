@@ -1,4 +1,4 @@
-#include "migration/legacy_config.h"
+#include "tdx/presets.h"
 #include "tdx/exports.h"
 #include "tdx/event_projection.h"
 
@@ -60,10 +60,11 @@ struct Slot
   std::string config;
   std::uint32_t hash = 0;
   unsigned tick = 0;
-  std::unique_ptr<Analysis> analysis;
+  std::unique_ptr<chan::FamilyAnalysis> analysis;
 };
 Slot g_slots[4];
 unsigned g_tick = 0;
+unsigned g_builds = 0;
 
 const Analysis &Analyzed(int count, const float *high, const float *low, const LevelConfig &config)
 {
@@ -71,8 +72,7 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const L
   std::uint32_t h = Fnv(Fnv(2166136261u, high, count), low, count);
   if (s.HasClose()) h = Fnv(h, s.close.data(), count);
   if (!s.volume.empty()) h = Fnv(h, s.volume.data(), count);
-  std::string code = chan::AnalysisId(config.analysis)+";level="+std::to_string(static_cast<int>(config.level))+
-    ";boundary="+std::to_string(static_cast<int>(config.projection.segmentBoundary));
+  std::string code = chan::AnalysisId(config.analysis);
   g_tick++;
   Slot *victim = &g_slots[0];
   for (Slot &slot : g_slots)
@@ -80,16 +80,17 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const L
     if (slot.analysis && slot.count == count && slot.config == code && slot.hash == h)
     {
       slot.tick = g_tick;
-      return *slot.analysis;
+      return slot.analysis->levels[static_cast<int>(config.level)];
     }
     if (!slot.analysis || (victim->analysis && slot.tick < victim->tick)) victim = &slot;
   }
-  victim->analysis = std::make_unique<Analysis>(chan::Analyze(s, config));
+  ++g_builds;
+  victim->analysis = std::make_unique<chan::FamilyAnalysis>(chan::AnalyzeFamily(s, config.analysis));
   victim->count = count;
   victim->config = code;
   victim->hash = h;
   victim->tick = g_tick;
-  return *victim->analysis;
+  return victim->analysis->levels[static_cast<int>(config.level)];
 }
 
 //----------------------------------------------------------------------------
@@ -103,17 +104,19 @@ void Clear(int count, float *out)
 
 // 通用入口：校验输入与配置码，非法则输出全 0
 template <class Project>
-void Run(int count, float *out, float *high, float *low, float *config, Project project, bool early = false)
+void Run(int count, float *out, float *high, float *low, float *config, Project project, bool needsEvents = false)
 {
   if (count <= 0 || out == nullptr) return;
   Clear(count, out);
   if (high == nullptr || low == nullptr) return;
   float code = config ? config[0] : 0.0f;
-  if (!std::isfinite(code) || code != std::floor(code)) return;
-  std::optional<LevelConfig> c = migration::MapLegacyConfig(static_cast<int>(code));
-  if (!c) return;
-  c->analysis.signals.publication = (early ? chan::SignalPublication::Early : chan::SignalPublication::Standard);
-  project(Analyzed(count, high, low, *c));
+  if (!std::isfinite(code) || code != std::floor(code) || code<0 || code>9999) return;
+  const Preset *preset=FindPreset(static_cast<int>(code));
+  if(!preset || preset->error || (needsEvents && !preset->view.outputs.events))return;
+  // 只复制视图配置与投影；共享family缓存不受level或投影影响。
+  const Analysis &shared=Analyzed(count,high,low,preset->view);
+  project(shared,preset->view);
+
 }
 
 bool InRange(int i, int count) { return i >= 0 && i < count; }
@@ -141,10 +144,10 @@ float Code(const chan::Signal &s) { return static_cast<float>(static_cast<int>(s
 
 void Pivots(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     for (const chan::Pivot &p : a.snapshot.pivots)
     {
-      int index = chan::DisplayPivotIndex(p, a.config);
+      int index = chan::DisplayPivotIndex(p, view);
       if (InRange(index, count)) out[index] = static_cast<float>(static_cast<int>(p.kind));
     }
   });
@@ -152,11 +155,12 @@ void Pivots(int count, float *out, float *high, float *low, float *config)
 
 void CenterHigh(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     for (const chan::Center &c : a.snapshot.centers)
     {
       // 显示口径：只画最初三笔／三段（第17/18课成枢构件），延伸仍由结构层计算。
-      int end = a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot + 3)].index;
+      int end = view.projection.centerBox==chan::CenterBox::Initial
+          ? a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot + 3)].index : c.end;
       for (int i = std::max(c.start, 0); i <= end && i < count; i++) out[i] = c.zg;
     }
   });
@@ -164,10 +168,11 @@ void CenterHigh(int count, float *out, float *high, float *low, float *config)
 
 void CenterLow(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     for (const chan::Center &c : a.snapshot.centers)
     {
-      int end = a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot + 3)].index;
+      int end = view.projection.centerBox==chan::CenterBox::Initial
+          ? a.snapshot.pivots[static_cast<std::size_t>(c.firstPivot + 3)].index : c.end;
       for (int i = std::max(c.start, 0); i <= end && i < count; i++) out[i] = c.zd;
     }
   });
@@ -175,7 +180,7 @@ void CenterLow(int count, float *out, float *high, float *low, float *config)
 
 void CenterRelation(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     const std::vector<chan::Center> &c = a.snapshot.centers;
     for (std::size_t i = 1; i < c.size(); i++)
       if (InRange(c[i].start, count)) out[c[i].start] = static_cast<float>(static_cast<int>(chan::Relate(c[i - 1], c[i])));
@@ -186,18 +191,18 @@ void CenterRelation(int count, float *out, float *high, float *low, float *confi
 // 社区快速提示：端点分型确认即输出，后续延伸或结构变化可失效；不回填历史K线。
 void EarlySignals(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) { WriteEvents(count, out, a.events, false, Code); }, true);
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) { WriteEvents(count, out, a.events, false, Code); }, true);
 }
 
 void EarlyRevokes(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) { WriteEvents(count, out, a.events, true, Code); }, true);
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) { WriteEvents(count, out, a.events, true, Code); }, true);
 }
 
 // 精确关联原买卖点的近三根有效信号，避免旧点失效误伤新点。
 void RecentLiveBuys(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     auto values = RecentLiveSignals(a.events, count, true);
     std::copy(values.begin(), values.end(), out);
   }, true);
@@ -205,7 +210,7 @@ void RecentLiveBuys(int count, float *out, float *high, float *low, float *confi
 
 void RecentLiveSells(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     auto values = RecentLiveSignals(a.events, count, false);
     std::copy(values.begin(), values.end(), out);
   }, true);
@@ -213,41 +218,41 @@ void RecentLiveSells(int count, float *out, float *high, float *low, float *conf
 
 void EarlyStops(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     WriteEvents(count, out, a.events, false, [](const chan::Signal &s) { return s.stop; });
   }, true);
 }
 
 void Signals(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) { WriteEvents(count, out, a.events, false, Code); });
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) { WriteEvents(count, out, a.events, false, Code); }, true);
 }
 
 void Revokes(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) { WriteEvents(count, out, a.events, true, Code); });
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) { WriteEvents(count, out, a.events, true, Code); }, true);
 }
 
 void Stops(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     WriteEvents(count, out, a.events, false, [](const chan::Signal &s) { return s.stop; });
-  });
+  }, true);
 }
 
 void Divergence(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     WriteEvents(count, out, a.events, false, [](const chan::Signal &s) {
       const chan::Divergence &d = s.divergence;
       return d.previous.area > 0 ? d.current.area / d.previous.area * 100.0f : 0.0f;
     });
-  });
+  }, true);
 }
 
 void Movements(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     for (const chan::Movement &m : a.snapshot.movements)
       for (int i = std::max(m.start, 0); i <= m.end && i < count; i++) out[i] = static_cast<float>(static_cast<int>(m.type));
   });
@@ -255,7 +260,7 @@ void Movements(int count, float *out, float *high, float *low, float *config)
 
 void Kisses(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     for (int i = 0; i < count && i < static_cast<int>(a.inputs->ma.kisses.size()); i++)
       out[i] = static_cast<float>(static_cast<int>(a.inputs->ma.kisses[static_cast<std::size_t>(i)]));
   });
@@ -264,17 +269,24 @@ void Kisses(int count, float *out, float *high, float *low, float *config)
 // 缺口（借鉴 czsc check_gap_info，只输出当下可知部分；“是否回补”需未来K线，不输出）
 void Gaps(int count, float *out, float *high, float *low, float *config)
 {
-  (void)config;
-  if (count <= 0 || out == nullptr) return;
-  Clear(count, out);
-  if (high == nullptr || low == nullptr) return;
-  std::vector<int8_t> g = chan::Gaps(Series::FromRaw(count, high, low));
-  for (int i = 0; i < count; i++) out[i] = static_cast<float>(g[static_cast<std::size_t>(i)]);
+  Run(count,out,high,low,config,[&](const Analysis &,const LevelConfig &) {
+    auto g=chan::Gaps(MakeSeries(count,high,low));
+    for(int i=0;i<count;++i)out[i]=static_cast<float>(g[i]);
+  });
+}
+
+void PresetDiagnostic(int count,float *out,float *,float *,float *config)
+{
+  if(count<=0 || !out)return;
+  float code=config?config[0]:0;int error=0;
+  if(!std::isfinite(code) || code!=std::floor(code) || code<0 || code>9999)error=1;
+  else { auto *p=FindPreset(static_cast<int>(code));error=p?p->error:2; }
+  for(int i=0;i<count;++i)out[i]=static_cast<float>(error);
 }
 
 void FractalStrength(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     std::vector<int8_t> f = chan::FractalStrengths(MakeSeries(count, high, low), a.inputs->bars, a.inputs->fractals);
     for (int i = 0; i < count; i++) out[i] = static_cast<float>(f[static_cast<std::size_t>(i)]);
   });
@@ -282,7 +294,7 @@ void FractalStrength(int count, float *out, float *high, float *low, float *conf
 
 void HindsightSignals(int count, float *out, float *high, float *low, float *config)
 {
-  Run(count, out, high, low, config, [&](const Analysis &a) {
+  Run(count, out, high, low, config, [&](const Analysis &a, const LevelConfig &view) {
     std::vector<int> priority(static_cast<std::size_t>(count), -1);
     for (const chan::Signal &s : a.snapshot.signals)
     {
@@ -313,11 +325,15 @@ void RegisterCloseVolume(int count, float *out, float *close, float *volume, flo
   for (int i = 0; i < count; i++) out[i] = close ? close[i] : 0.0f;  // 透传收盘价，便于公式写成 XC:=TDXDLL1(40,C,V,0)
 }
 
+unsigned AnalysisBuildsForTesting() { return g_builds; }
+
 void ResetForTesting()
 {
   g_registered = Registered();
   for (Slot &slot : g_slots) slot = Slot();
   g_tick = 0;
+  g_builds = 0;
+  ResetPresetsForTesting();
 }
 
 }  // namespace tdx

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""公式包静态校验：每个 TDXDLL1 调用的编号须在 Main.cpp 注册，配置码须合法，注释花括号成对。"""
+"""公式包静态校验：每个 TDXDLL1 调用的编号须在 Main.cpp 注册，预设号须合法，注释花括号成对。"""
 import pathlib
 import re
 import sys
@@ -14,14 +14,7 @@ def registered_numbers():
 
 
 def valid_config(text):
-    if not re.fullmatch(r"\d+", text):
-        return False
-    code = int(text)
-    digits = [code // 10 ** k % 10 for k in range(7)]
-    return (code <= 1129999 and digits[0] <= 4 and
-            all(digits[k] <= 1 for k in [1, 2, 3, 5, 6]) and
-            digits[4] <= 2 and (digits[3] != 0 or digits[4] == 0) and
-            (digits[6] == 0 or digits[1] == 0))
+    return bool(re.fullmatch(r"\d+", text)) and 0 <= int(text) <= 9999
 
 
 def check(path, numbers):
@@ -43,7 +36,7 @@ def check(path, numbers):
             if (a, b) != ("H", "L"):
                 errors.append(f"{n} 号前两个输入须为 H,L")
             if not valid_config(c):
-                errors.append(f"{n} 号配置码 {c} 非法")
+                errors.append(f"{n} 号预设号 {c} 非法")
     return errors
 
 

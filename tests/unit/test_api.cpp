@@ -230,7 +230,7 @@ TEST(ApiCausalConsistency)
   for (int code : {0, 1100})
   {
     Tables t = Build(full, code);
-    std::vector<float> cfg(static_cast<std::size_t>(full.n()), static_cast<float>(code));
+    std::vector<float> cfg(static_cast<std::size_t>(full.n()), static_cast<float>(code==1100?1:0));
     std::vector<float> s5(cfg.size()), s6(cfg.size()), e5(cfg.size(), 0), e6(cfg.size(), 0);
     std::vector<int> p5(cfg.size(), -1), p6(cfg.size(), -1);
     tdx::Signals(full.n(), s5.data(), full.h.data(), full.l.data(), cfg.data());

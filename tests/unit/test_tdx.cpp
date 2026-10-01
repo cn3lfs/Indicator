@@ -1,3 +1,4 @@
+#include "tdx/presets.h"
 #include "migration/legacy_config.h"
 // 通达信适配层：投影与引擎结果一致、非法输入、旁路 C/V、缓存。
 #include "check.h"
@@ -20,6 +21,14 @@ struct Sse
 
 std::vector<float> Call(void (*f)(int, float *, float *, float *, float *), Sse &s, float code)
 {
+  auto mapped=migration::MapLegacyConfig(static_cast<int>(code));
+  if(mapped && code>=0 && code==static_cast<int>(code))
+  {
+    mapped->projection.centerBox=chan::CenterBox::Initial;
+    bool early=f==tdx::EarlySignals || f==tdx::EarlyRevokes || f==tdx::EarlyStops || f==tdx::RecentLiveBuys || f==tdx::RecentLiveSells;
+    mapped->analysis.signals.publication=early?chan::SignalPublication::Early:chan::SignalPublication::Standard;
+    tdx::InstallPresetForTesting(3,*mapped);code=3;
+  }
   std::vector<float> out(static_cast<std::size_t>(s.n), -9.0f), cfg(static_cast<std::size_t>(s.n), code);
   f(s.n, out.data(), s.h.data(), s.l.data(), cfg.data());
   return out;

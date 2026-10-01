@@ -20,7 +20,7 @@
 #include "Main.h"
 #include "tdx/exports.h"
 
-// 通达信插件函数注册表：编号 → 函数，以 {0,NULL} 结尾。公式 TDXDLL1(编号,H,L,配置码)，含义见 README。
+// 通达信插件函数注册表：编号 → 函数，以 {0,NULL} 结尾。公式 TDXDLL1(编号,H,L,预设号)，含义见 README。
 static PluginTCalcFuncInfo Info[] =
 {
   {1, &tdx::Pivots},            // 端点 顶+1/底-1
@@ -42,6 +42,7 @@ static PluginTCalcFuncInfo Info[] =
   {43, &tdx::EarlyStops},
   {44, &tdx::RecentLiveBuys},
   {45, &tdx::RecentLiveSells},
+  {46, &tdx::PresetDiagnostic},
   {0, NULL},
 };
 

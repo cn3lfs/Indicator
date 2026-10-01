@@ -1,6 +1,7 @@
 // 通达信适配层：把 core 的分析结果投影为逐根序列。签名固定为 (数据个数, 输出, 输入a, 输入b, 输入c)。
-// 公式写法：TDXDLL1(编号, H, L, 配置码)；配置码 个位笔(0严格/1新/2czsc)、十位笔结束、百位中枢构件、千位线段法。
-// 非法配置码输出全 0。“当下”输出只用截至该根的数据（无未来函数）；“当前结构”随新K线可能改变最后一段。
+// 公式写法：TDXDLL1(编号,H,L,小整数预设号)，0笔级/1线段级/2主图快速口径。
+// DLL同目录czsc-presets.ini可覆盖或新增0..9999；非法预设输出0，46号诊断。
+// publication仅由预设控制，5/41等同类编号读同一事件流。
 #pragma once
 
 namespace tdx
@@ -30,7 +31,10 @@ void EarlyStops(int count, float *out, float *high, float *low, float *config);
 void RecentLiveBuys(int count, float *out, float *high, float *low, float *config);
 void RecentLiveSells(int count, float *out, float *high, float *low, float *config);
 
+void PresetDiagnostic(int count,float *out,float *high,float *low,float *config); // 46：0合法/1编号非法/2不存在/4字段非法
+
 // 测试用：清空旁路注册与缓存
 void ResetForTesting();
+unsigned AnalysisBuildsForTesting();
 
 }  // namespace tdx

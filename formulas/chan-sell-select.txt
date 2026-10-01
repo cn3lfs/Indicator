@@ -1,4 +1,4 @@
 {选股：最近3根出现且自身尚未结构失效的卖点，按原位置+类型关联}
 XC:=TDXDLL1(40,C,V,0);
-LIVE:=TDXDLL1(45,H,L,101000);
+LIVE:=TDXDLL1(45,H,L,2);
 LIVE>=11 AND LIVE<=13;
