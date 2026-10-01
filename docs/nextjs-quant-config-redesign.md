@@ -185,3 +185,94 @@ float 传参的上限问题改用**预设号**解决：
    缓存仅含分析身份与行情，level/projection不入键；测试证明两级及不同投影只构建一次，publication确实隔离。
    production core/adapter/tdx不再引用整数迁移工具；公式与校验同步，附INI示例。
    make test：69 cases，0 failed checks；原golden及240映射字节保持。
+
+5. v7按结构字段实现：同向原始缺口计数、large浮点阈值、分型笔禁用、细化窗口及bounded组合；choices/rules与INI同步。
+   第62/65/77/79课正文核实结论登记为社区/非原文。73个测试全绿，社区回归只追加新段，旧golden及240映射字节不变。
+
+## 答复
+
+已按§4顺序完成五步，每步make test全绿后独立提交；前置v6死锁修复已先提交b21eb2d。
+api最终为**v20不兼容主版本**；默认两级用同一笔/线段流与均线/MACD输入，输出和投影不进入分析身份。
+
+### 字段表与布局
+
+| 层 | schema key | 取值/默认 |
+|---|---|---|
+| 分析 | stroke.rule | strict默认/new/czsc/4k/fractal，C值0..4 |
+| 分析 | stroke.endpoint | extreme默认/first/bounded，C值0..2；替代旧十位与百万位 |
+| 分析 | stroke.gap | none默认/asbar/large，C值0..2；分型笔只能none |
+| 分析 | stroke.gapThreshold | float默认0.02，有限开区间(0,1)；只有large进入身份 |
+| 分析 | segment.method | heuristic=0/feature=1默认 |
+| 分析 | center.strokeFormation | entry=0默认/segment=1，只作用笔中枢 |
+| 分析 | signals.publication | standard=0默认/early=1 |
+| 输出 | outputs.levels | stroke=1/segment=2/both=3默认；TDX预设只选一个视图 |
+| 输出 | outputs.events / recursion / nested | 各自off/on，默认on；nested必须两级 |
+| 显示 | projection.segmentBoundary | extreme=0默认/first=1/last=2；heuristic仅extreme |
+| 显示 | projection.centerBox | initial=0/extended=1默认；TDX内置initial |
+
+czsc_config（自然align4，size32）offset：size0、strokeRule4、strokeEndpoint8、strokeGap12、gapThreshold16、segmentMethod20、centerStrokeFormation24、signalsPublication28。
+czsc_projection（align4，size12）：size0、segmentBoundary4、centerBox8。
+czsc_input只含size/n/H/L/C/V：x86 size24、指针offset8/12/16/20；x64 size40、指针offset8/16/24/32。
+schema三个结构pack(1)：field size92（key4,label36,layer68,kind72,defaultValue76,defaultFloat80,min84,max88）；
+choice size396（field4,value36,key40,label72,lessons104,original136,note140）；rule size204（whenField4,whenValue36,field40,onlyValue72,reason76）。
+业务行全部保留v10：pivot28/center56/movement60/divergence68/breakout96/signal144/event16/bar40/nested52/recursive_node84/recursive_center56/recursive_connection40字节。
+
+### 接口清单
+
+- czsc_config_default / validate（0合法，失败中文原因）/ id（返回含NUL所需容量）/ parse（缺失字段用默认，重复/未知拒绝）。
+- czsc_config_fields / choices / rules（NULL/0查询条数）；13字段、31选项、5依赖，field与choice的key全局唯一，note由DLL提供。
+- czsc_build(input,config,outputs)，输出位STROKE1/SEGMENT2/EVENTS4/RECURSION8/NESTED16，默认31；czsc_snapshot_free释放。
+- czsc_level_pivots / centers / movements / breakouts / signals / events / bars / recursive_nodes / recursive_children / recursive_centers / recursive_connections：level参数0笔级/1线段级。
+- czsc_nested_rows从同family读取，删除独立nested_build。递归行的level为所属视图内部递归层，不能与访问参数level混淆。
+- czsc_projection_default / czsc_set_projection，只改变显示表，getter指针在释放或下一次set_projection前有效。
+- czsc_api_version / build_commit / last_error。
+
+删除整数Encode/Decode、config_valid/options、CZSC_FLAG_*、旧single getters及snapshot_build。migration/legacy_config.h仅作一次性记录迁移与测试工具，production core/adapter/tdx均不引用。
+分析ID采用稳定字段名文本；规范化none/asbar无效阈值，输出/投影不在ID中。配置parse支持旧身份省略后增字段，schema让界面自行禁用依赖。
+TDX预设0/1共享同一分析，2为所属线段中枢+early；INI在DLL首次使用从自身目录读取，修改需重载。46号0合法/1编号非法/2不存在/3文件不可读/4字段非法。
+内置无文件可用；存在但无法读取的INI拒绝，防止静默回落默认。events=off禁用事件类输出；TDX没有递归/区间套导出，二者字段只用于C调用方。
+
+### 一次性映射表
+
+完整240行见[legacy-config-map.csv](legacy-config-map.csv)，字段包含legacyCode/analysisId/level/segmentBoundary/centerBox。其生成规则如下（仅历史迁移，不提供DLL整数接口）：
+
+| 旧项 | 新项 |
+|---|---|
+| 个位0..4 | stroke.rule0..4 |
+| 十位0/1，百万位0 | stroke.endpoint=extreme/first |
+| 百万位1（原十位须0） | stroke.endpoint=bounded |
+| 百位0/1 | 访问level0/1 |
+| 千位0/1 | segment.method=heuristic/feature |
+| 万位0/1/2 | projection.segmentBoundary=extreme/first/last |
+| 十万位0/1 | center.strokeFormation=entry/segment |
+| 隐式earlySignals | 明确stroke之外的signals.publication；旧C记录映射为standard，旧快速TDX记录须另记early |
+| 原flags EVENTS/HIGHER | 新outputs EVENTS/RECURSION，level另选；NESTED按需求选择 |
+| 原centerBox无开关 | C映射extended以保留end字节，TDX主图initial |
+
+新默认segment.method=feature使level1等于旧1100；在默认entry口径下，笔级不受线段法影响，所以level0同时等于旧0。
+全部240旧合法码的11表count+完整业务行字节与重构前冻结基线一致，负对照能发现单字节变化；默认nested字节同旧两次快照拼接。
+原tests/unit/golden未改；社区fixture旧205655字节保留，只追加缺口50630字节。v6默认0/1100已核对v9字节基线，重构继续保留。
+
+### 性能
+
+同一WSL native g++ -O2，真实C/V，含事件、递归及区间套；各5次预热，每轮100次，3轮取单次耗时中位数。
+旧程序保留重构前构建产物（两次0/1100+独立nested），新为一次czsc_build outputs31并释放；不比较缓存命中。
+
+| 样本 | 旧两次+区间套 | 新单次两级+区间套 | 耗时降低 |
+|---|---:|---:|---:|
+| SSE日线2038根 | 1508.664μs | 1247.643μs | 17.30% |
+| 000001日线8464根，1991-04-03至2026-09-30 | 6185.545μs | 5260.556μs | 14.95% |
+
+单次共享笔层有收益，但两级中枢/信号/递归与C投表仍须分别执行，不能声称减半。新工具tests/bench_family.cpp可复跑；个股行情及本机路径未入库。
+原始3轮SSE旧1507.995/1508.664/1532.575，新1328.639/1247.643/1139.803；个股旧6751.580/6185.545/6116.950，新5860.132/5081.062/5260.556μs。
+
+未做：nextjs-quant FFI、研究标签及设置面板修改属§6需求方工作，本仓库提供契约/映射/说明；未在通达信GUI导入公式，仅公式静态校验。
+缺口社区口径不标原文，未添加千万位或旧整数兼容导出。v6 bounded可回退，继续不承诺端点定型；无待实现的本轮必需项。
+
+### 最终DLL复核
+
+32/64位DLL均实际LoadLibrary成功：v20新导出、旧导出删除、schema13/31/5、projection、两级表、缺口及DLL自身目录INI（宿主EXE目录不同）通过。
+默认两级11表共174492字节：Win64与v9基线SHA256为1003760a081c3da02965ac46fb3ae44b8d7e2030d1960764e0c31762f2af13f9；
+Win32与从v9 cf0159c重建的同架构程序SHA256均为bc2610e95063df88c99d7200e546593c6c05b996df24daed28e888a42271c656。
+两架构各自逐字节一致；32位x87与64位浮点字节差异本来已存在，不把跨架构输出混作一个基线，也未为此改业务算法或golden。
+release-check通过：PE32/PE32+、仅KERNEL32/msvcrt导入、PE时间戳0。smoke工具见tests/smoke_api20.cpp；未做通达信GUI公式导入。

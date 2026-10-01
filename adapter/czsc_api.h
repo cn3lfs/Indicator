@@ -76,7 +76,7 @@ typedef struct czsc_config_field
   uint32_t size;
   char key[32], label[32];
   int32_t layer, kind, defaultValue; /* layer0分析/1输出/2显示；kind0枚举/1浮点 */
-  float defaultFloat, minFloat, maxFloat;
+  float defaultFloat, minFloat, maxFloat; /* gapThreshold边界为开区间 */
 } czsc_config_field; /* packed size92 */
 typedef struct czsc_config_choice
 {
@@ -232,7 +232,7 @@ typedef struct czsc_signal
   int32_t breakout;       /* 三类所依的离开/回试，突破表下标；其他类 -1 */
   int32_t basedOn;        /* 二类所依的一类信号，信号表下标；其他类 -1 */
   float stop;             /* 失效价：一/二买为信号点低点、三买为 ZG（第20/21/27课）；卖点对称为高点/ZD */
-  int32_t confirmedAt;    /* 信号成立的K线：信号端点已被下一端点确认（=事件流的出现）；未确认 -1 */
+  int32_t confirmedAt;    /* 事件出现K线：standard等下一端点，early等真实分型成立；未确认 -1 */
   int32_t revokedAt;      /* 当下口径下被撤销的K线（新低/新高否定背驰等）；未撤销 -1 */
   int32_t hindsight;      /* 1 = 属于事后全量集合 */
   czsc_divergence divergence; /* 一类：b 段 vs c 段；二类：一买后两段；三类：离开段 vs 前一同向段 */
@@ -385,7 +385,7 @@ CZSC_API const czsc_recursive_node *czsc_level_recursive_nodes(void *snapshot, i
 CZSC_API const int32_t *czsc_level_recursive_children(void *snapshot, int32_t level, int32_t *count);          /* 子节点的节点表下标 */
 CZSC_API const czsc_recursive_center *czsc_level_recursive_centers(void *snapshot, int32_t level, int32_t *count);          /* v5，未请求RECURSION时为空 */
 CZSC_API const czsc_recursive_connection *czsc_level_recursive_connections(void *snapshot, int32_t level, int32_t *count);  /* v5，未请求RECURSION时为空 */
-CZSC_API const czsc_nested *czsc_nested_rows(void *nested, int32_t *count);
+CZSC_API const czsc_nested *czsc_nested_rows(void *snapshot, int32_t *count);
 
 #ifdef __cplusplus
 }

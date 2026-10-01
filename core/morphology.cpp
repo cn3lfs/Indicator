@@ -42,15 +42,26 @@ bool MoreExtreme(const Fractal &base, const Fractal &f)
 }
 
 // 跨度：严格笔合并K线差 ≥4；新笔 ≥3 且原始K线差 ≥4；czsc 笔 ≥3（fx_a 首根到 fx_b 末根 ≥6 根）
-bool SpanEnough(const Fractal &a, const Fractal &b, const LevelConfig &c)
+bool SpanEnough(const Fractal &a, const Fractal &b, const LevelConfig &c, const StrokeGapCounts *gaps)
 {
-  int merged = b.merged - a.merged;
+  int bonus=0;
+  if(c.analysis.stroke.gap!=GapRule::None)
+  {
+    if(!gaps || a.index<0 || b.index>=static_cast<int>(gaps->up.size())-1)
+      throw std::invalid_argument("缺口成笔须提供完整原始K线");
+    const auto &counts=a.kind==Kind::Bottom?gaps->up:gaps->down;
+    const auto &large=a.kind==Kind::Bottom?gaps->largeUp:gaps->largeDown;
+    bonus=counts[b.index+1]-counts[a.index+1];
+    if(c.analysis.stroke.gap==GapRule::Large && large[b.index+1]>large[a.index+1])return true;
+  }
+  int merged = b.merged - a.merged + bonus;
+  int original = b.index - a.index + bonus;
   switch (c.analysis.stroke.rule)
   {
     // 社区/非原文口径，需求方固定；第62/77课独立K线要求不用于此选项。
-    case StrokeRule::FourK: return merged >= 3 && (b.index - a.index) >= 3;
+    case StrokeRule::FourK: return merged >= 3 && original >= 3;
     case StrokeRule::Fractal: return true;
-    case StrokeRule::New: return merged >= 3 && (b.index - a.index) >= 4;
+    case StrokeRule::New: return merged >= 3 && original >= 4;
     case StrokeRule::Czsc: return merged >= 3;
     default: return merged >= 4;
   }
@@ -69,18 +80,18 @@ bool Nested(const Fractal &a, const Fractal &b, const LevelConfig &c)
   return (a.high > b.high && a.low < b.low) || (a.high < b.high && a.low > b.low);
 }
 
-bool ValidStroke(const Fractal &a, const Fractal &b, const LevelConfig &c)
+bool ValidStroke(const Fractal &a, const Fractal &b, const LevelConfig &c, const StrokeGapCounts *gaps)
 {
   // 分型笔只检查顶高于底，不采用第62课上升/下降K线价位推进要求。
   if (c.analysis.stroke.rule == StrokeRule::Fractal)
     return a.kind == Kind::Bottom ? b.high > a.low : a.high > b.low;
-  return SpanEnough(a, b, c) && PriceProgress(a, b) && !Nested(a, b, c);
+  return SpanEnough(a, b, c, gaps) && PriceProgress(a, b) && !Nested(a, b, c);
 }
 
 // 社区合并K线包络：包含处理丢弃的影线不阻止笔形成；只查询已确认端点所在的稳定合并K线。
-bool BoundedStroke(const Fractal &a, const Fractal &b, const LevelConfig &c, const std::vector<MergedBar> &bars)
+bool BoundedStroke(const Fractal &a, const Fractal &b, const LevelConfig &c, const std::vector<MergedBar> &bars, const StrokeGapCounts *gaps)
 {
-  if (a.kind == b.kind || a.index >= b.index || !ValidStroke(a, b, c)) return false;
+  if (a.kind == b.kind || a.index >= b.index || !ValidStroke(a, b, c, gaps)) return false;
   if (bars.empty() || a.index < 0 || b.index > bars.back().last) return false;
   float top = a.kind == Kind::Top ? a.high : b.high;
   float bottom = a.kind == Kind::Bottom ? a.low : b.low;
@@ -96,11 +107,11 @@ bool BoundedStroke(const Fractal &a, const Fractal &b, const LevelConfig &c, con
 // 收笔点细化：在 (prev, next) 且距 prev 不超过 2×最小跨度的窗口内，取仍能与两侧成笔的最极端同型分型。
 // 只读取下标早于 next 的分型，故对分型前缀是因果的。
 Fractal RefineOne(const Fractal &prev, const Fractal &cur, const Fractal &next, const std::vector<Fractal> &fractals,
-                  const LevelConfig &c)
+                  const LevelConfig &c, const StrokeGapCounts *gaps)
 {
   int minSpan = c.analysis.stroke.rule == StrokeRule::Strict ? 4 : 3;
   Fractal best = cur;
-  int maxMerged = prev.merged + 2 * minSpan;
+  int maxMerged = c.analysis.stroke.gap==GapRule::None ? prev.merged + 2 * minSpan : next.merged-1;
   auto it = std::upper_bound(fractals.begin(), fractals.end(), prev.index,
                              [](int idx, const Fractal &f) { return idx < f.index; });
   for (; it != fractals.end() && it->index < next.index; ++it)
@@ -108,7 +119,7 @@ Fractal RefineOne(const Fractal &prev, const Fractal &cur, const Fractal &next, 
     const Fractal &f = *it;
     if (f.merged > maxMerged) break;
     if (f.kind != cur.kind) continue;
-    if (!ValidStroke(prev, f, c) || !ValidStroke(f, next, c)) continue;
+    if (!ValidStroke(prev, f, c, gaps) || !ValidStroke(f, next, c, gaps)) continue;
     if (MoreExtreme(best, f)) best = f;
   }
   return best;
@@ -423,6 +434,27 @@ std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Se
   return out;
 }
 
+StrokeStream::StrokeStream(const std::vector<Fractal> &fractals, const LevelConfig &config,
+                           const Series *source, const std::vector<MergedBar> *bars)
+  : boundSource_(bars), source_(source), fractals_(&fractals), config_(config)
+{
+  if(config.analysis.stroke.gap==GapRule::None)return;
+  if(!source)throw std::invalid_argument("缺口成笔须提供原始K线");
+  if(config.analysis.stroke.rule==StrokeRule::Fractal)throw std::invalid_argument("分型笔不支持缺口跨度");
+  std::size_t n=source->high.size();
+  gaps_.up.resize(n+1);gaps_.down.resize(n+1);gaps_.largeUp.resize(n+1);gaps_.largeDown.resize(n+1);
+  for(std::size_t i=0;i<n;++i)
+  {
+    bool up=i>0 && source->low[i]>source->high[i-1];
+    bool down=i>0 && source->high[i]<source->low[i-1];
+    // 社区/非原文：严格超过阈值；float输入的等比例边界按同精度比较。
+    bool largeUp=up && source->high[i-1]>0 && (source->low[i]-source->high[i-1])/source->high[i-1]>config.analysis.stroke.gapThreshold;
+    bool largeDown=down && source->low[i-1]>0 && (source->low[i-1]-source->high[i])/source->low[i-1]>config.analysis.stroke.gapThreshold;
+    gaps_.up[i+1]=gaps_.up[i]+up;gaps_.down[i+1]=gaps_.down[i]+down;
+    gaps_.largeUp[i+1]=gaps_.largeUp[i]+largeUp;gaps_.largeDown[i+1]=gaps_.largeDown[i]+largeDown;
+  }
+}
+
 int StrokeStream::Add(std::size_t k)
 {
   if ((config_.analysis.stroke.endpoint == chan::StrokeEnd::Bounded)) return AddBounded(k);
@@ -442,7 +474,7 @@ int StrokeStream::Add(std::size_t k)
     raw_.back() = f;
     ends_.back() = f;
   }
-  else if (ValidStroke(last, f, config_))
+  else if (ValidStroke(last, f, config_, &gaps_))
   {
     raw_.push_back(f);  // 新端点；不达标的反向分型忽略，不弹出已成笔端点（第65课）
     ends_.push_back(f);
@@ -456,7 +488,7 @@ int StrokeStream::Add(std::size_t k)
   if (config_.analysis.stroke.endpoint == StrokeEnd::Extreme && config_.analysis.stroke.rule != StrokeRule::Fractal && raw_.size() >= 3)
   {
     std::size_t i = raw_.size() - 2;
-    Fractal refined = RefineOne(ends_[i - 1], raw_[i], raw_[i + 1], *fractals_, config_);
+    Fractal refined = RefineOne(ends_[i - 1], raw_[i], raw_[i + 1], *fractals_, config_, &gaps_);
     if (refined.index != ends_[i].index || refined.kind != ends_[i].kind) changed = i;
     ends_[i] = refined;
   }
@@ -490,7 +522,7 @@ int StrokeStream::AddBounded(std::size_t k)
   }
   else
   {
-    if (!BoundedStroke(last, f, config_, bounds)) return -1;
+    if (!BoundedStroke(last, f, config_, bounds, &gaps_)) return -1;
     raw_.push_back(f);
   }
   std::size_t changed = raw_.size() - 1;
@@ -498,7 +530,7 @@ int StrokeStream::AddBounded(std::size_t k)
   // 延伸可能越过此前跳过的反向极值：优先用已确认分型修正起点，左右均合法才接受；
   // 不能修正时撤掉被破坏的尾部两笔，再从较早端点接续。
   // 不能把不满足包络的笔留在历史里，也不能冻结末端等待一个永远不存在的合法反向笔。
-  while (raw_.size() >= 2 && !BoundedStroke(raw_[raw_.size()-2], raw_.back(), config_, bounds))
+  while (raw_.size() >= 2 && !BoundedStroke(raw_[raw_.size()-2], raw_.back(), config_, bounds, &gaps_))
   {
     std::size_t n = raw_.size();
     Fractal start = raw_[n-2];
@@ -507,8 +539,8 @@ int StrokeStream::AddBounded(std::size_t k)
     {
       if (candidate.kind != start.kind || candidate.index < start.index || candidate.index >= f.index ||
           !MoreExtreme(start, candidate)) continue;
-      if (n >= 3 && !BoundedStroke(raw_[n-3], candidate, config_, bounds)) continue;
-      if (!BoundedStroke(candidate, f, config_, bounds)) continue;
+      if (n >= 3 && !BoundedStroke(raw_[n-3], candidate, config_, bounds, &gaps_)) continue;
+      if (!BoundedStroke(candidate, f, config_, bounds, &gaps_)) continue;
       start = candidate; repaired = true;
     }
     if (repaired)

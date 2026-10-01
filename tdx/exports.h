@@ -31,7 +31,7 @@ void EarlyStops(int count, float *out, float *high, float *low, float *config);
 void RecentLiveBuys(int count, float *out, float *high, float *low, float *config);
 void RecentLiveSells(int count, float *out, float *high, float *low, float *config);
 
-void PresetDiagnostic(int count,float *out,float *high,float *low,float *config); // 46：0合法/1编号非法/2不存在/4字段非法
+void PresetDiagnostic(int count,float *out,float *high,float *low,float *config); // 46：0合法/1编号非法/2不存在/3文件不可读/4字段非法
 
 // 测试用：清空旁路注册与缓存
 void ResetForTesting();

@@ -71,7 +71,14 @@ void Load()
   if(n==0 || n>=32768)return;
   auto ini=std::filesystem::path(path).parent_path()/L"czsc-presets.ini";
   std::ifstream file(ini,std::ios::binary);
-  if(!file)return; // 内置预设始终可用；没有自定义文件时自定义编号报不存在。
+  std::error_code ec;
+  bool exists=std::filesystem::exists(ini,ec);
+  if(ec || (exists && !file))
+  {
+    for(auto &item:presets) { item.second.error=3;item.second.reason="预设文件无法读取"; }
+    return;
+  }
+  if(!exists)return; // 没有INI时用内置；存在却不可读时拒绝，不能悄悄回落默认。
   std::ostringstream text;text<<file.rdbuf();presets=ParsePresets(text.str());
 #endif
 }

@@ -43,6 +43,8 @@ extern "C" int32_t czsc_config_choices(czsc_config_choice *out, int32_t cap)
     {sizeof(czsc_config_choice),"stroke.endpoint",1,"stroke.endpoint.first","次高次低","",0,"社区口径：保留首个同型分型。"},
     {sizeof(czsc_config_choice),"stroke.endpoint",2,"stroke.endpoint.bounded","区间包络","",0,"社区口径：合并K线包络，原始影线只作未确认末端延伸；端点链可回退。"},
     {sizeof(czsc_config_choice),"stroke.gap",0,"stroke.gap.none","不处理","",0,"缺口不改变成笔跨度，保持旧分析。"},
+    {sizeof(czsc_config_choice),"stroke.gap",1,"stroke.gap.asbar","缺口计作1根","",0,"社区口径：端点闭区间内每个同向原始K线缺口，同时给合并与原始跨度加1。"},
+    {sizeof(czsc_config_choice),"stroke.gap",2,"stroke.gap.large","大缺口成笔","",0,"社区口径：包括小缺口计数，比例严格大于gapThreshold（默认2%）时跳过跨度；其他成笔约束仍适用。"},
     {sizeof(czsc_config_choice),"segment.method",0,"segment.method.heuristic","启发式","",0,"保护点启发式，非第67/71课的特征序列规则。"},
     {sizeof(czsc_config_choice),"segment.method",1,"segment.method.feature","特征序列","67/71",1,"按特征序列分型、起点被破及有缺口新极值判定。"},
     {sizeof(czsc_config_choice),"center.strokeFormation",0,"centerFormation.entry","按进入段","",0,"社区笔中枢抽象；首三构件在进入段之后。"},
@@ -70,6 +72,7 @@ extern "C" int32_t czsc_config_rules(czsc_config_rule *out, int32_t cap)
 {
   static const czsc_config_rule rows[] = {
     {sizeof(czsc_config_rule),"stroke.gap",0,"stroke.gapThreshold",-1,"不处理缺口时阈值不适用。"},
+    {sizeof(czsc_config_rule),"stroke.gap",1,"stroke.gapThreshold",-1,"计作1根时阈值不适用。"},
     {sizeof(czsc_config_rule),"stroke.rule",4,"stroke.gap",0,"分型笔没有跨度门槛，缺口选项必须为不处理。"},
     {sizeof(czsc_config_rule),"segment.method",0,"projection.segmentBoundary",0,"启发式线段没有合并特征元素，只能显示极值。"},
     {sizeof(czsc_config_rule),"outputs.nested",1,"outputs.levels",3,"区间套必须同时选择笔级和线段级。"},

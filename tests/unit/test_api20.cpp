@@ -38,7 +38,7 @@ TEST(Api20ConfigSchemaAndValidation)
   c.gapThreshold=std::numeric_limits<float>::quiet_NaN();CHECK(czsc_config_validate(&c)!=0);CHECK(std::strlen(czsc_last_error())>0);
   c.gapThreshold=.02f;c.strokeEndpoint=3;CHECK(czsc_config_validate(&c)!=0);
   auto fields=Schema(czsc_config_fields); auto choices=Schema(czsc_config_choices); auto rules=Schema(czsc_config_rules);
-  CHECK(fields.size()==13); CHECK(rules.size()>=4);
+  CHECK(fields.size()==13); CHECK(rules.size()>=5);
   std::set<std::string> unique, keys;
   for(const auto &f:fields){CHECK(f.size==sizeof(f));CHECK(unique.insert(f.key).second);keys.insert(f.key);}
   for(const auto &o:choices){CHECK(o.size==sizeof(o));CHECK(unique.insert(o.key).second);CHECK(keys.count(o.field)==1);CHECK(o.note[0]!=0);CHECK(o.original==0 || o.lessons[0]!=0);}

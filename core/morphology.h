@@ -33,13 +33,18 @@ std::vector<Fractal> DetectFractals(const std::vector<MergedBar> &bars);
 // 社区百万位1插入当根可见的延伸候选；真实分型表不变，候选不能用于反向成笔。
 std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Series &source, const LevelConfig &config);
 
+// 社区缺口的因果前缀计数，一份笔流一次建立；区间查询O(1)。
+struct StrokeGapCounts
+{
+  std::vector<int> up, down, largeUp, largeDown;
+};
+
 // 笔端点流：按顺序逐个加入分型（同型更极端者延伸、异型须跨度与价位达标），并即时细化倒数第二个端点。
 // 细化只读取早于下一端点的分型，故 Add 到第 k 个分型时的 Ends() 恰等于对前 k+1 个分型的批量结果。
 class StrokeStream
 {
 public:
-  StrokeStream(const std::vector<Fractal> &fractals, const LevelConfig &config, const Series *source = nullptr, const std::vector<MergedBar> *bars = nullptr)
-    : boundSource_(bars), source_(source), fractals_(&fractals), config_(config) {}
+  StrokeStream(const std::vector<Fractal> &fractals, const LevelConfig &config, const Series *source = nullptr, const std::vector<MergedBar> *bars = nullptr);
   // 加入 fractals[k]（须按顺序）；返回首个发生变化的端点下标，无变化返回 -1
   int Add(std::size_t k);
   const std::vector<Fractal> &Ends() const { return ends_; }
@@ -48,6 +53,7 @@ public:
 
 private:
   int AddBounded(std::size_t k);
+  StrokeGapCounts gaps_;
   const std::vector<MergedBar> *boundSource_ = nullptr;
   std::vector<MergedBar> boundedBars_;
   std::vector<Fractal> boundedFractals_;  // 已确认分型；不含影线候选，端点修正只查询当下已知数据。

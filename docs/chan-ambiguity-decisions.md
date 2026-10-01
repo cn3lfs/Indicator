@@ -282,3 +282,23 @@ make test：48 cases, 0 failed checks；新社区事件回归在tests/fixtures/e
 因此需要回退链，不能复用默认算法“后两端点出现即永久定型”的承诺。
 这些候选/包络/回退规则均为社区工程选择，不宣称第62/65/77课规定了本选项；
 ABI仍为api v10，全部C结构体布局不变。
+
+## v20 / v7：笔中缺口（社区/非原文口径）
+
+正文复核：[第62课](https://github.com/stockServ/chzhshch-108-plus/blob/main/108/0567-486e105c01000bf2-062.md)、[第65课](https://github.com/stockServ/chzhshch-108-plus/blob/main/108/0593-486e105c01000bpo-065.md)、[第77课](https://github.com/stockServ/chzhshch-108-plus/blob/main/108/0675-486e105c01000cih-077.md)、[第79课](https://github.com/stockServ/chzhshch-108-plus/blob/main/108/0682-486e105c01000ck3-079.md)。只取正文，不使用课后评论。
+第77课将缺口定义为“没有成交的区间”，并仍要求顶底分型间有独立K线；第62/65课规定分型、跨度与包含处理，第79课没有把缺口改成笔跨度。
+这些正文不支持缺口替代独立K线或固定2%代表一笔力度；两个可选策略都登记为社区/非原文，original=0，默认none不变。
+
+| 边界 | 决策 |
+|---|---|
+| 缺口定义 | 相邻原始K线：up=low[i]>high[i-1]；down=high[i]<low[i-1]，与Gaps一致，不等待回补 |
+| 方向与位置 | 只计笔同向缺口；端点闭区间[a.index,b.index]内两根K线均须在区间，等价i属于(a.index,b.index]。包括右端点，不计左端点与区间外前根形成的缺口 |
+| asbar | 每个同向缺口同时给合并跨度和原始极值跨度加1；strict合并>=4；new合并>=3且原始>=4；czsc合并>=3仍否决分型互含；4K合并>=3且原始>=3 |
+| large | 包含asbar计数；若存在同向大缺口则只跳过跨度，包括原跨度不足时分型可能共用K线，明确不是原文严格笔。其他价位推进、顶高于底、czsc互含及bounded包络仍须成立 |
+| 阈值 | up=(low[i]-high[i-1])/high[i-1]；down=(low[i-1]-high[i])/low[i-1]，分母须>0。float比例严格>gapThreshold；相等不算大缺口；默认0.02，须有限且0<threshold<1 |
+| 分型笔 | 无跨度门槛，gap必须none，schema与validate一致拒绝其余选择 |
+| 同型延伸与细化 | 同型延伸不变；gap启用后细化窗口改为已知prev/next之间全部同型分型，逐一复核两侧成笔，不使用原跨度推算的固定窗口 |
+| bounded组合 | 无冲突；缺口仅放宽跨度，仍按合并K线包络修正/回退，影线仅候选，不可反向成笔或确认信号 |
+| 因果/定型 | 缺口在右根出现时可知，前缀计数只查端点区间；不看回补和未来。普通端点仍第二个后继出现后定型；bounded暂不承诺端点定型 |
+| 下游 | 线段、中枢、走势、信号与递归接受改变后的笔，均不加入额外缺口判断；特征序列缺口继续是第67/71课的独立概念 |
+| 配置与身份 | stroke.gap=none/asbar/large，阈值是浮点分析字段；none/asbar的无效阈值不进身份。TDX预设号，绝不增设千万位 |

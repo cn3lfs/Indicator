@@ -1,4 +1,4 @@
-// 分析配置：原文多义处（第33课）的可选口径，全部显式化。默认值=严格笔+严格收笔+笔中枢+启发式线段。
+// 分析配置：原文多义处（第33课）的可选口径，全部显式化。默认分析=严格笔+极值收笔+特征序列线段，单次两级。
 #pragma once
 
 #include <optional>
@@ -35,7 +35,7 @@ enum class SegmentMethod : int
   Feature = 1,    // 特征序列（第67/71课）
 };
 
-// 万位：社区显示口径；第67/71课的极值划分判定不变。
+// 分界投影：社区显示口径；第67/71课的极值划分判定不变。
 enum class SegmentEnd : int
 {
   Extreme = 0,
@@ -43,14 +43,14 @@ enum class SegmentEnd : int
   Last = 2,
 };
 
-// 十万位：按父线段筛选笔中枢是社区/非原文口径；线段级保持进入段。
+// 按父线段筛选笔中枢是社区/非原文口径；线段级保持进入段。
 enum class CenterFormation : int
 {
   Entry = 0,
   Segment = 1,
 };
 
-// 结构化配置：分析身份不包含输出选择或显示投影，缺口由v7实现。
+// 结构化配置：分析身份不包含输出选择或显示投影，缺口遵从v7社区决策。
 enum class GapRule : int { None = 0, AsBar = 1, Large = 2 };
 enum class SignalPublication : int { Standard = 0, Early = 1 };
 enum class CenterBox : int { Initial = 0, Extended = 1 };
@@ -103,7 +103,7 @@ std::string AnalysisId(const AnalysisConfig &config);
 std::string ApplyAnalysisField(AnalysisConfig &config, const std::string &key, const std::string &value);
 std::string ParseAnalysisId(const std::string &id, AnalysisConfig &config);
 
-// 单级引擎视图；level不是分析选项。旧整数桥只供迁移期间验证，v20移至测试工具。
+// 单级引擎视图；level不是分析选项。整数迁移工具独立于生产核心。
 struct LevelConfig
 {
   AnalysisConfig analysis;

@@ -92,6 +92,22 @@ TEST(GoldenCommunityStrokesSse)
       for (const auto &e : a.events)
         out << "事件 " << e.bar << " " << e.signal.index << " " << static_cast<int>(e.signal.type) << " " << e.revoked << "\n";
     }
+  // v20新增社区缺口段，只追加，不改变既有社区段和原文golden。
+  for(int gap:{1,2})for(int stroke=0;stroke<5;++stroke)
+  {
+    chan::AnalysisConfig config;config.stroke.rule=static_cast<chan::StrokeRule>(stroke);config.stroke.gap=static_cast<chan::GapRule>(gap);
+    if(stroke==4) { out << "## 缺口 " << gap << " 分型笔 不适用\n";continue; }
+    auto family=chan::AnalyzeFamily(real,config);
+    for(int level=0;level<2;++level)
+    {
+      const auto &a=family.levels[level];const auto &n=a.snapshot;
+      out << "## 缺口 " << gap << " 笔算法 " << stroke << " level " << level << " 端点 " << n.pivots.size()
+          << " 中枢 " << n.centers.size() << " 信号 " << n.signals.size() << " 事件 " << a.events.size() << "\n";
+      for(const auto &p:n.pivots)out << "端点 " << p.index << " " << static_cast<int>(p.kind) << " " << p.Price() << "\n";
+      for(const auto &c:n.centers)out << "中枢 " << c.start << " " << c.end << " " << c.zd << " " << c.zg << "\n";
+      for(const auto &e:a.events)out << "事件 " << e.bar << " " << e.signal.index << " " << static_cast<int>(e.signal.type) << " " << e.revoked << "\n";
+    }
+  }
   std::string here = __FILE__;
   std::size_t slash = here.find_last_of("/\\");
   std::string path = (slash == std::string::npos ? "." : here.substr(0, slash)) + "/../fixtures/sse-community.txt";

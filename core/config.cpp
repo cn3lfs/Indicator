@@ -29,7 +29,8 @@ std::string Validate(const AnalysisConfig &c)
 {
   if (static_cast<int>(c.stroke.rule) < 0 || static_cast<int>(c.stroke.rule) > 4) return "笔算法无效";
   if (static_cast<int>(c.stroke.endpoint) < 0 || static_cast<int>(c.stroke.endpoint) > 2) return "笔端点策略无效";
-  if (c.stroke.gap != GapRule::None) return "缺口策略尚未实现，请使用不处理";
+  if (static_cast<int>(c.stroke.gap)<0 || static_cast<int>(c.stroke.gap)>2) return "缺口策略无效";
+  if(c.stroke.rule==StrokeRule::Fractal && c.stroke.gap!=GapRule::None) return "分型笔无跨度门槛，缺口策略必须为不处理";
   if (!std::isfinite(c.stroke.gapThreshold) || c.stroke.gapThreshold <= 0 || c.stroke.gapThreshold >= 1)
     return "缺口阈值须为0到1之间的有限小数";
   if (c.segment.method != SegmentMethod::Heuristic && c.segment.method != SegmentMethod::Feature) return "线段算法无效";
