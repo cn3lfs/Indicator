@@ -215,3 +215,16 @@ TEST(TdxRecentLiveOutputsMatchSignalIdentityProjection)
   CHECK(Call(tdx::RecentLiveBuys, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, true));
   CHECK(Call(tdx::RecentLiveSells, s, 101000) == tdx::RecentLiveSignals(a.events, s.n, false));
 }
+
+TEST(TdxCacheSeparatesEarlyModeFromEncodedConfig)
+{
+  tdx::ResetForTesting(); Sse s;
+  auto old = Call(tdx::Signals, s, 0);
+  auto early = Call(tdx::EarlySignals, s, 0);
+  CHECK(old != early);
+  for (int i = 0; i < 3; ++i)
+  {
+    CHECK(Call(tdx::Signals, s, 0) == old);
+    CHECK(Call(tdx::EarlySignals, s, 0) == early);
+  }
+}

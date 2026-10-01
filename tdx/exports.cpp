@@ -57,6 +57,7 @@ struct Slot
 {
   int count = -1;
   int config = -1;
+  bool earlySignals = false;
   std::uint32_t hash = 0;
   unsigned tick = 0;
   std::unique_ptr<Analysis> analysis;
@@ -70,12 +71,12 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const C
   std::uint32_t h = Fnv(Fnv(2166136261u, high, count), low, count);
   if (s.HasClose()) h = Fnv(h, s.close.data(), count);
   if (!s.volume.empty()) h = Fnv(h, s.volume.data(), count);
-  int code = config.Encode() + (config.earlySignals ? 1000000 : 0);
+  int code = config.Encode();
   g_tick++;
   Slot *victim = &g_slots[0];
   for (Slot &slot : g_slots)
   {
-    if (slot.analysis && slot.count == count && slot.config == code && slot.hash == h)
+    if (slot.analysis && slot.count == count && slot.config == code && slot.earlySignals == config.earlySignals && slot.hash == h)
     {
       slot.tick = g_tick;
       return *slot.analysis;
@@ -85,6 +86,7 @@ const Analysis &Analyzed(int count, const float *high, const float *low, const C
   victim->analysis = std::make_unique<Analysis>(chan::Analyze(s, config));
   victim->count = count;
   victim->config = code;
+  victim->earlySignals = config.earlySignals;
   victim->hash = h;
   victim->tick = g_tick;
   return *victim->analysis;
