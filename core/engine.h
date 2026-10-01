@@ -12,6 +12,8 @@
 #include "core/signals.h"
 
 #include <vector>
+#include <array>
+#include <memory>
 
 namespace chan
 {
@@ -25,15 +27,21 @@ struct Snapshot
   std::vector<Signal> signals;
 };
 
-struct Analysis
+// 两级共同的包含处理、真实分型、均线与MACD表；同一族只有一份不可变数据。
+struct SharedAnalysisInputs
 {
-  Config config;
   std::vector<MergedBar> bars;
   std::vector<Fractal> fractals;
-  Snapshot snapshot;                 // 全部数据下的结构（画线/中枢用）
-  std::vector<SignalEvent> events;   // 当下信号的出现/失效（回测/选股用）
   MovingAverages ma;
-  EnergyTables energy;               // 逐根 MACD 累积表（DIF/DEA/柱）
+  EnergyTables energy;
+};
+
+struct Analysis
+{
+  Config config;  // 单级视图配置，不参与共享分析身份。
+  std::shared_ptr<const SharedAnalysisInputs> inputs;
+  Snapshot snapshot;
+  std::vector<SignalEvent> events;
 
   // 定型时刻：对象此后无论再来什么数据都不会改变的最早K线；尚未定型为 -1。
   // 与快照表逐行对应；breakoutFinalAt 按中枢下标。
@@ -46,6 +54,14 @@ struct Analysis
   // 向上段为 +1（见顶预警）、向下段为 -1（见底预警），否则 0
   std::vector<int8_t> instantWarning;
 };
+
+struct FamilyAnalysis
+{
+  std::array<Analysis,2> levels;
+};
+
+// 单次推进：共享笔与线段流，每级独立维护中枢/走势/信号/定型。
+FamilyAnalysis AnalyzeFamily(const Series &series, const AnalysisConfig &config, int window = 0);
 
 // window>0 时只对最近 window 根K线内的时刻产生事件（其前的状态作为基线，不产生事件）
 Analysis Analyze(const Series &series, const Config &config, int window = 0);

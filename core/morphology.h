@@ -38,8 +38,8 @@ std::vector<Fractal> StrokeInputs(const std::vector<Fractal> &fractals, const Se
 class StrokeStream
 {
 public:
-  StrokeStream(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr)
-    : source_(source), fractals_(&fractals), config_(config) {}
+  StrokeStream(const std::vector<Fractal> &fractals, const Config &config, const Series *source = nullptr, const std::vector<MergedBar> *bars = nullptr)
+    : boundSource_(bars), source_(source), fractals_(&fractals), config_(config) {}
   // 加入 fractals[k]（须按顺序）；返回首个发生变化的端点下标，无变化返回 -1
   int Add(std::size_t k);
   const std::vector<Fractal> &Ends() const { return ends_; }
@@ -48,6 +48,7 @@ public:
 
 private:
   int AddBounded(std::size_t k);
+  const std::vector<MergedBar> *boundSource_ = nullptr;
   std::vector<MergedBar> boundedBars_;
   std::vector<Fractal> boundedFractals_;  // 已确认分型；不含影线候选，端点修正只查询当下已知数据。
   const Series *source_ = nullptr;

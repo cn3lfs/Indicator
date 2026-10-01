@@ -5,6 +5,8 @@
 
 #include <map>
 #include <utility>
+#include <memory>
+#include <stdexcept>
 
 namespace chan
 {
@@ -39,31 +41,28 @@ int MinDirty(int a, int b)
   return a < b ? a : b;
 }
 
-// 增量状态：笔流 → (线段流) → 端点能量 → 中枢流 → 走势 → 买卖点流，每层只重算受上游变化影响的部分
-class Incremental
+// 共享形态流：所有级别读取同一笔链及线段链，MACD端点能量只赋值一次。
+class MorphologyStream
 {
 public:
-  Incremental(const std::vector<Fractal> &fractals, const EnergyTables &tables, const Config &config, const Series &source)
-    : strokes_(fractals, config, &source), segments_(config.analysis.segment.method), tables_(tables), config_(config)
-  {
-    signals_.SetTables(&tables_);
-    signals_.SetEarlySignals((config_.analysis.signals.publication == chan::SignalPublication::Early));
-  }
-
+  MorphologyStream(const std::vector<Fractal> &fractals, const Config &config, const Series &source,
+                   const SharedAnalysisInputs &inputs, bool needSegments)
+    : strokes(fractals,config,&source,&inputs.bars), segments(config.analysis.segment.method),
+      tables_(inputs.energy), needSegments_(needSegments) {}
   // 加入第 k 个分型；只登记变化，不重算下游
   void AddFractal(std::size_t k)
   {
-    int changed = strokes_.Add(k);
+    int changed = strokes.Add(k);
     if (changed < 0) return;
-    const std::vector<Fractal> &ends = strokes_.Ends();
+    const std::vector<Fractal> &ends = strokes.Ends();
     if (ends.size() < 2)
     {
-      if (!strokePivots_.empty()) strokeDirty_ = MinDirty(strokeDirty_, 0);
-      strokePivots_.clear();
+      if (!strokePivots.empty()) strokeDirty = MinDirty(strokeDirty, 0);
+      strokePivots.clear();
       return;
     }
-    std::size_t from = strokePivots_.empty() ? 0 : static_cast<std::size_t>(changed);
-    strokePivots_.resize(ends.size());
+    std::size_t from = strokePivots.empty() ? 0 : static_cast<std::size_t>(changed);
+    strokePivots.resize(ends.size());
     for (std::size_t i = from; i < ends.size(); i++)
     {
       Pivot p;
@@ -73,38 +72,67 @@ public:
       p.low = ends[i].low;
       p.fractalAt = ends[i].extensionOnly ? -1 : ends[i].confirmedAt;
       p.extensionOnly = ends[i].extensionOnly;
-      strokePivots_[i] = p;
+      strokePivots[i] = p;
     }
-    strokeDirty_ = MinDirty(strokeDirty_, static_cast<int>(from));
+    strokeDirty = MinDirty(strokeDirty, static_cast<int>(from));
+  }
+
+
+  void Step()
+  {
+    segmentDirty = -1;
+    if (strokeDirty < 0) return;
+    std::size_t from = static_cast<std::size_t>(strokeDirty);
+    if (from < strokePivots.size())
+    {
+      std::vector<Pivot> tail(strokePivots.begin()+static_cast<std::ptrdiff_t>(from),strokePivots.end());
+      AssignEnergy(tail,tables_);
+      std::copy(tail.begin(),tail.end(),strokePivots.begin()+static_cast<std::ptrdiff_t>(from));
+    }
+    if (needSegments_) segmentDirty = segments.Update(strokePivots,from);
+  }
+  void ClearDirty() { strokeDirty = segmentDirty = -1; }
+
+  StrokeStream strokes;
+  SegmentStream segments;
+  std::vector<Pivot> strokePivots;
+  int strokeDirty = -1, segmentDirty = -1;
+private:
+  const EnergyTables &tables_;
+  bool needSegments_;
+};
+
+// 增量状态：笔流 → (线段流) → 端点能量 → 中枢流 → 走势 → 买卖点流，每层只重算受上游变化影响的部分
+class Incremental
+{
+public:
+  Incremental(MorphologyStream &morphology, const EnergyTables &tables, const Config &config)
+    : morphology_(morphology), tables_(tables), config_(config)
+  {
+    signals_.SetTables(&tables_);
+    signals_.SetEarlySignals(config_.analysis.signals.publication == SignalPublication::Early);
   }
 
   // 一个时刻的全部分型加入后，推进下游并产出事件，再推进各层定型边界
   void Step(int bar, bool emit, std::vector<SignalEvent> &events)
   {
-    if (strokeDirty_ < 0) return;
-    int dirty = strokeDirty_;
-    strokeDirty_ = -1;
-    bool changed = true;
-    if (config_.level == CenterUnit::Segment)
+    if (morphology_.strokeDirty < 0) return;
+    int dirty = config_.level == CenterUnit::Segment ? morphology_.segmentDirty : morphology_.strokeDirty;
+    bool changed = dirty >= 0;
+    if (changed)
     {
-      dirty = segments_.Update(strokePivots_, static_cast<std::size_t>(dirty));
-      changed = dirty >= 0;
-      if (changed) Energize(segments_.Pivots(), static_cast<std::size_t>(dirty));
-    }
-    else
-    {
-      if (config_.analysis.center.strokeFormation == CenterFormation::Segment)
-        segments_.Update(strokePivots_, static_cast<std::size_t>(dirty));
-      Energize(strokePivots_, static_cast<std::size_t>(dirty));
+      const auto &source = config_.level == CenterUnit::Segment ? morphology_.segments.Pivots() : morphology_.strokePivots;
+      pivots_.resize(source.size());
+      for (std::size_t i=static_cast<std::size_t>(dirty); i<source.size(); ++i) pivots_[i] = source[i];
     }
     if (changed)
     {
       int dc;
       if (config_.level == CenterUnit::Stroke && config_.analysis.center.strokeFormation == CenterFormation::Segment)
       {
-        std::size_t stable = segments_.FinalCount(strokes_.FinalCount());
-        int finalBar = stable >= 2 ? segments_.Pivots()[stable - 1].index : -1;
-        dc = centers_.UpdateScoped(pivots_, CenterScopes(pivots_, segments_.Pivots()), finalBar);
+        std::size_t stable = morphology_.segments.FinalCount(morphology_.strokes.FinalCount());
+        int finalBar = stable >= 2 ? morphology_.segments.Pivots()[stable - 1].index : -1;
+        dc = centers_.UpdateScoped(pivots_, CenterScopes(pivots_, morphology_.segments.Pivots()), finalBar);
       }
       else dc = centers_.Update(pivots_, static_cast<std::size_t>(dirty));
       int dm = UpdateMovements(centers_.Centers(), moves_, dc);
@@ -117,8 +145,8 @@ public:
   // 已定型的输入此后不再改变，视界落在其内的检查点之前的输出也就不再改变。
   void AdvanceFinality(int bar)
   {
-    std::size_t strokeFinal = strokes_.FinalCount();
-    std::size_t pivotFinal = config_.level == CenterUnit::Segment ? segments_.FinalCount(strokeFinal) : strokeFinal;
+    std::size_t strokeFinal = morphology_.strokes.FinalCount();
+    std::size_t pivotFinal = config_.level == CenterUnit::Segment ? morphology_.segments.FinalCount(strokeFinal) : strokeFinal;
     pivotFinal = std::min(pivotFinal, pivots_.size());
     std::size_t centerFinal = std::min(centers_.FinalCount(pivotFinal), centers_.Centers().size());
     // 走势 [a,b] 由关系 (b,b+1) 截止：其后一个中枢也已定型才定型
@@ -174,21 +202,7 @@ public:
   }
 
 private:
-  // 端点从 from 起更新并赋能量（MACD 因果，只读 <= 端点下标的累积值）
-  void Energize(const std::vector<Pivot> &src, std::size_t from)
-  {
-    pivots_.resize(src.size());
-    for (std::size_t i = from; i < src.size(); i++) pivots_[i] = src[i];
-    if (from < pivots_.size())
-    {
-      std::vector<Pivot> tail(pivots_.begin() + static_cast<std::ptrdiff_t>(from), pivots_.end());
-      AssignEnergy(tail, tables_);
-      std::copy(tail.begin(), tail.end(), pivots_.begin() + static_cast<std::ptrdiff_t>(from));
-    }
-  }
-
-  StrokeStream strokes_;
-  SegmentStream segments_;
+  MorphologyStream &morphology_;
   CenterStream centers_;
   SignalStream signals_;
   static void Mark(std::vector<int> &at, std::size_t count, int bar)
@@ -201,10 +215,8 @@ private:
   float extreme_ = 0;
   const EnergyTables &tables_;
   Config config_;
-  std::vector<Pivot> strokePivots_;
   std::vector<Pivot> pivots_;
   std::vector<Movement> moves_;
-  int strokeDirty_ = -1;
 };
 
 }  // namespace
@@ -228,57 +240,104 @@ Snapshot BuildSnapshot(const std::vector<Fractal> &fractals, std::size_t count, 
   return s;
 }
 
+namespace
+{
+std::shared_ptr<SharedAnalysisInputs> SharedInputs(const Series &series)
+{
+  auto inputs = std::make_shared<SharedAnalysisInputs>();
+  inputs->bars = MergeBars(series);
+  inputs->fractals = DetectFractals(inputs->bars);
+  inputs->ma = BuildMovingAverages(series);
+  inputs->energy = BuildEnergyTables(series);
+  return inputs;
+}
+
+Snapshot SnapshotFromPivots(const std::vector<Pivot> &pivots, const std::vector<Pivot> &segments,
+                            const EnergyTables &tables, const Config &config)
+{
+  Snapshot s;
+  s.pivots = pivots;
+  s.centers = config.level == CenterUnit::Stroke && config.analysis.center.strokeFormation == CenterFormation::Segment
+    ? BuildCentersInSegments(pivots,segments) : BuildCenters(pivots);
+  s.movements = BuildMovements(s.centers);
+  s.breakouts = BuildBreakouts(s.pivots,s.centers);
+  s.signals = BuildSignals(s.pivots,s.centers,s.movements,s.breakouts,&tables);
+  return s;
+}
+
+FamilyAnalysis AnalyzeLevels(const Series &series, const Config &config, unsigned mask, int window)
+{
+  auto inputs = SharedInputs(series);
+  const auto f = StrokeInputs(inputs->fractals,series,config);
+  bool needSegments = (mask&2) != 0 || config.analysis.center.strokeFormation == CenterFormation::Segment;
+  MorphologyStream morphology(f,config,series,*inputs,needSegments);
+  FamilyAnalysis family;
+  std::array<std::unique_ptr<Incremental>,2> streams;
+  for (int level=0; level<2; ++level)
+  {
+    auto &view = family.levels[level];
+    view.config = config; view.config.level = static_cast<CenterUnit>(level); view.inputs = inputs;
+    if (!(mask&(1u<<level))) continue;
+    streams[level] = std::make_unique<Incremental>(morphology,inputs->energy,view.config);
+    view.instantWarning.assign(static_cast<std::size_t>(series.Size()),0);
+  }
+  int from = window>0 ? series.Size()-window : 0;
+  std::size_t k = 0;
+  for (int bar=0; bar<series.Size(); ++bar)
+  {
+    for (; k<f.size() && f[k].confirmedAt==bar; ++k) morphology.AddFractal(k);
+    morphology.Step();
+    for (int level=0; level<2; ++level)
+      if (streams[level])
+      {
+        auto &view = family.levels[level];
+        streams[level]->Step(bar,bar>=from,view.events);
+        view.instantWarning[static_cast<std::size_t>(bar)] = streams[level]->InstantWarning(bar,series);
+      }
+    morphology.ClearDirty();
+  }
+  auto fit = [](std::vector<int> v, std::size_t n) { v.resize(n,-1); return v; };
+  for (int level=0; level<2; ++level)
+    if (streams[level])
+    {
+      auto &view = family.levels[level]; auto &stream = *streams[level];
+      const auto &pivots = level==0 ? morphology.strokePivots : morphology.segments.Pivots();
+      view.snapshot = SnapshotFromPivots(pivots,morphology.segments.Pivots(),inputs->energy,view.config);
+      view.pivotFinalAt = fit(stream.pivotFinalAt,view.snapshot.pivots.size());
+      view.centerFinalAt = fit(stream.centerFinalAt,view.snapshot.centers.size());
+      view.movementFinalAt = fit(stream.movementFinalAt,view.snapshot.movements.size());
+      view.breakoutFinalAt = fit(stream.breakoutFinalAt,view.snapshot.centers.size());
+    }
+  return family;
+}
+}  // namespace
+
+FamilyAnalysis AnalyzeFamily(const Series &series, const AnalysisConfig &config, int window)
+{
+  auto error = Validate(config);
+  if (!error.empty()) throw std::invalid_argument(error);
+  Config view; view.analysis = Normalize(config);
+  return AnalyzeLevels(series,view,3,window);
+}
+
 Analysis Analyze(const Series &series, const Config &config, int window)
 {
-  Analysis a;
-  a.config = config;
-  a.bars = MergeBars(series);
-  a.fractals = DetectFractals(a.bars);
-  a.ma = BuildMovingAverages(series);
-  EnergyTables tables = BuildEnergyTables(series);
-
-  int from = window > 0 ? series.Size() - window : 0;
-  const std::vector<Fractal> f = StrokeInputs(a.fractals, series, config);
-  Incremental inc(f, tables, config, series);
-  a.instantWarning.assign(static_cast<std::size_t>(series.Size()), 0);
-  std::size_t k = 0;
-  for (int bar = 0; bar < series.Size(); bar++)
-  {
-    bool added = false;
-    for (; k < f.size() && f[k].confirmedAt == bar; k++)  // 同一时刻成立的分型一并处理
-    {
-      inc.AddFractal(k);
-      added = true;
-    }
-    if (added) inc.Step(bar, bar >= from, a.events);
-    a.instantWarning[static_cast<std::size_t>(bar)] = inc.InstantWarning(bar, series);
-  }
-  a.snapshot = BuildSnapshot(f, f.size(), tables, config, &series);
-  auto fit = [](std::vector<int> v, std::size_t n) {
-    v.resize(n, -1);
-    return v;
-  };
-  a.pivotFinalAt = fit(inc.pivotFinalAt, a.snapshot.pivots.size());
-  a.centerFinalAt = fit(inc.centerFinalAt, a.snapshot.centers.size());
-  a.movementFinalAt = fit(inc.movementFinalAt, a.snapshot.movements.size());
-  a.breakoutFinalAt = fit(inc.breakoutFinalAt, a.snapshot.centers.size());
-  a.energy = std::move(tables);
-  return a;
+  auto family = AnalyzeLevels(series,config,1u<<static_cast<unsigned>(config.level),window);
+  return std::move(family.levels[static_cast<std::size_t>(config.level)]);
 }
 
 Analysis AnalyzeReference(const Series &series, const Config &config, int window)
 {
   Analysis a;
   a.config = config;
-  a.bars = MergeBars(series);
-  a.fractals = DetectFractals(a.bars);
-  a.ma = BuildMovingAverages(series);
-  EnergyTables tables = BuildEnergyTables(series);
+  auto inputs = SharedInputs(series);
+  a.inputs = inputs;
+  const EnergyTables &tables = inputs->energy;
 
   int from = window > 0 ? series.Size() - window : 0;
   std::map<SignalKey, Signal> active;
   std::set<SignalKey> seen;
-  const std::vector<Fractal> f = StrokeInputs(a.fractals, series, config);
+  const std::vector<Fractal> f = StrokeInputs(inputs->fractals, series, config);
   for (std::size_t k = 0; k < f.size(); k++)
   {
     int bar = f[k].confirmedAt;

@@ -466,7 +466,8 @@ int StrokeStream::Add(std::size_t k)
 int StrokeStream::AddBounded(std::size_t k)
 {
   if (!source_) throw std::invalid_argument("bounded strokes require source series");
-  if (boundedBars_.empty()) boundedBars_ = MergeBars(*source_);
+  if (!boundSource_ && boundedBars_.empty()) boundedBars_ = MergeBars(*source_);
+  const auto &bounds = boundSource_ ? *boundSource_ : boundedBars_;
   const Fractal &f = (*fractals_)[k];
   if (f.extensionOnly)
   {
@@ -489,7 +490,7 @@ int StrokeStream::AddBounded(std::size_t k)
   }
   else
   {
-    if (!BoundedStroke(last, f, config_, boundedBars_)) return -1;
+    if (!BoundedStroke(last, f, config_, bounds)) return -1;
     raw_.push_back(f);
   }
   std::size_t changed = raw_.size() - 1;
@@ -497,7 +498,7 @@ int StrokeStream::AddBounded(std::size_t k)
   // 延伸可能越过此前跳过的反向极值：优先用已确认分型修正起点，左右均合法才接受；
   // 不能修正时撤掉被破坏的尾部两笔，再从较早端点接续。
   // 不能把不满足包络的笔留在历史里，也不能冻结末端等待一个永远不存在的合法反向笔。
-  while (raw_.size() >= 2 && !BoundedStroke(raw_[raw_.size()-2], raw_.back(), config_, boundedBars_))
+  while (raw_.size() >= 2 && !BoundedStroke(raw_[raw_.size()-2], raw_.back(), config_, bounds))
   {
     std::size_t n = raw_.size();
     Fractal start = raw_[n-2];
@@ -506,8 +507,8 @@ int StrokeStream::AddBounded(std::size_t k)
     {
       if (candidate.kind != start.kind || candidate.index < start.index || candidate.index >= f.index ||
           !MoreExtreme(start, candidate)) continue;
-      if (n >= 3 && !BoundedStroke(raw_[n-3], candidate, config_, boundedBars_)) continue;
-      if (!BoundedStroke(candidate, f, config_, boundedBars_)) continue;
+      if (n >= 3 && !BoundedStroke(raw_[n-3], candidate, config_, bounds)) continue;
+      if (!BoundedStroke(candidate, f, config_, bounds)) continue;
       start = candidate; repaired = true;
     }
     if (repaired)

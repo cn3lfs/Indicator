@@ -256,8 +256,8 @@ void Movements(int count, float *out, float *high, float *low, float *config)
 void Kisses(int count, float *out, float *high, float *low, float *config)
 {
   Run(count, out, high, low, config, [&](const Analysis &a) {
-    for (int i = 0; i < count && i < static_cast<int>(a.ma.kisses.size()); i++)
-      out[i] = static_cast<float>(static_cast<int>(a.ma.kisses[static_cast<std::size_t>(i)]));
+    for (int i = 0; i < count && i < static_cast<int>(a.inputs->ma.kisses.size()); i++)
+      out[i] = static_cast<float>(static_cast<int>(a.inputs->ma.kisses[static_cast<std::size_t>(i)]));
   });
 }
 
@@ -275,7 +275,7 @@ void Gaps(int count, float *out, float *high, float *low, float *config)
 void FractalStrength(int count, float *out, float *high, float *low, float *config)
 {
   Run(count, out, high, low, config, [&](const Analysis &a) {
-    std::vector<int8_t> f = chan::FractalStrengths(MakeSeries(count, high, low), a.bars, a.fractals);
+    std::vector<int8_t> f = chan::FractalStrengths(MakeSeries(count, high, low), a.inputs->bars, a.inputs->fractals);
     for (int i = 0; i < count; i++) out[i] = static_cast<float>(f[static_cast<std::size_t>(i)]);
   });
 }

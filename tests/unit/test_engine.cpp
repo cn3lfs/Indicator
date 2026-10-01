@@ -219,3 +219,67 @@ TEST(BoundedEngineMatchesReferenceOnSse)
       CHECK(Same(chan::Analyze(full,c).events,chan::AnalyzeReference(full,c).events));
     }
 }
+
+
+TEST(FamilySharesInputsAndMatchesIndependentReferenceAtBothLevels)
+{
+  auto source = chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
+  for (int code : {0,1,2,3,4,10,14,1000,101000,1000000,1000001,1000002,1000004,1101000})
+  {
+    auto config = *chan::Config::Decode(code);
+    auto family = chan::AnalyzeFamily(source,config.analysis);
+    CHECK(family.levels[0].inputs.get()==family.levels[1].inputs.get());
+    for (int level=0; level<2; ++level)
+    {
+      config.level=static_cast<chan::CenterUnit>(level);
+      auto reference=chan::AnalyzeReference(source,config);
+      const auto &actual=family.levels[level];
+      CHECK(Same(actual.events,reference.events));
+      const auto &a=actual.snapshot,&b=reference.snapshot;
+      REQUIRE(a.pivots.size()==b.pivots.size() && a.centers.size()==b.centers.size());
+      CHECK(a.movements.size()==b.movements.size() && a.breakouts.size()==b.breakouts.size());
+      for (std::size_t i=0; i<a.pivots.size(); ++i)
+      {
+        const auto &x=a.pivots[i],&y=b.pivots[i];
+        CHECK(x.index==y.index && x.kind==y.kind && x.high==y.high && x.low==y.low && x.fractalAt==y.fractalAt);
+        CHECK(x.firstFeatureIndex==y.firstFeatureIndex && x.lastFeatureIndex==y.lastFeatureIndex);
+        CHECK(x.energy==y.energy && x.energyRed==y.energyRed && x.energyGreen==y.energyGreen && x.dif==y.dif && x.dea==y.dea);
+      }
+      for (std::size_t i=0; i<a.centers.size(); ++i)
+      {
+        const auto &x=a.centers[i],&y=b.centers[i];
+        CHECK(x.firstPivot==y.firstPivot && x.lastPivot==y.lastPivot && x.start==y.start && x.end==y.end);
+        CHECK(x.zg==y.zg && x.zd==y.zd && x.gg==y.gg && x.dd==y.dd && x.direction==y.direction);
+      }
+      std::vector<chan::SignalEvent> as,bs;
+      for (const auto &s:a.signals) as.push_back({0,s,false});
+      for (const auto &s:b.signals) bs.push_back({0,s,false});
+      CHECK(Same(as,bs));
+    }
+  }
+}
+
+TEST(FamilyEventsAreCausalOnBothLevels)
+{
+  auto source = chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
+  for (int code : {0,101000,1000000,1101000})
+  {
+    auto config=*chan::Config::Decode(code);
+    for (auto publication : {chan::SignalPublication::Standard,chan::SignalPublication::Early})
+    {
+      config.analysis.signals.publication=publication;
+      auto full=chan::AnalyzeFamily(source,config.analysis);
+      for (int n : {170,176,240,500,1000})
+      {
+        auto prefix=chan::Series::FromRaw(n,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
+        auto partial=chan::AnalyzeFamily(prefix,config.analysis);
+        for (int level=0; level<2; ++level)
+        {
+          std::vector<chan::SignalEvent> expected;
+          for (const auto &event : full.levels[level].events) if (event.bar<n) expected.push_back(event);
+          CHECK(Same(partial.levels[level].events,expected));
+        }
+      }
+    }
+  }
+}

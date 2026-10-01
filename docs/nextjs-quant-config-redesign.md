@@ -168,3 +168,8 @@ float 传参的上限问题改用**预设号**解决：
    经映射全部一致，负对照能发现单个业务字节变化。make test：64 cases，0 failed checks。
    默认分析线段法选feature以同时对应旧0/1100；默认C中枢框投影为含延伸以保留旧end字节。
    v20按需求明确断代，替代CLAUDE.md中旧版本“只末尾追加字段”的约束，业务表默认字节仍保持。
+
+2. 单次两级：AnalyzeFamily共享包含/分型、笔/线段流、均线和MACD，一份不可变SharedAnalysisInputs供两级读取；
+   两级独立维护中枢/走势/信号与定型边界，最终快照复用共享端点，不再重跑形态链。
+   两级均与独立参照重算及前缀事件一致，全部旧码C表字节基线不变。
+   make test：66 cases，0 failed checks；原golden不变。

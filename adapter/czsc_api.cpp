@@ -577,16 +577,16 @@ Snapshot *Build(const czsc_input *in)
   if (in->flags & CZSC_FLAG_HIGHER) BuildRecursiveNodes(a, s, *out);
 
   std::vector<int8_t> gaps = chan::Gaps(s);
-  std::vector<int8_t> strengths = chan::FractalStrengths(s, a.bars, a.fractals);
+  std::vector<int8_t> strengths = chan::FractalStrengths(s, a.inputs->bars, a.inputs->fractals);
   for (std::size_t i = 0; i < n; i++)
   {
     czsc_bar row = Row<czsc_bar>();
-    row.dif = a.energy.dif[i];
-    row.dea = a.energy.dea[i];
-    row.macd = (a.energy.dif[i] - a.energy.dea[i]) * 2.0f;
-    row.kiss = static_cast<int32_t>(a.ma.kisses[i]);
-    row.maShort = a.ma.shortMa[i];
-    row.maLong = a.ma.longMa[i];
+    row.dif = a.inputs->energy.dif[i];
+    row.dea = a.inputs->energy.dea[i];
+    row.macd = (a.inputs->energy.dif[i] - a.inputs->energy.dea[i]) * 2.0f;
+    row.kiss = static_cast<int32_t>(a.inputs->ma.kisses[i]);
+    row.maShort = a.inputs->ma.shortMa[i];
+    row.maLong = a.inputs->ma.longMa[i];
     row.gap = gaps[i];
     row.fractalStrength = strengths[i];
     row.instantDivergence = a.instantWarning[i];
