@@ -52,7 +52,11 @@ public:
   std::size_t FinalCount() const { return (config_.analysis.stroke.endpoint == chan::StrokeEnd::Bounded) ? 0 : (raw_.size() >= 2 ? raw_.size() - 2 : 0); }
 
 private:
+  int AddSecond(std::size_t k);
   int AddBounded(std::size_t k);
+  std::optional<Fractal> secondExtreme_;  // 当前起点之后因成笔条件受阻的反向极值。
+  bool secondEligible_ = false;  // 仅跨度不足，其他条件成立。
+  bool secondTried_ = false;     // 每个极值只试其后紧邻的一个同型分型。
   StrokeGapCounts gaps_;
   const std::vector<MergedBar> *boundSource_ = nullptr;
   std::vector<MergedBar> boundedBars_;

@@ -44,13 +44,12 @@ TEST(IncrementalEngineMatchesReference)
   {
     int n = static_cast<int>(s.high.size());
     chan::Series series = chan::Series::FromRaw(n, &s.high[0], &s.low[0]);
-    for (int code : {0, 1, 2, 10, 101, 1100, 1101, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104})
+    for (auto c : AnalysisConfigs({0,1,2,101,1100,1101,3,4,1103,1104,11100,11101,11102,11103,11104,21100,21101,21102,21103,21104}, {0,1,2,3,4,1100}))
     {
-      chan::LevelConfig c = *migration::MapLegacyConfig(code);
       chan::Analysis inc = chan::Analyze(series, c);
       chan::Analysis ref = chan::AnalyzeReference(series, c);
       bool same = Same(inc.events, ref.events);
-      if (!same) std::printf("  %s cfg %d\n", s.name, code);
+      if (!same) std::printf("  %s cfg %s level%d\n", s.name, chan::AnalysisId(c.analysis).c_str(), static_cast<int>(c.level));
       CHECK(same);
       total += static_cast<int>(inc.events.size());
     }
@@ -63,9 +62,8 @@ TEST(IncrementalEngineMatchesReference)
 TEST(EngineIsCausalOnEveryPrefix)
 {
   chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
-  for (int code : {0, 2, 1100, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104, 1000000, 1000001, 1000002, 1000003, 1000004, 1001100, 1001101, 1001102, 1001103, 1001104, 1100000, 1101000, 1101100})
+  for (auto c : AnalysisConfigs({0,2,1100,3,4,1103,1104,11100,11101,11102,11103,11104,21100,21101,21102,21103,21104,1000000,1000001,1000002,1000003,1000004,1001100,1001101,1001102,1001103,1001104,1100000,1101000,1101100}, {0,1,2,3,4,1100}))
   {
-    chan::LevelConfig c = *migration::MapLegacyConfig(code);
     std::vector<chan::SignalEvent> all = chan::Analyze(full, c).events;
     for (int t = 120; t < full.Size(); t += 37)
     {
@@ -85,9 +83,8 @@ TEST(FinalizedObjectsNeverChange)
 {
   chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
   int checked = 0;
-  for (int code : {0, 1, 2, 10, 101, 1100, 1101, 3, 4, 13, 14, 1103, 1104, 11100, 11101, 11102, 11103, 11104, 21100, 21101, 21102, 21103, 21104, 1000000, 1000001, 1000002, 1000003, 1000004, 1001100, 1001101, 1001102, 1001103, 1001104, 1100000, 1101000, 1101100})
+  for (auto c : AnalysisConfigs({0,1,2,101,1100,1101,3,4,1103,1104,11100,11101,11102,11103,11104,21100,21101,21102,21103,21104,1000000,1000001,1000002,1000003,1000004,1001100,1001101,1001102,1001103,1001104,1100000,1101000,1101100}, {0,1,2,3,4,1100}))
   {
-    chan::LevelConfig c = *migration::MapLegacyConfig(code);
     chan::Analysis all = chan::Analyze(full, c);
     for (int k = 60; k < full.Size(); k += 29)
     {
@@ -133,7 +130,7 @@ TEST(FinalizedObjectsNeverChange)
       }
     }
     // 全量中除末尾外应基本都已定型
-    CHECK(all.pivotFinalAt.size() < 3 || all.pivotFinalAt[all.pivotFinalAt.size() - 3] >= 0 || code >= 1000);
+    CHECK(all.pivotFinalAt.size() < 3 || all.pivotFinalAt[all.pivotFinalAt.size() - 3] >= 0 || c.analysis.segment.method == chan::SegmentMethod::Feature || c.analysis.stroke.endpoint == chan::StrokeEnd::Bounded);
   }
   CHECK(checked > 1000);
 }
@@ -142,13 +139,12 @@ TEST(FinalizedObjectsNeverChange)
 TEST(InstantWarningIsCausal)
 {
   chan::Series full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
-  for (int code : {0, 1100})
+  for (auto c : AnalysisConfigs({0,1100}))
   {
-    chan::LevelConfig c = *migration::MapLegacyConfig(code);
     std::vector<int8_t> all = chan::Analyze(full, c).instantWarning;
     int up = 0, down = 0;
     for (int8_t w : all) { up += w > 0; down += w < 0; }
-    CHECK(code != 0 || (up > 0 && down > 0));
+    CHECK(c.level != chan::CenterUnit::Stroke || (up > 0 && down > 0));
     for (int k = 100; k < full.Size(); k += 73)
     {
       chan::Series pre;
@@ -185,9 +181,8 @@ TEST(ParentCentersIncrementalReferenceAndCausality)
 TEST(EarlyEngineMatchesReferenceAndEveryPrefix)
 {
   auto full = chan::Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW, SSE_DAILY_CLOSE, SSE_DAILY_VOLUME);
-  for (int code : {0, 2, 1100, 100000, 101000, 1000000, 1000004, 1001100})
+  for (auto c : AnalysisConfigs({0,2,1100,100000,101000,1000000,1000004,1001100}))
   {
-    auto c = *migration::MapLegacyConfig(code);
     c.analysis.signals.publication = chan::SignalPublication::Early;
     auto all = chan::Analyze(full, c);
     CHECK(Same(all.events, chan::AnalyzeReference(full, c).events));
@@ -221,13 +216,92 @@ TEST(BoundedEngineMatchesReferenceOnSse)
     }
 }
 
+TEST(SecondEngineRulesGapsPublicationAndBothLevels)
+{
+  auto source=chan::Series::FromRaw(600,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
+  for (int rule=0;rule<=4;++rule)
+    for (int gap=0;gap<=2;++gap)
+    {
+      if (rule==4 && gap!=0) continue;
+      for (auto publication:{chan::SignalPublication::Standard,chan::SignalPublication::Early})
+      {
+        chan::LevelConfig c;
+        c.analysis.stroke.endpoint=chan::StrokeEnd::Second;
+        c.analysis.stroke.rule=static_cast<chan::StrokeRule>(rule);
+        c.analysis.stroke.gap=static_cast<chan::GapRule>(gap);
+        c.analysis.signals.publication=publication;
+        auto family=chan::AnalyzeFamily(source,c.analysis);
+        for (int level=0;level<2;++level)
+        {
+          c.level=static_cast<chan::CenterUnit>(level);
+          const auto &actual=family.levels[level];
+          auto reference=chan::AnalyzeReference(source,c);
+          CHECK(Same(actual.events,reference.events));
+          REQUIRE(actual.snapshot.pivots.size()==reference.snapshot.pivots.size());
+          REQUIRE(actual.snapshot.centers.size()==reference.snapshot.centers.size());
+          CHECK(actual.snapshot.movements.size()==reference.snapshot.movements.size());
+          CHECK(actual.snapshot.signals.size()==reference.snapshot.signals.size());
+          for (std::size_t i=0;i<actual.snapshot.pivots.size();++i)
+          {
+            const auto &a=actual.snapshot.pivots[i],&b=reference.snapshot.pivots[i];
+            CHECK(a.index==b.index && a.kind==b.kind && a.high==b.high && a.low==b.low && a.fractalAt==b.fractalAt);
+          }
+          for (std::size_t i=0;i<actual.snapshot.centers.size();++i)
+          {
+            const auto &a=actual.snapshot.centers[i],&b=reference.snapshot.centers[i];
+            CHECK(a.start==b.start && a.end==b.end && a.firstPivot==b.firstPivot && a.lastPivot==b.lastPivot);
+            CHECK(a.zd==b.zd && a.zg==b.zg && a.dd==b.dd && a.gg==b.gg && a.direction==b.direction);
+          }
+        }
+      }
+    }
+  // 不抽样：逐根检查真实样本上的两级事件与已定型端点，覆盖补选后的因果链。
+  chan::AnalysisConfig config; config.stroke.endpoint=chan::StrokeEnd::Second;
+  config.signals.publication=chan::SignalPublication::Early;
+  auto full=chan::AnalyzeFamily(source,config);
+  for (int n=1;n<=source.Size();++n)
+  {
+    auto prefix=chan::Series::FromRaw(n,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
+    auto partial=chan::AnalyzeFamily(prefix,config);
+    for (int level=0;level<2;++level)
+    {
+      const auto &a=partial.levels[level],&b=full.levels[level];
+      std::vector<chan::SignalEvent> expected;
+      for (const auto &event:b.events) if (event.bar<n) expected.push_back(event);
+      CHECK(Same(a.events,expected));
+      for (std::size_t i=0;i<a.pivotFinalAt.size();++i)
+        if (a.pivotFinalAt[i]>=0)
+        {
+          REQUIRE(i<b.snapshot.pivots.size());
+          CHECK(a.snapshot.pivots[i].index==b.snapshot.pivots[i].index);
+          CHECK(a.pivotFinalAt[i]==b.pivotFinalAt[i]);
+        }
+    }
+  }
+  auto real=chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
+  int total=0;
+  for (auto publication:{chan::SignalPublication::Standard,chan::SignalPublication::Early})
+  {
+    config.signals.publication=publication;
+    auto family=chan::AnalyzeFamily(real,config);
+    for (int level=0;level<2;++level)
+    {
+      const auto &a=family.levels[level];
+      int revoked=0; for (const auto &e:a.events) revoked+=e.revoked;
+      std::printf("  second SSE publication=%d level=%d pivots=%zu centers=%zu movements=%zu signals=%zu events=%zu revoked=%d\n",
+        static_cast<int>(publication),level,a.snapshot.pivots.size(),a.snapshot.centers.size(),a.snapshot.movements.size(),a.snapshot.signals.size(),a.events.size(),revoked);
+      total+=static_cast<int>(a.events.size());
+    }
+  }
+  CHECK(total>0);
+}
+
 
 TEST(FamilySharesInputsAndMatchesIndependentReferenceAtBothLevels)
 {
   auto source = chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
-  for (int code : {0,1,2,3,4,10,14,1000,101000,1000000,1000001,1000002,1000004,1101000})
+  for (auto config : AnalysisConfigs({0,1,2,3,4,1000,101000,1000000,1000001,1000002,1000004,1101000}, {0,1,2,3,4}))
   {
-    auto config = *migration::MapLegacyConfig(code);
     auto family = chan::AnalyzeFamily(source,config.analysis);
     CHECK(family.levels[0].inputs.get()==family.levels[1].inputs.get());
     for (int level=0; level<2; ++level)
@@ -263,9 +337,8 @@ TEST(FamilySharesInputsAndMatchesIndependentReferenceAtBothLevels)
 TEST(FamilyEventsAreCausalOnBothLevels)
 {
   auto source = chan::Series::FromRaw(SSE_DAILY_COUNT,SSE_DAILY_HIGH,SSE_DAILY_LOW,SSE_DAILY_CLOSE,SSE_DAILY_VOLUME);
-  for (int code : {0,101000,1000000,1101000})
+  for (auto config : AnalysisConfigs({0,101000,1000000,1101000}))
   {
-    auto config=*migration::MapLegacyConfig(code);
     for (auto publication : {chan::SignalPublication::Standard,chan::SignalPublication::Early})
     {
       config.analysis.signals.publication=publication;

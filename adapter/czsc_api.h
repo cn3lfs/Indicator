@@ -34,8 +34,9 @@ extern "C" {
 
 /* v20不兼容主版本：结构化配置与一次构建两级，删除整数配置/flags/独立区间套。
  * 所有业务行保持v10布局；packed仅用于schema，其他POD按4字节字段布局。
- * 默认分析level0/1分别保留旧配置0/1100的业务字节。 */
-#define CZSC_API_VERSION 20
+ * 默认分析level0/1分别保留旧配置0/1100的业务字节。
+ * v21移除first，strokeEndpoint=1改为后续相邻次高低补选second；布局与v20一致。 */
+#define CZSC_API_VERSION 21
 
 /* czsc_signal.context 位定义（研判语义，信号确认当时计算、随信号冻结） */
 #define CZSC_CTX_ABC 0x01u            /* a+A+b+B+c 完整：一类的 c 段内含 B 中枢的三类点（第37课） */
@@ -51,7 +52,7 @@ typedef struct czsc_config
 {
   uint32_t size;
   int32_t strokeRule;       /* 0严格/1新笔/2czsc/3社区4K/4社区分型 */
-  int32_t strokeEndpoint;   /* 0极值/1次高低/2合并K线包络 */
+  int32_t strokeEndpoint;   /* 0极值/1后续相邻次高低补选/2合并K线包络 */
   int32_t strokeGap;        /* 0不处理/1计作一根/2大缺口成笔 */
   float gapThreshold;      /* 大缺口相对前根高/低阈值，默认0.02 */
   int32_t segmentMethod;    /* 0启发式/1特征序列，默认1 */

@@ -20,7 +20,7 @@ int main(int argc,char **argv)
   LOAD(czsc_level_pivots);LOAD(czsc_level_centers);LOAD(czsc_level_movements);LOAD(czsc_level_breakouts);LOAD(czsc_level_signals);LOAD(czsc_level_events);LOAD(czsc_level_bars);
   LOAD(czsc_level_recursive_nodes);LOAD(czsc_level_recursive_children);LOAD(czsc_level_recursive_centers);LOAD(czsc_level_recursive_connections);LOAD(czsc_nested_rows);
   LOAD(czsc_set_projection);LOAD(czsc_config_fields);LOAD(czsc_config_choices);LOAD(czsc_config_rules);
-  REQUIRE_OK(czsc_api_versionFn()==20);REQUIRE_OK(sizeof(czsc_input)==(sizeof(void*)==8?40:24));
+  REQUIRE_OK(czsc_api_versionFn()==21);REQUIRE_OK(sizeof(czsc_input)==(sizeof(void*)==8?40:24));
   for(const char *old:{"czsc_snapshot_build","czsc_config_valid","czsc_config_options","czsc_nested_build","czsc_pivots"}) REQUIRE_OK(!GetProcAddress(dll,old));
   REQUIRE_OK(czsc_config_fieldsFn(nullptr,0)==13);REQUIRE_OK(czsc_config_choicesFn(nullptr,0)==31);REQUIRE_OK(czsc_config_rulesFn(nullptr,0)==5);
   czsc_config config{};REQUIRE_OK(czsc_config_defaultFn(&config)==0);REQUIRE_OK(czsc_config_validateFn(&config)==0);
@@ -43,6 +43,11 @@ int main(int argc,char **argv)
   }
   std::fclose(file);int count=0;czsc_nested_rowsFn(h,&count);REQUIRE_OK(count>0);
   czsc_projection projection{sizeof(projection),2,0};REQUIRE_OK(czsc_set_projectionFn(h,&projection)==0);czsc_snapshot_freeFn(h);
+  czsc_config second{};
+  REQUIRE_OK(czsc_config_parseFn("stroke.endpoint=second",&second)==0 && second.strokeEndpoint==1);
+  h=czsc_buildFn(&input,&second,CZSC_OUTPUT_DEFAULT);REQUIRE_OK(h);
+  czsc_level_pivotsFn(h,0,&count);REQUIRE_OK(count>0);czsc_snapshot_freeFn(h);
+  REQUIRE_OK(czsc_config_parseFn("stroke.endpoint=first",&second)!=0);
   auto bounded=config;bounded.strokeEndpoint=2;
   for(int n:{160,SSE_DAILY_COUNT})
   {
@@ -64,6 +69,6 @@ int main(int argc,char **argv)
   preset=3;diagnostic(input.n,out.data(),nullptr,nullptr,&preset);REQUIRE_OK(out.back()==0);
   pivots(input.n,out.data(),high.data(),low.data(),&preset);count=0;for(float value:out)count+=value!=0;REQUIRE_OK(count==166);
   preset=4;diagnostic(input.n,out.data(),nullptr,nullptr,&preset);REQUIRE_OK(out.back()==4);pivots(input.n,out.data(),high.data(),low.data(),&preset);for(float value:out)REQUIRE_OK(value==0);
-  std::printf("api20 pointer%zu commit=%s default tables dumped; DLL-adjacent INI and gap validated\n",sizeof(void*),czsc_build_commitFn());
+  std::printf("api21 pointer%zu commit=%s default tables dumped; DLL-adjacent INI and gap validated\n",sizeof(void*),czsc_build_commitFn());
   FreeLibrary(dll);return 0;
 }

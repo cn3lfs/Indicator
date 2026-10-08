@@ -19,7 +19,7 @@ enum class StrokeRule : int
 enum class StrokeEnd : int
 {
   Extreme = 0,  // 同型分型取更极端者延伸端点
-  First = 1,    // 保留首个同型分型（允许次高/次低收笔）
+  Second = 1,   // 社区/非原文：极值跨度不足时，仅试其后相邻同型分型；成笔后正常延伸
   Bounded = 2,  // 社区合并K线包络与未确认末端延伸（v6修复口径）
 };
 

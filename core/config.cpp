@@ -44,7 +44,7 @@ std::string AnalysisId(const AnalysisConfig &config)
   if (!Validate(config).empty()) return {};
   auto c = Normalize(config);
   const char *stroke[] = {"strict","new","czsc","4k","fractal"};
-  const char *endpoint[] = {"extreme","first","bounded"};
+  const char *endpoint[] = {"extreme","second","bounded"};
   const char *gap[] = {"none","asbar","large"};
   if (!Validate(c).empty()) return {};
   std::string out="stroke.rule=";
@@ -77,7 +77,7 @@ std::string ApplyAnalysisField(AnalysisConfig &c, const std::string &key, const 
     return -1;
   };
   const char *stroke[]={"strict","new","czsc","4k","fractal"};
-  const char *endpoint[]={"extreme","first","bounded"};
+  const char *endpoint[]={"extreme","second","bounded"};
   const char *gap[]={"none","asbar","large"};
   const char *method[]={"heuristic","feature"};
   const char *formation[]={"entry","segment"};

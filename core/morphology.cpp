@@ -457,6 +457,7 @@ StrokeStream::StrokeStream(const std::vector<Fractal> &fractals, const LevelConf
 
 int StrokeStream::Add(std::size_t k)
 {
+  if (config_.analysis.stroke.endpoint == StrokeEnd::Second) return AddSecond(k);
   if ((config_.analysis.stroke.endpoint == chan::StrokeEnd::Bounded)) return AddBounded(k);
   const Fractal &f = (*fractals_)[k];
   std::size_t changed;
@@ -493,6 +494,46 @@ int StrokeStream::Add(std::size_t k)
     ends_[i] = refined;
   }
   return static_cast<int>(changed);
+}
+
+// 社区/非原文：只在极值跨度不足时，以其后相邻次高/次低收笔，不向前细化。
+int StrokeStream::AddSecond(std::size_t k)
+{
+  const Fractal &f = (*fractals_)[k];
+  if (f.extensionOnly) return -1;
+  auto reset = [&]() { secondExtreme_.reset(); secondEligible_ = false; secondTried_ = false; };
+  if (raw_.empty())
+  {
+    raw_.push_back(f); ends_.push_back(f);
+    return 0;
+  }
+  const Fractal &last = raw_.back();
+  if (f.kind == last.kind)
+  {
+    if (!MoreExtreme(last, f)) return -1;
+    if (raw_.size() >= 2 && !ValidStroke(raw_[raw_.size()-2], f, config_, &gaps_)) return -1;
+    raw_.back() = f; ends_.back() = f;
+    reset();
+    return static_cast<int>(raw_.size()-1);
+  }
+  bool extreme = !secondExtreme_ || MoreExtreme(*secondExtreme_, f);
+  if (!extreme)
+  {
+    if (secondTried_) return -1;
+    secondTried_ = true;
+    if (!secondEligible_ || !ValidStroke(last, f, config_, &gaps_)) return -1;
+  }
+  else if (!ValidStroke(last, f, config_, &gaps_))
+  {
+    secondExtreme_ = f;
+    secondEligible_ = config_.analysis.stroke.rule != StrokeRule::Fractal &&
+      !SpanEnough(last, f, config_, &gaps_) && PriceProgress(last, f) && !Nested(last, f, config_);
+    secondTried_ = false;
+    return -1;
+  }
+  raw_.push_back(f); ends_.push_back(f);
+  reset();
+  return static_cast<int>(raw_.size()-1);
 }
 
 int StrokeStream::AddBounded(std::size_t k)

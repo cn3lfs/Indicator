@@ -67,9 +67,8 @@ TEST(FractalsAlternateAndAreCausal)
 TEST(PivotsAlternateAndProgress)
 {
   std::vector<Fractal> f = DetectFractals(MergeBars(Sse()));
-  for (int code : kConfigs)
+  for (const auto &c : CommonConfigs())
   {
-    LevelConfig c = *migration::MapLegacyConfig(code);
     std::vector<Pivot> p = BuildPivots(f, c);
     CHECK(p.size() >= 2);
     CHECK(Alternates(p));
@@ -326,7 +325,7 @@ TEST(AllLegalConfigurationsCannotFreezeEligibleOppositeStroke)
                   }
                 }
               }
-  CHECK(configurations==240);
+  CHECK(configurations==160);
   CHECK(eligible>10000 && extended>1000);
 }
 

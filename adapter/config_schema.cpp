@@ -40,7 +40,7 @@ extern "C" int32_t czsc_config_choices(czsc_config_choice *out, int32_t cap)
     {sizeof(czsc_config_choice),"stroke.rule",3,"stroke.rule.4k","4K笔","",0,"社区口径：原始极值下标差至少3，分型不共用合并K线。"},
     {sizeof(czsc_config_choice),"stroke.rule",4,"stroke.rule.fractal","分型笔","",0,"社区口径：相邻异型分型直接连接。"},
     {sizeof(czsc_config_choice),"stroke.endpoint",0,"stroke.endpoint.extreme","极值延伸","65",1,"同型分型向更极端者延伸。"},
-    {sizeof(czsc_config_choice),"stroke.endpoint",1,"stroke.endpoint.first","次高次低","",0,"社区口径：保留首个同型分型。"},
+    {sizeof(czsc_config_choice),"stroke.endpoint",1,"stroke.endpoint.second","相邻次高次低","",0,"社区口径：极值仅因跨度不足时，尝试其后紧邻的次高/次低分型；成笔后正常极值延伸。"},
     {sizeof(czsc_config_choice),"stroke.endpoint",2,"stroke.endpoint.bounded","区间包络","",0,"社区口径：合并K线包络，原始影线只作未确认末端延伸；端点链可回退。"},
     {sizeof(czsc_config_choice),"stroke.gap",0,"stroke.gap.none","不处理","",0,"缺口不改变成笔跨度，保持旧分析。"},
     {sizeof(czsc_config_choice),"stroke.gap",1,"stroke.gap.asbar","缺口计作1根","",0,"社区口径：端点闭区间内每个同向原始K线缺口，同时给合并与原始跨度加1。"},

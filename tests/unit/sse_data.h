@@ -1,9 +1,11 @@
-// 上证指数日线样本：原样 + 翻转/缩放拼接的 12 倍放大序列（覆盖更多形态）；kConfigs 为常用配置全集。
+// 上证指数日线样本：原样 + 翻转/缩放拼接的 12 倍放大序列（覆盖更多形态）；CommonConfigs 为常用配置全集。
 #pragma once
 
 #include "tests/SseIndexDaily.h"
 
 #include <vector>
+#include <initializer_list>
+#include "migration/legacy_config.h"
 
 struct SseSample
 {
@@ -32,4 +34,21 @@ inline std::vector<SseSample> SseSamples()
   return out;
 }
 
-inline const int kConfigs[] = {0, 1, 2, 10, 11, 12, 100, 101, 102, 1100, 1101, 1102, 1110};
+// 新端点策略显式构造，不借旧first整数迁移。
+inline std::vector<chan::LevelConfig> AnalysisConfigs(std::initializer_list<int> legacy,
+                                                     std::initializer_list<int> second = {})
+{
+  std::vector<chan::LevelConfig> out;
+  for (int code : legacy) out.push_back(migration::MapLegacyConfig(code).value());
+  for (int code : second)
+  {
+    auto c = migration::MapLegacyConfig(code).value();
+    c.analysis.stroke.endpoint = chan::StrokeEnd::Second;
+    out.push_back(c);
+  }
+  return out;
+}
+inline std::vector<chan::LevelConfig> CommonConfigs()
+{
+  return AnalysisConfigs({0,1,2,100,101,102,1100,1101,1102},{0,1,2,1100});
+}

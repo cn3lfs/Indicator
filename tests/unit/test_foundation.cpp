@@ -9,13 +9,16 @@ using namespace chan;
 
 TEST(ConfigRoundTrip)
 {
-  for (int code : {0, 1, 2, 10, 11, 100, 1100, 1101, 1102, 1111})
+  for (int code : {0, 1, 2, 100, 1100, 1101, 1102})
   {
     auto c = migration::MapLegacyConfig(code);
     REQUIRE(c.has_value());
     CHECK(migration::LegacyCode(*c) == code);
   }
   CHECK(!migration::MapLegacyConfig(5).has_value());     // 个位笔类型只允许 0/1/2/3/4
+  for (int retired : {10,11,12,13,14,1110,100010}) CHECK(!migration::MapLegacyConfig(retired));
+  LevelConfig second; second.analysis.stroke.endpoint=StrokeEnd::Second;
+  CHECK(migration::LegacyCode(second)==-1);
   CHECK(!migration::MapLegacyConfig(20).has_value());
   CHECK(!migration::MapLegacyConfig(-1).has_value());
   CHECK(!migration::MapLegacyConfig(10000).has_value());
@@ -57,7 +60,7 @@ TEST(SegmentEndConfigRoundTrip)
     CHECK(c->projection.segmentBoundary == SegmentEnd::Extreme || c->analysis.segment.method == SegmentMethod::Feature);
     ++count;
   }
-  CHECK(count == 80);
+  CHECK(count == 40);
   CHECK(!migration::MapLegacyConfig(10000) && !migration::MapLegacyConfig(20100) && !migration::MapLegacyConfig(31000));
   CHECK(migration::MapLegacyConfig(11100) && migration::MapLegacyConfig(21100));
   CHECK(!(*migration::MapLegacyConfig(1100) == *migration::MapLegacyConfig(11100)));
@@ -73,6 +76,6 @@ TEST(CenterFormationConfigRoundTrip)
     CHECK(migration::LegacyCode(*c) == code);
     ++count;
   }
-  CHECK(count == 160 && !migration::MapLegacyConfig(200000));
+  CHECK(count == 80 && !migration::MapLegacyConfig(200000));
   CHECK(migration::MapLegacyConfig(100000)->analysis.center.strokeFormation == CenterFormation::Segment);
 }

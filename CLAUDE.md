@@ -57,7 +57,7 @@ cd D:/github/czsc-tdx
   （曾因 `thread_local std::string` 发生）。改动 `adapter/` 后，用 x64 程序 LoadLibrary 加载 `build/CZSC64.dll`
   调一次 `czsc_build` 并正常退出，作为发布前冒烟检查。
 
-## 结构化接口（adapter/czsc_api.h，api v20）
+## 结构化接口（adapter/czsc_api.h，api v21）
 
 v20按需求断代：czsc_config为32字节分析配置，outputs选择表，czsc_projection为12字节显示投影。
 czsc_build一次构建两级；czsc_level_*显式level=0笔级/1线段级，nested直接从同一快照读取。
@@ -87,3 +87,6 @@ center.strokeFormation=segment按父线段筛选笔中枢，三笔与延伸不�
 v20缺口字段stroke.gap=none/asbar/large（可选策略社区/非原文）；原始同向缺口在端点闭区间内计数，
 large含asbar且严格超过gapThreshold才跳跨度，其他笔约束不绕过；分型笔只能none。
 缺口流用前缀表，不读取回补未来；gap启用后RefineOne在已知两侧端点间查找并验证两侧成笔。
+
+
+v21移除stroke.endpoint=first，数值1改为second：仅在极值跨度不足时尝试其后相邻同型分型，失败不继续搜索；成笔后按实际端点继续延伸。C API布局保持v20、版本为21；旧first字符串/整数迁移拒绝，历史fixtures保留。second不调用向前RefineOne，默认extreme及golden不变。

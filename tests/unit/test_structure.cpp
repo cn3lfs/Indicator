@@ -25,9 +25,9 @@ TEST(CentersRespectBoundsAndDoNotShareEndpoints)
 {
   Series s = Series::FromRaw(SSE_DAILY_COUNT, SSE_DAILY_HIGH, SSE_DAILY_LOW);
   std::vector<Fractal> f = DetectFractals(MergeBars(s));
-  for (int code : kConfigs)
+  for (const auto &config : CommonConfigs())
   {
-    std::vector<Pivot> p = BuildPivots(f, *migration::MapLegacyConfig(code));
+    std::vector<Pivot> p = BuildPivots(f, config);
     std::vector<Center> c = BuildCenters(p);
     for (std::size_t i = 0; i < c.size(); i++)
     {

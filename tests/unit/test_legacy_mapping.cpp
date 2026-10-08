@@ -54,12 +54,12 @@ std::string Fixture()
 }
 }
 
-TEST(LegacyV10CBytesAll240Mappings)
+TEST(LegacyV10CBytesRemaining160Mappings)
 {
   std::ifstream file(Fixture());
   REQUIRE(file.good());
   std::string line;
-  int checked=0;
+  int checked=0, retired=0;
   std::map<int,std::uint64_t> corrected;
   auto correctedPath=Fixture()+".bounded-fixed";
   std::ifstream fixed(correctedPath);
@@ -78,6 +78,15 @@ TEST(LegacyV10CBytesAll240Mappings)
     if (code=="nested") { nestedHash=expected; continue; }
     int value=std::stoi(code);
     auto mapped=migration::MapLegacyConfig(value);
+    if (value/10%10==1)
+    {
+      CHECK(!mapped);
+      auto input=SseInput(value);
+      void *handle=legacy_test::Build(&input);
+      CHECK(handle==nullptr); legacy_test::Free(handle);
+      ++retired;
+      continue;
+    }
     REQUIRE(mapped.has_value());
     CHECK(migration::LegacyCode(*mapped)==value);
     CHECK(mapped->analysis.stroke.gap==chan::GapRule::None);
@@ -97,7 +106,7 @@ TEST(LegacyV10CBytesAll240Mappings)
     legacy_test::Free(handle);
     ++checked;
   }
-  CHECK(checked==240);
+  CHECK(checked==160 && retired==80);
   auto lo=SseInput(0),hi=SseInput(1100);
   void *low=legacy_test::Build(&lo),*high=legacy_test::Build(&hi);
   REQUIRE(low && high);

@@ -1,7 +1,7 @@
-# 通达信公式配置指南（api v20）
+# 通达信公式配置指南（api v21）
 
 当前公式使用小整数预设号。预设的分析参数、输出级别及显示投影写在 DLL 同目录的 UTF-8 `czsc-presets.ini` 中；公式通过 `TDXDLL1(函数号,H,L,预设号)` 选择预设。
-本文适用于当前 [公式包](../formulas/README.md)。旧公式中的 `1100`、`101000` 等十进制配置码已经停用，升级 v20 DLL 时须一并换用当前公式。
+本文适用于当前 [公式包](../formulas/README.md)。旧公式中的 `1100`、`101000` 等十进制配置码已经停用，升级当前 DLL 时须一并换用当前公式。
 
 ## 安装与生效
 
@@ -33,12 +33,27 @@ INI可以显式覆盖0/1/2。新增预设未写字段的分析默认值与0相�
 | 字段 | 取值 | 默认 | 含义 |
 |---|---|---|---|
 | `stroke.rule` | `strict` / `new` / `czsc` / `4k` / `fractal` | `strict` | 严格笔 / 新笔 / czsc笔 / 4K笔 / 分型笔 |
-| `stroke.endpoint` | `extreme` / `first` / `bounded` | `extreme` | 同型取更极值延伸 / 保留首个同型分型、允许次高次低 / 合并K线包络约束 |
+| `stroke.endpoint` | `extreme` / `second` / `bounded` | `extreme` | 同型取更极值延伸 / 极值仅因跨度不足时补选其后相邻次高次低 / 合并K线包络约束 |
 | `stroke.gap` | `none` / `asbar` / `large` | `none` | 不处理 / 同向原始缺口计入跨度 / 计入跨度且大缺口可跳过跨度门槛 |
 | `stroke.gapThreshold` | 0与1之间的有限小数 | `0.02` | large策略的比例阈值，0.02为2%，严格超过才算大缺口 |
 | `segment.method` | `feature` / `heuristic` | `feature` | 特征序列法 / 保护点启发式 |
 | `center.strokeFormation` | `entry` / `segment` | `entry` | 按进入段 / 笔中枢服从所属线段方向 |
 | `signals.publication` | `standard` / `early` | `standard` | 标准等待下一端点 / 真实端点分型确认且结构条件满足即提示 |
+
+second为社区/非原文口径：正常取极值并继续延伸；只有极值因跨度不足、其他条件均合法时，才尝试其后时间上紧邻的一个同型分型。上升笔取次高顶，下降笔取次低底；不是价格排名第二，也不回选之前的分型。候选不合法就等待新极值，不再尝试第三、第四个较弱分型。等值极值按现有规则取后，并重新允许相邻候选。
+
+跨度沿用所选笔规则与缺口策略。严格笔的合并K线下标差须≥4，即含两端至少5根；候选仍须满足价位推进、czsc互含等条件。分型直连无跨度门槛，因此不会触发补选。次高顶10元成笔后，后续10.5元顶可正常延伸，即使先前因跨度不足跳过了11元顶。只采用已确认分型，不回溯细化内部端点，沿用其后第二个端点出现后定型的保守边界。
+
+SSE日线样本（2038根、真实收盘价/成交量），`strict + second + gap=none + feature + entry` 的当前统计：
+
+| 发布 | 级别 | 端点 | 中枢 | 走势 | 最终信号 | 事件（含撤销） | 撤销 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| standard | 笔级 | 158 | 14 | 10 | 13 | 23 | 5 |
+| early | 笔级 | 158 | 14 | 10 | 13 | 50 | 19 |
+| standard | 线段级 | 11 | 1 | 1 | 0 | 0 | 0 |
+| early | 线段级 | 11 | 1 | 1 | 0 | 0 | 0 |
+
+v21删除旧first策略。`stroke.endpoint=first`会使该预设诊断报错（4）；须由使用者显式选择second或extreme，不静默转换。C API枚举值1现为second，调用方须核对`czsc_api_version()==21`。`projection.segmentBoundary=first`是独立的显示字段，仍保留。
 
 bounded以包含处理后的合并K线判包络：两端极值闭区间内不得超过端点，相等允许。被包含处理舍弃的原始影线不作阻塞条件，所以它不等于“所有原始影线都不得越界”。同型末端继续延伸，未确认极值仅作延伸候选，不能反向成笔或确认信号；尾部失效时保留合法前缀并重建，当前不承诺bounded端点定型。
 
@@ -65,7 +80,7 @@ projection只改变显示位置，不改变线段划分、真实极值、力度�
 
 - `stroke.rule=fractal`只能使用`stroke.gap=none`。
 - `segment.method=heuristic`只能使用`projection.segmentBoundary=extreme`。
-- `stroke.endpoint`一次只能选一种策略；first与bounded不能同时开启。
+- `stroke.endpoint`一次只能选一种策略；second与bounded不能同时开启。
 - `stroke.gapThreshold`即使在none/asbar下也须为合法有限小数；只有large策略使用其数值参与分析身份。
 
 ## 示例：同步改为bounded，并保留快速买卖点

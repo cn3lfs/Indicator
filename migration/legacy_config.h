@@ -10,7 +10,8 @@ inline std::optional<chan::LevelConfig> MapLegacyConfig(int code)
   if (code<0 || code>1129999) return std::nullopt;
   int d0=code%10,d1=(code/10)%10,d2=(code/100)%10,d3=(code/1000)%10;
   int d4=(code/10000)%10,d5=(code/100000)%10,d6=code/1000000;
-  if (d6>1 || (d6==1 && d1==1) || d5>1 || d4>2 || (d3==0 && d4!=0) || d0>4 || d1>1 || d2>1 || d3>1)
+  // 旧first已移除，不能静默解释成语义不同的second。
+  if (d6>1 || d5>1 || d4>2 || (d3==0 && d4!=0) || d0>4 || d1!=0 || d2>1 || d3>1)
     return std::nullopt;
   chan::LevelConfig c;
   c.analysis.stroke.rule=static_cast<chan::StrokeRule>(d0);
@@ -24,8 +25,8 @@ inline std::optional<chan::LevelConfig> MapLegacyConfig(int code)
 // 仅回归工具核对映射，不支持新缺口配置。
 inline int LegacyCode(const chan::LevelConfig &c)
 {
-  if (c.analysis.stroke.gap!=chan::GapRule::None) return -1;
-  return static_cast<int>(c.analysis.stroke.rule)+(c.analysis.stroke.endpoint==chan::StrokeEnd::First ? 10 : 0)+
+  if (c.analysis.stroke.gap!=chan::GapRule::None || c.analysis.stroke.endpoint==chan::StrokeEnd::Second) return -1;
+  return static_cast<int>(c.analysis.stroke.rule)+
     static_cast<int>(c.level)*100+static_cast<int>(c.analysis.segment.method)*1000+
     static_cast<int>(c.projection.segmentBoundary)*10000+static_cast<int>(c.analysis.center.strokeFormation)*100000+
     (c.analysis.stroke.endpoint==chan::StrokeEnd::Bounded ? 1000000 : 0);
