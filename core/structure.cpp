@@ -125,7 +125,7 @@ std::vector<CenterScope> CenterScopes(const std::vector<Pivot> &strokes, const s
     bool closed = k + 1 < segments.size();
     std::size_t last = closed ? position(segments[k + 1].index) : strokes.size() - 1;
     if (first >= strokes.size() || last >= strokes.size() || first >= last) continue;
-    scopes.push_back({first, last, segments[k].kind == Kind::Bottom ? 1 : -1, closed});
+    scopes.push_back({first, last, segments[k].kind == Kind::Bottom ? 1 : -1, closed, k, Horizon()});
   }
   return scopes;
 }
@@ -138,10 +138,14 @@ int CenterStream::UpdateScoped(const std::vector<Pivot> &p, const std::vector<Ce
   scoped_ = true; finalScopeBar_ = finalScopeBar;
   for (const auto &scope : scopes)
   {
+    // 未收尾父段的终点可回退到段内极值（起点被破收段），段内中枢都依赖数据尽头
+    if (!scope.closed) horizon_.Bound();
     Run(p, scope.first + 1, scope.last, scope.direction, scope.closed);
     // 即使没有后一个成枢尝试，也记录父段边界读取视界。
     horizon_.Read(scope.last);
-    if (!scope.closed) horizon_.Bound();
+    // 父段终点可能要读到其后笔才确认（缺口反向分型、起点被破收段）
+    horizon_.Read(scope.boundary.max);
+    if (!scope.closed || scope.boundary.unbounded) horizon_.Bound();
     checkpoints_.push_back({scope.last, out_.size(), horizon_});
   }
   std::size_t k = 0;

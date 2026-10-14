@@ -19,6 +19,8 @@ struct CenterScope
   std::size_t first, last;
   int direction;
   bool closed;
+  std::size_t segment = 0;  // 起点所在父线段端点下标
+  Horizon boundary;         // 父段终点确认时的笔读取视界（增量用；批量为空）
 };
 std::vector<CenterScope> CenterScopes(const std::vector<Pivot> &strokes, const std::vector<Pivot> &segments);
 std::vector<Center> BuildCentersInSegments(const std::vector<Pivot> &strokes, const std::vector<Pivot> &segments);

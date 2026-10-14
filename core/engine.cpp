@@ -132,7 +132,10 @@ public:
       {
         std::size_t stable = morphology_.segments.FinalCount(morphology_.strokes.FinalCount());
         int finalBar = stable >= 2 ? morphology_.segments.Pivots()[stable - 1].index : -1;
-        dc = centers_.UpdateScoped(pivots_, CenterScopes(pivots_, morphology_.segments.Pivots()), finalBar);
+        auto scopes = CenterScopes(pivots_, morphology_.segments.Pivots());
+        for (auto &scope : scopes)
+          if (scope.closed) scope.boundary = morphology_.segments.HorizonAfter(scope.segment + 1);
+        dc = centers_.UpdateScoped(pivots_, scopes, finalBar);
       }
       else dc = centers_.Update(pivots_, static_cast<std::size_t>(dirty));
       int dm = UpdateMovements(centers_.Centers(), moves_, dc);

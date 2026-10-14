@@ -91,6 +91,8 @@ public:
   const std::vector<Pivot> &Pivots() const { return out_; }
   // 已定型线段端点数：输入前 inputFinal 个端点不再改变时，视界落在其内的最后检查点之前的输出不再改变
   std::size_t FinalCount(std::size_t inputFinal) const;
+  // 第 k 个输出端点不再是末元素时的累计读取视界；仍为末元素则无界
+  Horizon HorizonAfter(std::size_t k) const;
 
 private:
   struct Checkpoint

@@ -272,8 +272,9 @@ SegmentBoundary FindSegmentEnd(const std::vector<Pivot> &p, std::size_t start, i
     }
     // 视界：反向分型若在 r 处找到，结论只依赖到 r 为止的数据（r 之后的新极值不会早于该分型）；
     // 未找到时依赖到 limit（再创新极值处）为止，扫描到数据尽头则无界
+    // 再创新极值的那一笔可作反向分型第三元素：它越过第二元素极值时分型已成立，早于新极值出现
     Horizon reverse;
-    if (AnyFeatureFractal(p, end, -dir, limit, reverse))
+    if (AnyFeatureFractal(p, end, -dir, std::min(limit + 1, p.size()), reverse))
     {
       h.Read(reverse.max);
       return boundary;
@@ -689,6 +690,15 @@ std::size_t SegmentStream::FinalCount(std::size_t inputFinal) const
   return 0;
 }
 
+Horizon SegmentStream::HorizonAfter(std::size_t k) const
+{
+  for (const Checkpoint &cp : checkpoints_)
+    if (cp.outSize > k + 1) return cp.horizon;
+  Horizon h;
+  h.Bound();
+  return h;
+}
+
 void SegmentStream::Save()
 {
   Checkpoint cp;
@@ -703,7 +713,7 @@ void SegmentStream::Save()
   checkpoints_.push_back(cp);
 }
 
-// 特征序列法（第65/67/71课）：前三笔有重叠的起点开始，依次定位线段终点；新段确立前起点被破则顺延
+// 特征序列法（第65/67/71课）：前三笔有重叠的起点开始，依次定位线段终点；首段起点被破则顺延，已确认分界点不回改
 void SegmentStream::RunFeature(const std::vector<Pivot> &s, bool fresh)
 {
   if (fresh)
@@ -730,6 +740,22 @@ void SegmentStream::RunFeature(const std::vector<Pivot> &s, bool fresh)
     int end = boundary.extreme;
     std::size_t limit = end < 0 ? s.size() : static_cast<std::size_t>(end) + 1;
     std::size_t extreme = StartBreak(s, start_, limit, horizon_);
+    if (extreme != start_ && out_.size() > 1)
+    {
+      // 起点已是按第67课两种情况确认的分界点（第71课当下程序），一笔不能破坏线段（第64课），
+      // 小级别服从大级别：不回改前段；本段在被破之前的最极端反向端点结束，从该点续划。
+      std::size_t brk = start_ + 2;
+      while (!(MoreExtremePivot(s[start_], s[brk]) && s[brk].Price() != s[start_].Price())) brk += 2;
+      std::size_t top = start_ + 1;
+      for (std::size_t i = start_ + 3; i < brk; i += 2)
+        if (MoreExtremePivot(s[top], s[i])) top = i;
+      if (top >= start_ + 3 && FirstThreeOverlap(s, start_, horizon_))
+      {
+        if (out_.back().index != s[top].index) out_.push_back(s[top]);
+        start_ = top;
+        continue;
+      }
+    }
     if (extreme != start_)
     {
       out_.back() = s[extreme];
@@ -773,6 +799,19 @@ void SegmentStream::RunHeuristic(const std::vector<Pivot> &s, bool fresh)
     // 前一段延续 → 起点顺延到该端点后重新考察（与极值持平不算突破）
     if (s[i_].kind == s[start_].kind && MoreExtremePivot(s[start_], s[i_]) && s[i_].Price() != s[start_].Price())
     {
+      // 已确认分界点不回改（与特征序列法同口径）：本段在被破前最极端反向端点结束
+      std::size_t top = start_ + 1;
+      for (std::size_t k = start_ + 3; k < i_; k += 2)
+        if (MoreExtremePivot(s[top], s[k])) top = k;
+      if (out_.size() > 1 && top >= start_ + 3)
+      {
+        if (out_.back().index != s[top].index) out_.push_back(s[top]);
+        start_ = top;
+        has_ = false;
+        i_ = start_ + 1;
+        Save();
+        continue;
+      }
       out_.back() = s[i_];
       start_ = i_;
       has_ = false;
