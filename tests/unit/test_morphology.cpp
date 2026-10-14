@@ -443,3 +443,56 @@ TEST(BoundedHistorySurvivesEveryPrefixAndEvery300BarWindow)
     if (n==176) { CHECK(ends[9].index==119); CHECK(ends[10].index==174); }
   }
 }
+
+// 已确认的线段分界点不被其后一笔回改（第64/67/71课，小级别服从大级别）；缺口第二种情况中
+// 再创新极值的那一笔可作反向特征分型第三元素。两例分别取自创业板指30分钟与科创50日线。
+TEST(SegmentConfirmedBoundaryIsNotRevertedByStroke)
+{
+  auto run = [](std::vector<float> prices, bool topFirst) {
+    std::vector<Pivot> s;
+    for (std::size_t i = 0; i < prices.size(); ++i)
+    {
+      Pivot p; p.index = static_cast<int>(i);
+      p.kind = (i % 2 == 0) == topFirst ? Kind::Top : Kind::Bottom;
+      p.high = p.low = prices[i];
+      s.push_back(p);
+    }
+    std::vector<int> out;
+    for (const auto &p : SegmentPivotsFeature(s)) out.push_back(p.index);
+    // 增量续算与批量一致
+    SegmentStream stream(SegmentMethod::Feature);
+    for (std::size_t n = 4; n <= s.size(); ++n)
+    {
+      std::vector<Pivot> prefix(s.begin(), s.begin() + n);
+      stream.Update(prefix, n - 1);
+      auto batch = SegmentPivotsFeature(prefix);
+      CHECK(stream.Pivots().size() == batch.size());
+      for (std::size_t i = 0; i < batch.size() && i < stream.Pivots().size(); ++i)
+        CHECK(stream.Pivots()[i].index == batch[i].index);
+    }
+    return out;
+  };
+  // 无缺口：下跌段止于60；向上三笔到95后一笔跌破60，不回改，上涨段止于95
+  auto a = run({100,80,90,70,85,60,75,65,95,50,58,40,48,35}, true);
+  CHECK((a == std::vector<int>{0, 5, 8}));
+  // 有缺口：1270由1580→1400→1495→1250的反向顶分型确认；1250跌破1270后上涨段止于1580
+  auto b = run({1590,1405,1500,1270,1355,1285,1580,1400,1495,1250,2255,2000,2200,1900}, true);
+  REQUIRE(b.size() >= 4);
+  CHECK(b[1] == 3 && b[2] == 6 && b[3] == 9);
+  // 启发式同口径
+  auto heuristic = [](std::vector<float> prices) {
+    std::vector<Pivot> s;
+    for (std::size_t i = 0; i < prices.size(); ++i)
+    {
+      Pivot p; p.index = static_cast<int>(i);
+      p.kind = i % 2 == 0 ? Kind::Top : Kind::Bottom;
+      p.high = p.low = prices[i];
+      s.push_back(p);
+    }
+    std::vector<int> out;
+    for (const auto &p : SegmentPivotsHeuristic(s)) out.push_back(p.index);
+    return out;
+  };
+  CHECK((heuristic({100,80,90,70,85,60,75,65,95,50,58,40,48,35}) == std::vector<int>{0, 5, 8, 13}));
+  CHECK((heuristic({1590,1405,1500,1270,1355,1285,1580,1400,1495,1250,2255,2000,2200,1900}) == std::vector<int>{0, 3, 6, 9, 12}));
+}

@@ -61,7 +61,7 @@ TEST(LegacyV10CBytesRemaining160Mappings)
   std::string line;
   int checked=0, retired=0;
   std::map<int,std::uint64_t> corrected;
-  auto correctedPath=Fixture()+".bounded-fixed";
+  auto correctedPath=Fixture()+".fixed";
   std::ifstream fixed(correctedPath);
   int fixedCode; std::uint64_t fixedHash;
   while (fixed>>fixedCode>>std::hex>>fixedHash>>std::dec) corrected[fixedCode]=fixedHash;
@@ -95,12 +95,9 @@ TEST(LegacyV10CBytesRemaining160Mappings)
     void *handle=legacy_test::Build(&input);
     REQUIRE(handle!=nullptr);
     auto actual=SnapshotHash(handle);
-    // 保留旧v10冻结文件；仅bounded错误历史使用独立的修复后基线。
-    if (mapped->analysis.stroke.endpoint==chan::StrokeEnd::Bounded)
-    {
-      if (update) { output<<value<<" "<<std::hex<<actual<<std::dec<<"\n"; expected=actual; }
-      else { REQUIRE(corrected.count(value)==1); expected=corrected.at(value); }
-    }
+    // 保留旧v10冻结文件；口径修正（bounded修复、已确认线段分界点不回改）后的差异记入修复后基线。
+    if (update) { if (actual!=expected) output<<value<<" "<<std::hex<<actual<<std::dec<<"\n"; expected=actual; }
+    else if (corrected.count(value)) expected=corrected.at(value);
     if (actual!=expected) std::printf("  legacy code %d bytes changed\n",value);
     CHECK(actual==expected);
     legacy_test::Free(handle);
@@ -114,6 +111,8 @@ TEST(LegacyV10CBytesRemaining160Mappings)
   REQUIRE(nested!=nullptr);
   std::uint64_t actual=14695981039346656037ULL;
   HashTable(actual,legacy_test::NestedRows,nested);
+  if (update && actual!=nestedHash) output<<-1<<" "<<std::hex<<actual<<std::dec<<"\n";
+  else if (!update && corrected.count(-1)) nestedHash=corrected.at(-1);
   CHECK(actual==nestedHash);
   legacy_test::Free(nested); legacy_test::Free(low); legacy_test::Free(high);
   // 负对照：已知一个业务字节改变，表示级回归必须能发现。
