@@ -9,3 +9,4 @@ tests/unit/ChanTests
 tests/unit/*.exe
 tests/unit/*.exp
 tests/unit/*.lib
+/logs/

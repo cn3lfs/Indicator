@@ -52,6 +52,7 @@ cd D:/github/czsc-tdx
 - 更新 golden：`CHAN_UPDATE_GOLDEN=1 ./tests/unit/ChanTests.exe Golden`，并人工核对 `tests/unit/golden/sse.txt` 的 diff。
 - DLL 与完整 `make test`/`make release` 走 WSL：`wsl.exe -e bash -lc 'cd /mnt/d/github/czsc-tdx && make release'`。
 - `Main.cpp` 含 windows.h，clang 只能 `-fsyntax-only`；不要为此改 pack/windows 头。`build/` 不入库。
+- 构建/测试日志、验证输出、临时冒烟程序一律放 `logs/`（已 gitignore）；`build/` 只放发布 DLL。
 - `compile_flags.txt` 供 clangd 以 C++17 解析头文件。
 - DLL 内禁止使用带析构的 `thread_local`/会在卸载时析构的线程局部对象：MinGW 静态运行时下宿主进程退出会崩溃
   （曾因 `thread_local std::string` 发生）。改动 `adapter/` 后，用 x64 程序 LoadLibrary 加载 `build/CZSC64.dll`
