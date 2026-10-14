@@ -524,6 +524,7 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
   // 2) 受影响分组重算去重幸存者
   std::set<int> survivorChanged;
   std::set<int> groupCenters;  // 幸存者有变化的中枢：其三类的小转大/重合上下文需重算
+  // 先撤全部受影响分组的旧幸存者再写新幸存者：中枢下标前移时同一端点可从旧组换到新组
   for (const std::pair<int, int> &g : groups)
   {
     groupCenters.insert(g.second);
@@ -542,6 +543,9 @@ void SignalStream::Update(const std::vector<Pivot> &p, const std::vector<Center>
       }
       groupSurvivors_.erase(oldIt);
     }
+  }
+  for (const std::pair<int, int> &g : groups)
+  {
     auto mIt = members_.find(g);
     if (mIt == members_.end()) continue;
     if (mIt->second.empty())
