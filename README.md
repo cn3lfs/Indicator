@@ -91,7 +91,7 @@ make test      # 原生 g++ 运行单元测试与公式校验
 `czsc_build(input, config, outputs)` 一次构建两级，`czsc_level_*` 访问时传 `level=0` 笔级或 `1` 线段级，区间套直接 `czsc_nested_rows`。
 `czsc_set_projection` 仅改显示分界和中枢框，不改分析、事件、递归或身份。默认分析为严格笔/极值端点/不处理缺口/特征序列/进入段/标准发布；默认中枢框含延伸。
 旧 `czsc_snapshot_build`、整数配置接口、`CZSC_FLAG_*`、单级取表与 `czsc_nested_build` 已删除。
-历史旧码映射见 [legacy-config-map.csv](docs/legacy-config-map.csv)，完整240行，其中first的80行在v21已退役并拒绝迁移，其余160行仍验证；业务行布局保持v10，默认两级分别保留旧0/1100字节。
+历史旧码映射见 [legacy-config-map.csv](docs/legacy-config-map.csv)，完整240行，其中first的80行在v21已退役并拒绝迁移，其余160行仍可迁移；业务行布局保持v10，输出随口径修正而变化，不再保证与旧版字节一致。
 
 ### 分析与显示口径
 

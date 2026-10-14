@@ -64,7 +64,7 @@ czsc_build一次构建两级；czsc_level_*显式level=0笔级/1线段级，nest
 czsc_config_default/validate/id/parse与fields/choices/rules提供规范身份、中文错误和依赖自描述。
 删除旧整数配置与单级C入口；一次映射仅在migration/与测试工具中，不导出DLL。
 业务行布局保留v10，extremeIndex为分析端点，index/price为投影；投影不改事件和递归。
-默认level0/1分别与旧0/1100的真实C/V完整C表一致，tests/unit/golden不得修改。
+旧v10字节冻结基线已删除；口径以原文为准，改口径后人工核对并更新golden/fixtures，不为旧输出让步。
 czsc_build_commit()由Makefile写入；发布先提交后make release，并用Win64真实加载冒烟。
 
 ## 缠论知识来源
